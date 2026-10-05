@@ -169,13 +169,15 @@ class _LoginPanel extends StatelessWidget {
           const Divider(color: Colors.white54, height: 1),
           const SizedBox(height: 16),
           Center(
-            child: Semantics(
-              button: true,
-              label: 'Sign up',
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => Navigator.of(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  "Don't have account yet ?  ",
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(
                     context,
                     rootNavigator: true,
                   ).push<void>(
@@ -183,34 +185,25 @@ class _LoginPanel extends StatelessWidget {
                       builder: (_) => const SignupPage(),
                     ),
                   ),
-                  borderRadius: BorderRadius.circular(6),
-                  splashColor: Colors.white24,
-                  highlightColor: Colors.white12,
-                  child: Padding(
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    overlayColor: Colors.white24,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 8,
+                      horizontal: 4,
+                      vertical: 4,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Text(
-                          "Don't have account yet ?  ",
-                          style: TextStyle(color: Colors.white70, fontSize: 12),
-                        ),
-                        Text(
-                          'Sign up',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
                     ),
                   ),
+                  child: const Text(
+                    'Sign up',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ],

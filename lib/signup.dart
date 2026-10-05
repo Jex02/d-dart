@@ -147,7 +147,7 @@ class _SignupPanel extends StatelessWidget {
               child: CustomPaint(painter: _SignupTexturePainter()),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(22, 26, 22, 68),
+              padding: const EdgeInsets.fromLTRB(22, 26, 22, 18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -194,8 +194,8 @@ class _SignupFields extends StatelessWidget {
           style: TextStyle(
             color: Colors.white70,
             fontSize: 10,
-            height: 1.35,
-            letterSpacing: 1.2,
+            height: 1.3,
+            letterSpacing: 1,
           ),
         ),
         SizedBox(height: compact ? 12 : 15),
@@ -241,7 +241,7 @@ class _SignupTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 34,
+      height: 42,
       child: TextField(
         keyboardType: keyboardType,
         obscureText: obscureText,
@@ -257,7 +257,7 @@ class _SignupTextField extends StatelessWidget {
           isDense: true,
           filled: true,
           fillColor: const Color(0xFFE0E0E0),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           border: const OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(10)),
             borderSide: BorderSide.none,
@@ -282,18 +282,19 @@ class _SignupButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 34,
+      height: 38,
       child: ElevatedButton(
         onPressed: () {},
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFE0E0E0),
-          foregroundColor: Colors.black45,
+          backgroundColor: const Color(0xFFD4AF37),
+          foregroundColor: Colors.black,
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          padding: EdgeInsets.zero,
+          shape: const StadiumBorder(),
         ),
         child: const Text(
           'Sign Up',
-          style: TextStyle(fontSize: 10, letterSpacing: 1.5),
+          style: TextStyle(fontSize: 14),
         ),
       ),
     );
@@ -310,7 +311,7 @@ class _LoginFooter extends StatelessWidget {
     return Column(
       children: [
         const Divider(color: Colors.white38, height: 1),
-        const SizedBox(height: 15),
+        const SizedBox(height: 16),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -318,7 +319,7 @@ class _LoginFooter extends StatelessWidget {
               'Already have an account ?  ',
               style: TextStyle(
                 color: Colors.white54,
-                fontSize: 10,
+                fontSize: 12,
                 letterSpacing: 1,
               ),
             ),
@@ -337,7 +338,7 @@ class _LoginFooter extends StatelessWidget {
               child: const Text(
                 'Login',
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 12,
                   letterSpacing: 1,
                 ),
               ),
