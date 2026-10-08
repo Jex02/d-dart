@@ -22,11 +22,14 @@ class _SignupPageState extends State<SignupPage> {
       body: SafeArea(
         child: Center(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 20, 18, 8),
+            padding: const EdgeInsets.symmetric(vertical: 10),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 430),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(28),
+                  bottomRight: Radius.circular(28),
+                ),
                 child: Column(
                   children: [
                     const _SignupHeader(),

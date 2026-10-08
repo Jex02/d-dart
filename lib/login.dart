@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'signup.dart';
+import 'main_dashboard.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -159,7 +160,13 @@ class _LoginPanel extends StatelessWidget {
             child: SizedBox(
               width: 105, height: 30,
               child: ElevatedButton(
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (_) => const MainDashboard(),
+                    ),
+                  );
+                },
                 style: ElevatedButton.styleFrom(backgroundColor: _LoginPageState._accentColor, foregroundColor: Colors.black, elevation: 0, padding: EdgeInsets.zero, shape: const StadiumBorder()),
                 child: const Text('Login', style: TextStyle(fontSize: 14)),
               ),
