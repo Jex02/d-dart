@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
-import 'login.dart';
 
 const _signupPanelColor = Color(0xFF8F1F0D);
 
@@ -57,12 +56,7 @@ class _SignupPageState extends State<SignupPage> {
   void _returnToLogin() {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
-      return;
     }
-
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (context) => const LoginPage()),
-    );
   }
 }
 

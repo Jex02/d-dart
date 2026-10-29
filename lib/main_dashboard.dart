@@ -8,159 +8,282 @@ class MainDashboard extends StatefulWidget {
 }
 
 class _MainDashboardState extends State<MainDashboard> {
-  static const Color darkRed = Color(0xFF7F0000);
+  static const Color darkRed = Color(0xFF8F1F0D);
+  static const Color gold = Color(0xFFD4AF37);
 
   String? selectedRole;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      // Dark area surrounding the mobile-style application.
+      backgroundColor: const Color(0xFF2B2B2B),
+
       body: SafeArea(
         child: Center(
-          child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+
             child: ConstrainedBox(
               constraints: const BoxConstraints(
                 maxWidth: 430,
+                maxHeight: 720,
               ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 20,
-                ),
-                child: Column(
-                  children: [
-                    // Branding
-                    const Text(
-                      'Order.Run.Deliver.',
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontSize: 20,
-                        letterSpacing: 3,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
 
-                    const SizedBox(height: 25),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
 
-                    // Main title
-                    const Text(
-                      'D-DART',
-                      style: TextStyle(
-                        color: Color(0xFF1E1E1E),
-                        fontSize: 40,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 3,
-                      ),
-                    ),
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                  ),
 
-                    const SizedBox(height: 8),
+                  child: Stack(
+                    children: [
+                      // ==================================================
+                      // LRAC BACKGROUND
+                      // ==================================================
 
-                    const Text(
-                      'Peer-to-Peer Campus Delivery Application',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Color(0xFF1E1E1E),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-
-                    const SizedBox(height: 25),
-
-                    // Choose role title
-                    const Text(
-                      'Choose Role',
-                      style: TextStyle(
-                        color: darkRed,
-                        fontSize: 30,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    const Text(
-                      'Choose a role to get started',
-                      style: TextStyle(
-                        color: Colors.black87,
-                        fontSize: 13,
-                      ),
-                    ),
-
-                    const SizedBox(height: 25),
-
-                    // Customer
-                    _RoleCard(
-                      title: 'Customer',
-                      description:
-                          'Order food and request items to be delivered on campus.',
-                      imageUrl:
-                          'https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/22e77230-b5a4-4f13-9fc8-a98eee5e2fe8',
-                      selected: selectedRole == 'Customer',
-                      onTap: () {
-                        setState(() {
-                          selectedRole = 'Customer';
-                        });
-                      },
-                    ),
-
-                    const SizedBox(height: 18),
-
-                    // Runner
-                    _RoleCard(
-                      title: 'Runner',
-                      description:
-                          'Accept delivery requests and deliver items around campus.',
-                      imageUrl:
-                          'https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/2bbae86b-b7ef-4e3c-b824-e73d461e5159',
-                      selected: selectedRole == 'Runner',
-                      onTap: () {
-                        setState(() {
-                          selectedRole = 'Runner';
-                        });
-                      },
-                    ),
-
-                    const SizedBox(height: 35),
-
-                    // Proceed button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: selectedRole == null
-                            ? null
-                            : () {
-                                // TODO:
-                                // Navigate to the appropriate dashboard
-                                // after the Customer/Runner pages are created.
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: darkRed,
-                          disabledBackgroundColor:
-                              darkRed.withOpacity(0.35),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Text(
-                          selectedRole == null
-                              ? 'Proceed'
-                              : 'Proceed as $selectedRole',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
+                      Positioned.fill(
+                        child: Image.asset(
+                          'assets/lrac.jpg',
+                          fit: BoxFit.cover,
                         ),
                       ),
-                    ),
 
-                    const SizedBox(height: 20),
-                  ],
+                      // ==================================================
+                      // LIGHT OVERLAY
+                      // ==================================================
+
+                      Positioned.fill(
+                        child: Container(
+                          color: Colors.white.withOpacity(0.78),
+                        ),
+                      ),
+
+                      // ==================================================
+                      // MAIN CONTENT
+                      // ==================================================
+
+                      SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 17,
+                            vertical: 8,
+                          ),
+
+                          child: Column(
+                            children: [
+                              // ==================================================
+                              // TOP TAGLINE
+                              // ==================================================
+
+                              const Text(
+                                'Order.Run.Deliver.',
+                                style: TextStyle(
+                                  color: Colors.black87,
+                                  fontSize: 13,
+                                  letterSpacing: 2.5,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+
+                              const SizedBox(height: 8),
+
+                              // ==================================================
+                              // DIVIDER
+                              // ==================================================
+
+                              Container(
+                                width: double.infinity,
+                                height: 1,
+                                color: Colors.black54,
+                              ),
+
+                              const SizedBox(height: 22),
+
+                              // ==================================================
+                              // D-DART
+                              // ==================================================
+
+                              RichText(
+                                textAlign: TextAlign.center,
+                                text: const TextSpan(
+                                  style: TextStyle(
+                                    fontFamily: 'serif',
+                                    fontSize: 31,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 2,
+                                  ),
+
+                                  children: [
+                                    TextSpan(
+                                      text: 'D',
+                                      style: TextStyle(
+                                        color: gold,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: '-DART',
+                                      style: TextStyle(
+                                        color: Color(0xFF202020),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              const SizedBox(height: 3),
+
+                              // ==================================================
+                              // SUBTITLE
+                              // ==================================================
+
+                              const Text(
+                                'Peer-to-Peer Campus Delivery Application',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.black87,
+                                  fontSize: 7,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.25,
+                                ),
+                              ),
+
+                              const SizedBox(height: 22),
+
+                              // ==================================================
+                              // CHOOSE ROLE
+                              // ==================================================
+
+                              const Text(
+                                'Choose Role',
+                                style: TextStyle(
+                                  color: darkRed,
+                                  fontFamily: 'serif',
+                                  fontSize: 27,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+
+                              const SizedBox(height: 5),
+
+                              const Text(
+                                'Choose role to get started',
+                                style: TextStyle(
+                                  color: Colors.black87,
+                                  fontSize: 7,
+                                ),
+                              ),
+
+                              const SizedBox(height: 25),
+
+                              // ==================================================
+                              // CUSTOMER CARD
+                              // ==================================================
+
+                              Center(
+                                child: SizedBox(
+                                  width: 365,
+
+                                  child: _RoleCard(
+                                    title: 'Customer',
+                                    description:
+                                        'Order food and request items to be delivered on campus.',
+                                    imageUrl:
+                                        'https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/22e77230-b5a4-4f13-9fc8-a98eee5e2fe8',
+                                    selected: selectedRole == 'Customer',
+                                    onTap: () {
+                                      setState(() {
+                                        selectedRole = 'Customer';
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 13),
+
+                              // ==================================================
+                              // RUNNER CARD
+                              // ==================================================
+
+                              Center(
+                                child: SizedBox(
+                                  width: 365,
+
+                                  child: _RoleCard(
+                                    title: 'Runner',
+                                    description:
+                                        'Accept delivery requests and deliver items around campus.',
+                                    imageUrl:
+                                        'https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/2bbae86b-b7ef-4e3c-b824-e73d461e5159',
+                                    selected: selectedRole == 'Runner',
+                                    onTap: () {
+                                      setState(() {
+                                        selectedRole = 'Runner';
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 55),
+
+                              // ==================================================
+                              // PROCEED BUTTON
+                              // ==================================================
+
+                              Center(
+                                child: SizedBox(
+                                  width: 120,
+                                  height: 30,
+
+                                  child: ElevatedButton(
+                                    onPressed: selectedRole == null
+                                        ? null
+                                        : () {
+                                            // TODO:
+                                            // Navigate to the selected
+                                            // Customer or Runner dashboard.
+                                          },
+
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: darkRed,
+
+                                      disabledBackgroundColor:
+                                          darkRed.withOpacity(0.35),
+
+                                      foregroundColor: Colors.white,
+
+                                      disabledForegroundColor:
+                                          Colors.white,
+
+                                      elevation: 0,
+
+                                      padding: EdgeInsets.zero,
+
+                                      shape: const StadiumBorder(),
+                                    ),
+
+                                    child: const Text(
+                                      'Proceed',
+                                      style: TextStyle(
+                                        fontSize: 8,
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 22),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -170,6 +293,10 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 }
+
+// ============================================================
+// ROLE CARD
+// ============================================================
 
 class _RoleCard extends StatelessWidget {
   const _RoleCard({
@@ -186,90 +313,103 @@ class _RoleCard extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  static const Color darkRed = Color(0xFF7F0000);
+  static const Color darkRed = Color(0xFF8F1F0D);
+  static const Color gold = Color(0xFFD4AF37);
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: const Duration(milliseconds: 180),
+
         width: double.infinity,
-        padding: const EdgeInsets.all(16),
+        height: 68,
+
+        padding: const EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: 7,
+        ),
+
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          color: Colors.white.withOpacity(0.88),
+
+          borderRadius: BorderRadius.circular(6),
+
           border: Border.all(
-            color: selected ? darkRed : Colors.grey.shade300,
+            color: selected ? gold : darkRed,
             width: selected ? 2 : 1,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
         ),
+
         child: Row(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: SizedBox(
-                width: 90,
-                height: 75,
-                child: Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: Colors.grey.shade200,
-                      child: const Icon(
-                        Icons.image_not_supported_outlined,
-                        color: Colors.grey,
-                      ),
-                    );
-                  },
-                ),
+            // ==================================================
+            // ROLE IMAGE
+            // ==================================================
+
+            SizedBox(
+              width: 70,
+              height: 62,
+
+              child: Image.network(
+                imageUrl,
+                fit: BoxFit.contain,
+
+                errorBuilder: (
+                  context,
+                  error,
+                  stackTrace,
+                ) {
+                  return const Icon(
+                    Icons.image_not_supported_outlined,
+                    color: Colors.grey,
+                    size: 30,
+                  );
+                },
               ),
             ),
 
-            const SizedBox(width: 18),
+            const SizedBox(width: 12),
+
+            // ==================================================
+            // ROLE INFORMATION
+            // ==================================================
 
             Expanded(
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
+
                 children: [
                   Text(
                     title,
+
                     style: const TextStyle(
                       color: darkRed,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w600,
+                      fontFamily: 'serif',
+                      fontSize: 20,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
 
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 1),
 
                   Text(
                     description,
+
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+
                     style: const TextStyle(
-                      color: Colors.black87,
-                      fontSize: 11,
-                      height: 1.3,
+                      color: Colors.black54,
+                      fontSize: 6.5,
+                      height: 1.15,
                     ),
                   ),
                 ],
               ),
-            ),
-
-            const SizedBox(width: 8),
-
-            Icon(
-              selected
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked,
-              color: selected ? darkRed : Colors.grey,
             ),
           ],
         ),
