@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'customer_home_screen.dart';
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({super.key});
@@ -410,6 +411,13 @@ class _RoleCard extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              selected
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+              color: selected ? darkRed : Colors.grey,
             ),
           ],
         ),
