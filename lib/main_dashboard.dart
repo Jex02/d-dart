@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'customer_home_screen.dart';
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({super.key});
@@ -91,7 +92,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
                     const SizedBox(height: 25),
 
-                    // Customer
+                    // Customer Card
                     _RoleCard(
                       title: 'Customer',
                       description:
@@ -108,7 +109,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
                     const SizedBox(height: 18),
 
-                    // Runner
+                    // Runner Card
                     _RoleCard(
                       title: 'Runner',
                       description:
@@ -133,9 +134,22 @@ class _MainDashboardState extends State<MainDashboard> {
                         onPressed: selectedRole == null
                             ? null
                             : () {
-                                // TODO:
-                                // Navigate to the appropriate dashboard
-                                // after the Customer/Runner pages are created.
+                                if (selectedRole == 'Customer') {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const CustomerHomeScreen(),
+                                    ),
+                                  );
+                                } else if (selectedRole == 'Runner') {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                          'Runner Dashboard coming soon!'),
+                                    ),
+                                  );
+                                }
                               },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: darkRed,
@@ -233,9 +247,7 @@ class _RoleCard extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(width: 18),
-
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -248,9 +260,7 @@ class _RoleCard extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-
                   const SizedBox(height: 6),
-
                   Text(
                     description,
                     style: const TextStyle(
@@ -262,9 +272,7 @@ class _RoleCard extends StatelessWidget {
                 ],
               ),
             ),
-
             const SizedBox(width: 8),
-
             Icon(
               selected
                   ? Icons.radio_button_checked
