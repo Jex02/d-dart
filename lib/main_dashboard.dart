@@ -242,13 +242,19 @@ class _MainDashboardState extends State<MainDashboard> {
 
                                   child: ElevatedButton(
                                     onPressed: selectedRole == null
-                                        ? null
+                                      ? null
                                         : () {
-                                            // TODO:
-                                            // Navigate to the selected
-                                            // Customer or Runner dashboard.
+                                            if (selectedRole == 'Customer') {
+                                              Navigator.pushReplacement(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) => const CustomerHomeScreen(),
+                                                ),
+                                              );
+                                            } else if (selectedRole == 'Runner') {
+                                              // TODO: Connect Runner Home Screen
+                                            }
                                           },
-
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: darkRed,
 
