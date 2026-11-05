@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'customer_home_screen.dart';
 import 'runner_gig_board_screen.dart';
+import 'cor_upload_screen.dart';
+import 'services/duty_lock_service.dart';
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({super.key});
@@ -230,7 +232,7 @@ class _MainDashboardState extends State<MainDashboard> {
                                 ),
                               ),
 
-                              const SizedBox(height: 55),
+                              const SizedBox(height: 24),
 
                               // ==================================================
                               // PROCEED BUTTON
@@ -243,7 +245,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
                                   child: ElevatedButton(
                                     onPressed: selectedRole == null
-                                      ? null
+                                        ? null
                                         : () {
                                             if (selectedRole == 'Customer') {
                                               Navigator.pushReplacement(
@@ -253,12 +255,75 @@ class _MainDashboardState extends State<MainDashboard> {
                                                 ),
                                               );
                                             } else if (selectedRole == 'Runner') {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) => const RunnerGigBoardScreen(),
-                                                ),
-                                              );
+                                              final status = DutyLockService.checkDutyStatus();
+                                              if (status['isLocked'] == true) {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (context) => AlertDialog(
+                                                    title: const Row(
+                                                      children: [
+                                                        Icon(Icons.lock_clock, color: darkRed),
+                                                        SizedBox(width: 8),
+                                                        Text(
+                                                          'Academic Duty Lock',
+                                                          style: TextStyle(
+                                                            fontSize: 16,
+                                                            fontWeight: FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    content: Column(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        const Text(
+                                                          'Runner Mode is locked due to an active class session:',
+                                                          style: TextStyle(fontWeight: FontWeight.bold),
+                                                        ),
+                                                        const SizedBox(height: 8),
+                                                        Text(
+                                                          status['reason'] ?? '',
+                                                          style: const TextStyle(color: darkRed),
+                                                        ),
+                                                        const SizedBox(height: 12),
+                                                        const Text(
+                                                          'D-DART enforces Duty Lock to ensure academic priorities come first. Please fulfill your class duties before accepting deliveries.',
+                                                          style: TextStyle(fontSize: 12, color: Colors.black87),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    actions: [
+                                                      TextButton(
+                                                        onPressed: () {
+                                                          Navigator.pop(context);
+                                                          Navigator.push(
+                                                            context,
+                                                            MaterialPageRoute(
+                                                              builder: (context) => const CorUploadScreen(),
+                                                            ),
+                                                          );
+                                                        },
+                                                        child: const Text(
+                                                          'Update Study Load',
+                                                          style: TextStyle(color: darkRed),
+                                                        ),
+                                                      ),
+                                                      TextButton(
+                                                        onPressed: () => Navigator.pop(context),
+                                                        child: const Text('OK'),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                              } else {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) => const RunnerGigBoardScreen(),
+                                                  ),
+                                                );
+                                              }
                                             }
                                           },
                                     style: ElevatedButton.styleFrom(
@@ -290,7 +355,30 @@ class _MainDashboardState extends State<MainDashboard> {
                                 ),
                               ),
 
-                              const SizedBox(height: 22),
+                              const SizedBox(height: 8),
+
+                              // Secondary Action: Manage / Update Study Load
+                              TextButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const CorUploadScreen(),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.school_outlined, size: 14, color: darkRed),
+                                label: const Text(
+                                  'Manage / Update Study Load',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    color: darkRed,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 14),
                             ],
                           ),
                         ),
