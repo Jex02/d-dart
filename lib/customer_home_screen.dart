@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'pabili_request_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -19,6 +20,18 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+        floatingActionButton: FloatingActionButton.extended(
+  backgroundColor: const Color(0xFF7F0000),
+  foregroundColor: Colors.white,
+  icon: const Icon(Icons.add_shopping_cart),
+  label: const Text('New Pabili'),
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const PabiliRequestScreen()),
+    );
+  },
+),
       backgroundColor: primaryMaroon,
       body: SafeArea(
         bottom: false,
@@ -240,7 +253,17 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                               children: [
                                 _buildQuickActionButton('View Campus\nFavorites'),
                                 const SizedBox(height: 10),
-                                _buildQuickActionButton('Customize\nOrder'),
+                                InkWell(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => const PabiliRequestScreen(),
+                                      ),
+                                    );
+                                  },
+                                  child: _buildQuickActionButton('Customize\nOrder'),
+                                ),
                               ],
                             ),
                           ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'customer_home_screen.dart';
+import 'runner_gig_board_screen.dart';
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({super.key});
@@ -252,7 +253,12 @@ class _MainDashboardState extends State<MainDashboard> {
                                                 ),
                                               );
                                             } else if (selectedRole == 'Runner') {
-                                              // TODO: Connect Runner Home Screen
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) => const RunnerGigBoardScreen(),
+                                                ),
+                                              );
                                             }
                                           },
                                     style: ElevatedButton.styleFrom(
