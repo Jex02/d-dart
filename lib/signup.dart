@@ -115,62 +115,51 @@ class _SignupPageState extends State<SignupPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF252525),
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktopOrTablet = screenWidth > 600;
+
+    Widget content = SafeArea(
+      child: Column(
+        children: [
+          const _SignupHeader(),
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: _signupPanelColor,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
               child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(28),
-                  bottomRight: Radius.circular(28),
-                ),
-                child: Column(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    const _SignupHeader(),
-                    Expanded(
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          color: _signupPanelColor,
-                          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              const Positioned.fill(
-                                child: CustomPaint(painter: _SignupTexturePainter()),
-                              ),
-                              SingleChildScrollView(
-                                padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    _SignupFields(
-                                      nameController: _nameController,
-                                      emailController: _emailController,
-                                      phoneController: _phoneController,
-                                      studentIdController: _studentIdController,
-                                      passwordController: _passwordController,
-                                      confirmPasswordController: _confirmPasswordController,
-                                    ),
-                                    const SizedBox(height: 24),
-                                    _SignupButton(
-                                      isLoading: _isLoading,
-                                      onPressed: _handleSignUp,
-                                    ),
-                                    const SizedBox(height: 20),
-                                    _LoginFooter(onTap: _returnToLogin),
-                                  ],
-                                ),
-                              ),
-                            ],
+                    const Positioned.fill(
+                      child: CustomPaint(painter: _SignupTexturePainter()),
+                    ),
+                    SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _SignupFields(
+                            nameController: _nameController,
+                            emailController: _emailController,
+                            phoneController: _phoneController,
+                            studentIdController: _studentIdController,
+                            passwordController: _passwordController,
+                            confirmPasswordController: _confirmPasswordController,
                           ),
-                        ),
+                          const SizedBox(height: 24),
+                          _SignupButton(
+                            isLoading: _isLoading,
+                            onPressed: _handleSignUp,
+                          ),
+                          const SizedBox(height: 20),
+                          _LoginFooter(onTap: _returnToLogin),
+                        ],
                       ),
                     ),
                   ],
@@ -178,8 +167,23 @@ class _SignupPageState extends State<SignupPage> {
               ),
             ),
           ),
-        ),
+        ],
       ),
+    );
+
+    return Scaffold(
+      backgroundColor: isDesktopOrTablet ? const Color(0xFF252525) : Colors.white,
+      body: isDesktopOrTablet
+          ? Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 450, maxHeight: 900),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: content,
+                ),
+              ),
+            )
+          : content,
     );
   }
 }
@@ -190,13 +194,13 @@ class _SignupHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 57,
+      height: 56,
       width: double.infinity,
       color: Colors.white,
       alignment: Alignment.center,
       child: RichText(
         text: const TextSpan(
-          style: TextStyle(fontSize: 18, letterSpacing: 3),
+          style: TextStyle(fontSize: 18, letterSpacing: 3, fontWeight: FontWeight.w500),
           children: [
             TextSpan(text: 'Order.', style: TextStyle(color: Colors.black87)),
             TextSpan(text: 'Run.', style: TextStyle(color: Color(0xFFD4AF37))),
@@ -227,7 +231,7 @@ class _SignupFields extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const gap = 9.0;
+    const gap = 10.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -237,20 +241,21 @@ class _SignupFields extends StatelessWidget {
           style: TextStyle(
             color: Colors.white,
             fontFamily: 'serif',
-            fontSize: 18,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         const Text(
           'Sign up and start ordering, request errands and\nget things delivered in campus',
           style: TextStyle(
             color: Colors.white70,
-            fontSize: 10,
+            fontSize: 11,
             height: 1.3,
-            letterSpacing: 1,
+            letterSpacing: 0.5,
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 18),
         _SignupTextField(
           controller: nameController,
           hintText: 'Full Name',
@@ -270,7 +275,7 @@ class _SignupFields extends StatelessWidget {
         const SizedBox(height: gap),
         _SignupTextField(
           controller: studentIdController,
-          hintText: 'Student Id/Teacher Id',
+          hintText: 'Student Id / Teacher Id',
         ),
         const SizedBox(height: gap),
         _SignupTextField(
@@ -305,34 +310,34 @@ class _SignupTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 42,
+      height: 46,
       child: TextField(
         controller: controller,
         keyboardType: keyboardType,
         obscureText: obscureText,
         textAlign: TextAlign.center,
-        style: const TextStyle(color: Colors.black87, fontSize: 11),
+        style: const TextStyle(color: Colors.black87, fontSize: 13),
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: const TextStyle(
-            color: Colors.black38,
-            fontSize: 10,
-            letterSpacing: 1.2,
+            color: Colors.black45,
+            fontSize: 12,
+            letterSpacing: 0.8,
           ),
           isDense: true,
           filled: true,
-          fillColor: const Color(0xFFE0E0E0),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          fillColor: const Color(0xFFF0F0F0),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           border: const OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(10)),
+            borderRadius: BorderRadius.all(Radius.circular(12)),
             borderSide: BorderSide.none,
           ),
           enabledBorder: const OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(10)),
+            borderRadius: BorderRadius.all(Radius.circular(12)),
             borderSide: BorderSide.none,
           ),
           focusedBorder: const OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(10)),
+            borderRadius: BorderRadius.all(Radius.circular(12)),
             borderSide: BorderSide(color: Color(0xFFD4AF37), width: 1.5),
           ),
         ),
@@ -353,7 +358,7 @@ class _SignupButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 38,
+      height: 44,
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
@@ -365,13 +370,13 @@ class _SignupButton extends StatelessWidget {
         ),
         child: isLoading
             ? const SizedBox(
-                width: 18,
-                height: 18,
+                width: 20,
+                height: 20,
                 child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
               )
             : const Text(
                 'Sign Up',
-                style: TextStyle(fontSize: 14),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
       ),
     );
@@ -395,9 +400,9 @@ class _LoginFooter extends StatelessWidget {
             const Text(
               'Already have an account ?  ',
               style: TextStyle(
-                color: Colors.white54,
+                color: Colors.white70,
                 fontSize: 12,
-                letterSpacing: 1,
+                letterSpacing: 0.5,
               ),
             ),
             TextButton(
@@ -405,18 +410,16 @@ class _LoginFooter extends StatelessWidget {
               style: TextButton.styleFrom(
                 foregroundColor: Colors.white,
                 overlayColor: Colors.white24,
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(5),
-                ),
               ),
               child: const Text(
                 'Login',
                 style: TextStyle(
                   fontSize: 12,
-                  letterSpacing: 1,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
                 ),
               ),
             ),
@@ -435,7 +438,7 @@ class _SignupTexturePainter extends CustomPainter {
     final random = math.Random(41);
     final darkSpecks = <Offset>[];
     final lightSpecks = <Offset>[];
-    final speckCount = (size.width * size.height / 12).round();
+    final speckCount = (size.width * size.height / 14).round();
 
     for (var i = 0; i < speckCount; i++) {
       final point = Offset(
@@ -450,14 +453,14 @@ class _SignupTexturePainter extends CustomPainter {
         ui.PointMode.points,
         darkSpecks,
         Paint()
-          ..color = Colors.black.withOpacity(0.09)
+          ..color = Colors.black.withOpacity(0.08)
           ..strokeWidth = 0.7,
       )
       ..drawPoints(
         ui.PointMode.points,
         lightSpecks,
         Paint()
-          ..color = Colors.white.withOpacity(0.045)
+          ..color = Colors.white.withOpacity(0.04)
           ..strokeWidth = 0.6,
       );
   }

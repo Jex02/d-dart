@@ -80,78 +80,85 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF2B2B2B),
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(28),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final compact = constraints.maxHeight < 700;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktopOrTablet = screenWidth > 600;
 
-                    return Stack(
-                      children: [
-                        // LRAC BACKGROUND
-                        Positioned.fill(
-                          child: Image.asset(
-                            'assets/lrac.jpg',
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-
-                        // LIGHT OVERLAY
-                        Positioned.fill(
-                          child: Container(
-                            color: Colors.white.withOpacity(0.62),
-                          ),
-                        ),
-
-                        // BRANDING
-                        const Positioned(
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          bottom: 440,
-                          child: _Branding(),
-                        ),
-
-                        // LOGIN PANEL
-                        Align(
-                          alignment: Alignment.bottomCenter,
-                          child: _LoginPanel(
-                            compact: compact,
-                            rememberMe: _rememberMe,
-                            obscurePassword: _obscurePassword,
-                            isLoading: _isLoading,
-                            emailController: _emailController,
-                            passwordController: _passwordController,
-                            onLogin: _handleLogin,
-                            onRememberChanged: (value) {
-                              setState(() {
-                                _rememberMe = value;
-                              });
-                            },
-                            onPasswordVisibilityChanged: () {
-                              setState(() {
-                                _obscurePassword = !_obscurePassword;
-                              });
-                            },
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ),
+    Widget content = Stack(
+      children: [
+        // Background Image
+        Positioned.fill(
+          child: Image.asset(
+            'assets/lrac.jpg',
+            fit: BoxFit.cover,
           ),
         ),
-      ),
+
+        // Light Overlay
+        Positioned.fill(
+          child: Container(
+            color: Colors.white.withOpacity(0.62),
+          ),
+        ),
+
+        // Responsive Scrollable Auto-Layout
+        SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Top Branding (Flexes with space)
+                        const Expanded(
+                          child: Center(
+                            child: _Branding(),
+                          ),
+                        ),
+
+                        // Login Panel at Bottom
+                        _LoginPanel(
+                          rememberMe: _rememberMe,
+                          obscurePassword: _obscurePassword,
+                          isLoading: _isLoading,
+                          emailController: _emailController,
+                          passwordController: _passwordController,
+                          onLogin: _handleLogin,
+                          onRememberChanged: (value) {
+                            setState(() => _rememberMe = value);
+                          },
+                          onPasswordVisibilityChanged: () {
+                            setState(() => _obscurePassword = !_obscurePassword);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+
+    return Scaffold(
+      backgroundColor: isDesktopOrTablet ? const Color(0xFF2B2B2B) : panelColor,
+      body: isDesktopOrTablet
+          ? Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 450, maxHeight: 900),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: content,
+                ),
+              ),
+            )
+          : content,
     );
   }
 }
@@ -161,45 +168,43 @@ class _Branding extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 45, 24, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'D-DART',
-              style: TextStyle(
-                color: Colors.black87,
-                fontSize: 42,
-                fontWeight: FontWeight.w400,
-                letterSpacing: 2,
-              ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'D-DART',
+            style: TextStyle(
+              color: Colors.black87,
+              fontSize: 40,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 2,
             ),
-            const SizedBox(height: 6),
-            const Text(
-              'CIT-U WILDCATS ERRAND & DELIVERY',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.black87,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.8,
-              ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'CIT-U WILDCATS ERRAND & DELIVERY',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.black87,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.8,
             ),
-            const SizedBox(height: 20),
-            RichText(
-              text: const TextSpan(
-                style: TextStyle(fontSize: 19, letterSpacing: 3),
-                children: [
-                  TextSpan(text: 'Order.', style: TextStyle(color: Colors.black)),
-                  TextSpan(text: 'Run.', style: TextStyle(color: accentColor)),
-                  TextSpan(text: 'Deliver.', style: TextStyle(color: panelColor)),
-                ],
-              ),
+          ),
+          const SizedBox(height: 18),
+          RichText(
+            text: const TextSpan(
+              style: TextStyle(fontSize: 18, letterSpacing: 3, fontWeight: FontWeight.w600),
+              children: [
+                TextSpan(text: 'Order.', style: TextStyle(color: Colors.black87)),
+                TextSpan(text: 'Run.', style: TextStyle(color: accentColor)),
+                TextSpan(text: 'Deliver.', style: TextStyle(color: panelColor)),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -207,7 +212,6 @@ class _Branding extends StatelessWidget {
 
 class _LoginPanel extends StatelessWidget {
   const _LoginPanel({
-    required this.compact,
     required this.rememberMe,
     required this.obscurePassword,
     required this.isLoading,
@@ -218,7 +222,6 @@ class _LoginPanel extends StatelessWidget {
     required this.onPasswordVisibilityChanged,
   });
 
-  final bool compact;
   final bool rememberMe;
   final bool obscurePassword;
   final bool isLoading;
@@ -232,8 +235,7 @@ class _LoginPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      height: compact ? 400 : 440,
-      padding: EdgeInsets.fromLTRB(34, compact ? 26 : 32, 34, 24),
+      padding: const EdgeInsets.fromLTRB(28, 28, 28, 24),
       decoration: const BoxDecoration(
         color: panelColor,
         borderRadius: BorderRadius.only(
@@ -244,29 +246,30 @@ class _LoginPanel extends StatelessWidget {
           BoxShadow(
             color: Colors.black26,
             blurRadius: 14,
-            offset: Offset(0, -2),
+            offset: Offset(0, -3),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           const Text(
             'Welcome !',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 30,
-              fontWeight: FontWeight.w400,
+              fontSize: 28,
+              fontWeight: FontWeight.w500,
             ),
           ),
-          SizedBox(height: compact ? 20 : 25),
+          const SizedBox(height: 20),
 
           _LoginTextField(
             controller: emailController,
             hintText: 'Email',
             keyboardType: TextInputType.emailAddress,
           ),
-          SizedBox(height: compact ? 12 : 16),
+          const SizedBox(height: 14),
 
           _LoginTextField(
             controller: passwordController,
@@ -284,13 +287,13 @@ class _LoginPanel extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
 
           Row(
             children: [
               SizedBox(
-                width: 27,
-                height: 27,
+                width: 24,
+                height: 24,
                 child: Checkbox(
                   value: rememberMe,
                   shape: const CircleBorder(),
@@ -300,10 +303,10 @@ class _LoginPanel extends StatelessWidget {
                   onChanged: (value) => onRememberChanged(value ?? false),
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 8),
               const Text(
                 'Remember',
-                style: TextStyle(color: Colors.white, fontSize: 11),
+                style: TextStyle(color: Colors.white, fontSize: 12),
               ),
               const Spacer(),
               TextButton(
@@ -311,20 +314,20 @@ class _LoginPanel extends StatelessWidget {
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 30),
+                  minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                child: const Text('Forgot Password?', style: TextStyle(fontSize: 11)),
+                child: const Text('Forgot Password?', style: TextStyle(fontSize: 12)),
               ),
             ],
           ),
 
-          SizedBox(height: compact ? 15 : 20),
+          const SizedBox(height: 24),
 
           Center(
             child: SizedBox(
-              width: 115,
-              height: 38,
+              width: 140,
+              height: 42,
               child: ElevatedButton(
                 onPressed: isLoading ? null : onLogin,
                 style: ElevatedButton.styleFrom(
@@ -336,21 +339,24 @@ class _LoginPanel extends StatelessWidget {
                 ),
                 child: isLoading
                     ? const SizedBox(
-                        width: 18,
-                        height: 18,
+                        width: 20,
+                        height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: Colors.black,
                         ),
                       )
-                    : const Text('Login', style: TextStyle(fontSize: 14)),
+                    : const Text(
+                        'Login',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
               ),
             ),
           ),
 
-          const Spacer(),
+          const SizedBox(height: 22),
 
-          const Divider(color: Colors.white54, height: 1),
+          const Divider(color: Colors.white38, height: 1),
           const SizedBox(height: 16),
 
           Center(
@@ -375,7 +381,7 @@ class _LoginPanel extends StatelessWidget {
                   ),
                   child: const Text(
                     'Sign up',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
@@ -413,21 +419,21 @@ class _LoginTextField extends StatelessWidget {
         style: const TextStyle(fontSize: 13),
         decoration: InputDecoration(
           hintText: hintText,
-          hintStyle: const TextStyle(color: Colors.black87, fontSize: 12),
+          hintStyle: const TextStyle(color: Colors.black54, fontSize: 12),
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           suffixIcon: suffix,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(14),
             borderSide: BorderSide.none,
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(14),
             borderSide: BorderSide.none,
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(14),
             borderSide: const BorderSide(color: accentColor, width: 2),
           ),
         ),

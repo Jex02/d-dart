@@ -83,51 +83,56 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
   }
 
   Widget _buildUploadPromptUI() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Icon(Icons.document_scanner_outlined, size: 75, color: primaryMaroon),
-        const SizedBox(height: 16),
-        const Text(
-          'Upload Certificate of Registration (COR)',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 10),
-        const Text(
-          'D-DART uses Google Gemini AI to read your enrolled class hours. This automatically protects your studies by preventing gig requests while class is in session.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.black87, fontSize: 13),
-        ),
-        const SizedBox(height: 28),
-        if (_isProcessing) ...[
-          const CircularProgressIndicator(color: primaryMaroon),
-          const SizedBox(height: 16),
-          const Text('Analyzing study load with Gemini 2.5 Flash...', style: TextStyle(fontWeight: FontWeight.w600)),
-        ] else ...[
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton.icon(
-              onPressed: _pickAndProcessCOR,
-              icon: const Icon(Icons.upload_file, color: Colors.white),
-              label: const Text('Select COR Photo / PDF', style: TextStyle(color: Colors.white, fontSize: 15)),
-              style: ElevatedButton.styleFrom(backgroundColor: primaryMaroon),
+    return Center(
+      child: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.document_scanner_outlined, size: 75, color: primaryMaroon),
+            const SizedBox(height: 16),
+            const Text(
+              'Upload Certificate of Registration (COR)',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: () {
-              // Load demo preview
-              setState(() {
-                _extractedSessions = DutyLockService.verifiedSchedule;
-                _isReviewMode = true;
-              });
-            },
-            child: const Text('Or view existing verified schedule', style: TextStyle(color: primaryMaroon)),
-          ),
-        ]
-      ],
+            const SizedBox(height: 10),
+            const Text(
+              'D-DART uses Google Gemini AI to read your enrolled class hours. This automatically protects your studies by preventing gig requests while class is in session.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.black87, fontSize: 13),
+            ),
+            const SizedBox(height: 28),
+            if (_isProcessing) ...[
+              const CircularProgressIndicator(color: primaryMaroon),
+              const SizedBox(height: 16),
+              const Text('Analyzing study load with Gemini 2.5 Flash...', style: TextStyle(fontWeight: FontWeight.w600)),
+            ] else ...[
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: _pickAndProcessCOR,
+                  icon: const Icon(Icons.upload_file, color: Colors.white),
+                  label: const Text('Select COR Photo / PDF', style: TextStyle(color: Colors.white, fontSize: 15)),
+                  style: ElevatedButton.styleFrom(backgroundColor: primaryMaroon),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () {
+                  // Load demo preview
+                  setState(() {
+                    _extractedSessions = DutyLockService.verifiedSchedule;
+                    _isReviewMode = true;
+                  });
+                },
+                child: const Text('Or view existing verified schedule', style: TextStyle(color: primaryMaroon)),
+              ),
+            ]
+          ],
+        ),
+      ),
     );
   }
 

@@ -152,19 +152,26 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
                       // Category Icons: Food & Snacks, Drinks, Campus Stores
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          _buildCategoryItem(
-                            iconWidget: const Icon(Icons.lunch_dining, size: 36, color: Color(0xFFB56565)),
-                            label: 'Food\n& Snacks',
+                          Expanded(
+                            child: _buildCategoryItem(
+                              iconWidget: const Icon(Icons.lunch_dining, size: 34, color: Color(0xFFB56565)),
+                              label: 'Food\n& Snacks',
+                            ),
                           ),
-                          _buildCategoryItem(
-                            iconWidget: const Icon(Icons.local_drink, size: 36, color: Color(0xFF2C3E50)),
-                            label: 'Drinks\n',
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildCategoryItem(
+                              iconWidget: const Icon(Icons.local_drink, size: 34, color: Color(0xFF2C3E50)),
+                              label: 'Drinks\n',
+                            ),
                           ),
-                          _buildCategoryItem(
-                            iconWidget: const Icon(Icons.storefront_outlined, size: 36, color: Color(0xFF2C3E50)),
-                            label: 'Campus\nStores',
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildCategoryItem(
+                              iconWidget: const Icon(Icons.storefront_outlined, size: 34, color: Color(0xFF2C3E50)),
+                              label: 'Campus\nStores',
+                            ),
                           ),
                         ],
                       ),
@@ -205,27 +212,34 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
                       // Canteen Cards
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildCanteenCard(
-                            label: 'Main Canteen',
-                            child: Image.asset(
-                              'assets/lrac.jpg',
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => Container(
-                                color: Colors.grey.shade200,
-                                child: const Icon(Icons.restaurant, color: Colors.grey),
+                          Expanded(
+                            child: _buildCanteenCard(
+                              label: 'Main Canteen',
+                              child: Image.asset(
+                                'assets/lrac.jpg',
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) => Container(
+                                  color: Colors.grey.shade200,
+                                  child: const Icon(Icons.restaurant, color: Colors.grey),
+                                ),
                               ),
                             ),
                           ),
-                          _buildCanteenCard(
-                            label: 'College Canteen',
-                            child: Container(color: Colors.white),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildCanteenCard(
+                              label: 'College Canteen',
+                              child: Container(color: Colors.grey.shade100, child: const Icon(Icons.local_cafe_outlined, color: Colors.grey)),
+                            ),
                           ),
-                          _buildCanteenCard(
-                            label: 'Elementary\nCanteen',
-                            child: Container(color: Colors.white),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildCanteenCard(
+                              label: 'Elementary\nCanteen',
+                              child: Container(color: Colors.grey.shade100, child: const Icon(Icons.fastfood_outlined, color: Colors.grey)),
+                            ),
                           ),
                         ],
                       ),
@@ -390,7 +404,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     return Column(
       children: [
         Container(
-          width: 72,
+          width: double.infinity,
           height: 68,
           decoration: BoxDecoration(
             color: Colors.white,
@@ -419,7 +433,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     return Column(
       children: [
         Container(
-          width: 84,
+          width: double.infinity,
           height: 80,
           decoration: BoxDecoration(
             color: Colors.white,

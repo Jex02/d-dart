@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'customer_home_screen.dart';
+import 'runner_gig_board_screen.dart';
+import 'services/supabase_service.dart';
 
 class RoleSelectionPage extends StatefulWidget {
   const RoleSelectionPage({super.key});
@@ -12,6 +15,24 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
 
   String? selectedRole;
 
+  void _proceed() {
+    if (selectedRole == null) return;
+
+    SupabaseService().updateUserRole(selectedRole!.toLowerCase());
+
+    if (selectedRole == 'Customer') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const CustomerHomeScreen()),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const RunnerGigBoardScreen()),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -19,146 +40,116 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 430,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 20,
-                ),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Order.Run.Deliver.',
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontSize: 20,
-                        letterSpacing: 3,
-                        fontWeight: FontWeight.w400,
-                      ),
+              constraints: const BoxConstraints(maxWidth: 430),
+              child: Column(
+                children: [
+                  const Text(
+                    'Order.Run.Deliver.',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontSize: 18,
+                      letterSpacing: 3,
+                      fontWeight: FontWeight.w400,
                     ),
+                  ),
+                  const SizedBox(height: 20),
 
-                    const SizedBox(height: 25),
-
-                    const Text(
-                      'D-DART',
-                      style: TextStyle(
-                        color: Color(0xFF1E1E1E),
-                        fontSize: 40,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 3,
-                      ),
+                  const Text(
+                    'D-DART',
+                    style: TextStyle(
+                      color: Color(0xFF1E1E1E),
+                      fontSize: 38,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 2,
                     ),
+                  ),
+                  const SizedBox(height: 6),
 
-                    const SizedBox(height: 8),
-
-                    const Text(
-                      'Peer-to-Peer Campus Delivery Application',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Color(0xFF1E1E1E),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.8,
-                      ),
+                  const Text(
+                    'Peer-to-Peer Campus Delivery Application',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFF1E1E1E),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.6,
                     ),
+                  ),
+                  const SizedBox(height: 28),
 
-                    const SizedBox(height: 25),
-
-                    const Text(
-                      'Choose Role',
-                      style: TextStyle(
-                        color: darkRed,
-                        fontSize: 30,
-                        fontWeight: FontWeight.w500,
-                      ),
+                  const Text(
+                    'Choose Role',
+                    style: TextStyle(
+                      color: darkRed,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w600,
                     ),
+                  ),
+                  const SizedBox(height: 6),
 
-                    const SizedBox(height: 8),
-
-                    const Text(
-                      'Choose a role to get started',
-                      style: TextStyle(
-                        color: Colors.black87,
-                        fontSize: 13,
-                      ),
+                  const Text(
+                    'Choose a role to get started',
+                    style: TextStyle(
+                      color: Colors.black54,
+                      fontSize: 13,
                     ),
+                  ),
+                  const SizedBox(height: 24),
 
-                    const SizedBox(height: 25),
+                  // CUSTOMER
+                  _RoleCard(
+                    title: 'Customer',
+                    description: 'Order food and request items to be delivered on campus.',
+                    imageUrl:
+                        'https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/22e77230-b5a4-4f13-9fc8-a98eee5e2fe8',
+                    selected: selectedRole == 'Customer',
+                    onTap: () {
+                      setState(() => selectedRole = 'Customer');
+                    },
+                  ),
+                  const SizedBox(height: 16),
 
-                    // CUSTOMER
-                    _RoleCard(
-                      title: 'Customer',
-                      description:
-                          'Order food and request items to be delivered on campus.',
-                      imageUrl:
-                          'https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/22e77230-b5a4-4f13-9fc8-a98eee5e2fe8',
-                      selected: selectedRole == 'Customer',
-                      onTap: () {
-                        setState(() {
-                          selectedRole = 'Customer';
-                        });
-                      },
-                    ),
+                  // RUNNER
+                  _RoleCard(
+                    title: 'Runner',
+                    description: 'Accept delivery requests and deliver items around campus.',
+                    imageUrl:
+                        'https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/2bbae86b-b7ef-4e3c-b824-e73d461e5159',
+                    selected: selectedRole == 'Runner',
+                    onTap: () {
+                      setState(() => selectedRole = 'Runner');
+                    },
+                  ),
+                  const SizedBox(height: 32),
 
-                    const SizedBox(height: 18),
-
-                    // RUNNER
-                    _RoleCard(
-                      title: 'Runner',
-                      description:
-                          'Accept delivery requests and deliver items around campus.',
-                      imageUrl:
-                          'https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/2bbae86b-b7ef-4e3c-b824-e73d461e5159',
-                      selected: selectedRole == 'Runner',
-                      onTap: () {
-                        setState(() {
-                          selectedRole = 'Runner';
-                        });
-                      },
-                    ),
-
-                    const SizedBox(height: 35),
-
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: selectedRole == null
-                            ? null
-                            : () {
-                                // TODO:
-                                // Add navigation here when the
-                                // Customer and Runner dashboards
-                                // are implemented.
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: darkRed,
-                          disabledBackgroundColor:
-                              darkRed.withOpacity(0.35),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: selectedRole == null ? null : _proceed,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: darkRed,
+                        disabledBackgroundColor: darkRed.withOpacity(0.35),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Text(
-                          selectedRole == null
-                              ? 'Proceed'
-                              : 'Proceed as $selectedRole',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
+                      ),
+                      child: Text(
+                        selectedRole == null ? 'Proceed' : 'Proceed as $selectedRole',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-
-                    const SizedBox(height: 20),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
               ),
             ),
           ),
@@ -192,19 +183,19 @@ class _RoleCard extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         width: double.infinity,
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: selected ? darkRed : Colors.grey.shade300,
             width: selected ? 2 : 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withOpacity(0.06),
               blurRadius: 8,
-              offset: const Offset(0, 3),
+              offset: const Offset(0, 2),
             ),
           ],
         ),
@@ -213,8 +204,8 @@ class _RoleCard extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: SizedBox(
-                width: 90,
-                height: 75,
+                width: 80,
+                height: 70,
                 child: Image.network(
                   imageUrl,
                   fit: BoxFit.cover,
@@ -230,9 +221,7 @@ class _RoleCard extends StatelessWidget {
                 ),
               ),
             ),
-
-            const SizedBox(width: 18),
-
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -241,32 +230,27 @@ class _RoleCard extends StatelessWidget {
                     title,
                     style: const TextStyle(
                       color: darkRed,
-                      fontSize: 22,
+                      fontSize: 18,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-
-                  const SizedBox(height: 6),
-
+                  const SizedBox(height: 4),
                   Text(
                     description,
                     style: const TextStyle(
                       color: Colors.black87,
                       fontSize: 11,
-                      height: 1.3,
+                      height: 1.25,
                     ),
                   ),
                 ],
               ),
             ),
-
             const SizedBox(width: 8),
-
             Icon(
-              selected
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked,
+              selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
               color: selected ? darkRed : Colors.grey,
+              size: 22,
             ),
           ],
         ),

@@ -20,386 +20,273 @@ class _MainDashboardState extends State<MainDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      // Dark area surrounding the mobile-style application.
-      backgroundColor: const Color(0xFF2B2B2B),
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktopOrTablet = screenWidth > 600;
 
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+    Widget content = Stack(
+      children: [
+        // Background Image
+        Positioned.fill(
+          child: Image.asset(
+            'assets/lrac.jpg',
+            fit: BoxFit.cover,
+          ),
+        ),
 
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 430,
-                maxHeight: 720,
-              ),
+        // Light Overlay
+        Positioned.fill(
+          child: Container(
+            color: Colors.white.withOpacity(0.82),
+          ),
+        ),
 
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                  ),
-
-                  child: Stack(
-                    children: [
-                      // ==================================================
-                      // LRAC BACKGROUND
-                      // ==================================================
-
-                      Positioned.fill(
-                        child: Image.asset(
-                          'assets/lrac.jpg',
-                          fit: BoxFit.cover,
-                        ),
+        // Responsive Scrollable Auto-Layout
+        SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Top Tagline
+                    const Text(
+                      'Order.Run.Deliver.',
+                      style: TextStyle(
+                        color: Colors.black87,
+                        fontSize: 14,
+                        letterSpacing: 3,
+                        fontWeight: FontWeight.w400,
                       ),
+                    ),
+                    const SizedBox(height: 10),
 
-                      // ==================================================
-                      // LIGHT OVERLAY
-                      // ==================================================
+                    // Divider
+                    Container(
+                      width: double.infinity,
+                      height: 1,
+                      color: Colors.black26,
+                    ),
+                    const SizedBox(height: 24),
 
-                      Positioned.fill(
-                        child: Container(
-                          color: Colors.white.withOpacity(0.78),
+                    // D-Dart Branding
+                    RichText(
+                      textAlign: TextAlign.center,
+                      text: const TextSpan(
+                        style: TextStyle(
+                          fontFamily: 'serif',
+                          fontSize: 34,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 2,
                         ),
+                        children: [
+                          TextSpan(text: 'D', style: TextStyle(color: gold)),
+                          TextSpan(text: '-DART', style: TextStyle(color: darkRed)),
+                        ],
                       ),
+                    ),
+                    const SizedBox(height: 8),
 
-                      // ==================================================
-                      // MAIN CONTENT
-                      // ==================================================
+                    const Text(
+                      'Peer-to-Peer Campus Delivery Application',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.black87,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
 
-                      SafeArea(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 17,
-                            vertical: 8,
-                          ),
+                    // Section Heading
+                    const Text(
+                      'Choose Role',
+                      style: TextStyle(
+                        color: darkRed,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
 
-                          child: Column(
-                            children: [
-                              // ==================================================
-                              // TOP TAGLINE
-                              // ==================================================
+                    const Text(
+                      'Choose a role to get started',
+                      style: TextStyle(
+                        color: Colors.black54,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
 
-                              const Text(
-                                'Order.Run.Deliver.',
-                                style: TextStyle(
-                                  color: Colors.black87,
-                                  fontSize: 13,
-                                  letterSpacing: 2.5,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                              ),
+                    // CUSTOMER CARD
+                    _RoleCard(
+                      title: 'Customer',
+                      description: 'Order food and request items to be delivered on campus.',
+                      imageUrl:
+                          'https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/22e77230-b5a4-4f13-9fc8-a98eee5e2fe8',
+                      selected: selectedRole == 'Customer',
+                      onTap: () {
+                        setState(() => selectedRole = 'Customer');
+                      },
+                    ),
+                    const SizedBox(height: 16),
 
-                              const SizedBox(height: 8),
+                    // RUNNER CARD
+                    _RoleCard(
+                      title: 'Runner',
+                      description: 'Accept delivery requests and deliver items around campus.',
+                      imageUrl:
+                          'https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/2bbae86b-b7ef-4e3c-b824-e73d461e5159',
+                      selected: selectedRole == 'Runner',
+                      onTap: () {
+                        setState(() => selectedRole = 'Runner');
+                      },
+                    ),
+                    const SizedBox(height: 28),
 
-                              // ==================================================
-                              // DIVIDER
-                              // ==================================================
-
-                              Container(
-                                width: double.infinity,
-                                height: 1,
-                                color: Colors.black54,
-                              ),
-
-                              const SizedBox(height: 22),
-
-                              // ==================================================
-                              // D-DART
-                              // ==================================================
-
-                              RichText(
-                                textAlign: TextAlign.center,
-                                text: const TextSpan(
-                                  style: TextStyle(
-                                    fontFamily: 'serif',
-                                    fontSize: 31,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 2,
-                                  ),
-
-                                  children: [
-                                    TextSpan(
-                                      text: 'D',
-                                      style: TextStyle(
-                                        color: gold,
-                                      ),
-                                    ),
-                                    TextSpan(
-                                      text: '-DART',
-                                      style: TextStyle(
-                                        color: Color(0xFF202020),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-
-                              const SizedBox(height: 3),
-
-                              // ==================================================
-                              // SUBTITLE
-                              // ==================================================
-
-                              const Text(
-                                'Peer-to-Peer Campus Delivery Application',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.black87,
-                                  fontSize: 7,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.25,
-                                ),
-                              ),
-
-                              const SizedBox(height: 22),
-
-                              // ==================================================
-                              // CHOOSE ROLE
-                              // ==================================================
-
-                              const Text(
-                                'Choose Role',
-                                style: TextStyle(
-                                  color: darkRed,
-                                  fontFamily: 'serif',
-                                  fontSize: 27,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                              ),
-
-                              const SizedBox(height: 5),
-
-                              const Text(
-                                'Choose role to get started',
-                                style: TextStyle(
-                                  color: Colors.black87,
-                                  fontSize: 7,
-                                ),
-                              ),
-
-                              const SizedBox(height: 25),
-
-                              // ==================================================
-                              // CUSTOMER CARD
-                              // ==================================================
-
-                              Center(
-                                child: SizedBox(
-                                  width: 365,
-
-                                  child: _RoleCard(
-                                    title: 'Customer',
-                                    description:
-                                        'Order food and request items to be delivered on campus.',
-                                    imageUrl:
-                                        'https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/22e77230-b5a4-4f13-9fc8-a98eee5e2fe8',
-                                    selected: selectedRole == 'Customer',
-                                    onTap: () {
-                                      setState(() {
-                                        selectedRole = 'Customer';
-                                      });
-                                    },
-                                  ),
-                                ),
-                              ),
-
-                              const SizedBox(height: 13),
-
-                              // ==================================================
-                              // RUNNER CARD
-                              // ==================================================
-
-                              Center(
-                                child: SizedBox(
-                                  width: 365,
-
-                                  child: _RoleCard(
-                                    title: 'Runner',
-                                    description:
-                                        'Accept delivery requests and deliver items around campus.',
-                                    imageUrl:
-                                        'https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/2bbae86b-b7ef-4e3c-b824-e73d461e5159',
-                                    selected: selectedRole == 'Runner',
-                                    onTap: () {
-                                      setState(() {
-                                        selectedRole = 'Runner';
-                                      });
-                                    },
-                                  ),
-                                ),
-                              ),
-
-                              const SizedBox(height: 24),
-
-                              // ==================================================
-                              // PROCEED BUTTON
-                              // ==================================================
-
-                              Center(
-                                child: SizedBox(
-                                  width: 120,
-                                  height: 30,
-
-                                  child: ElevatedButton(
-                                    onPressed: selectedRole == null
-                                        ? null
-                                        : () {
-                                            SupabaseService().updateUserRole(selectedRole!.toLowerCase());
-                                            if (selectedRole == 'Customer') {
-                                              Navigator.pushReplacement(
+                    // PROCEED BUTTON
+                    SizedBox(
+                      width: 140,
+                      height: 40,
+                      child: ElevatedButton(
+                        onPressed: selectedRole == null
+                            ? null
+                            : () {
+                                SupabaseService().updateUserRole(selectedRole!.toLowerCase());
+                                if (selectedRole == 'Customer') {
+                                  Navigator.pushReplacement(
+                                    context,
+                                    MaterialPageRoute(builder: (context) => const CustomerHomeScreen()),
+                                  );
+                                } else if (selectedRole == 'Runner') {
+                                  final status = DutyLockService.checkDutyStatus();
+                                  if (status['isLocked'] == true) {
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Row(
+                                          children: [
+                                            Icon(Icons.lock_clock, color: darkRed),
+                                            SizedBox(width: 8),
+                                            Text(
+                                              'Academic Duty Lock',
+                                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                            ),
+                                          ],
+                                        ),
+                                        content: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'Runner Mode is locked due to an active class session:',
+                                              style: TextStyle(fontWeight: FontWeight.bold),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              status['reason'] ?? '',
+                                              style: const TextStyle(color: darkRed),
+                                            ),
+                                            const SizedBox(height: 12),
+                                            const Text(
+                                              'D-DART enforces Duty Lock to ensure academic priorities come first. Please fulfill your class duties before accepting deliveries.',
+                                              style: TextStyle(fontSize: 12, color: Colors.black87),
+                                            ),
+                                          ],
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () {
+                                              Navigator.pop(context);
+                                              Navigator.push(
                                                 context,
                                                 MaterialPageRoute(
-                                                  builder: (context) => const CustomerHomeScreen(),
+                                                  builder: (context) => const CorUploadScreen(),
                                                 ),
                                               );
-                                            } else if (selectedRole == 'Runner') {
-                                              final status = DutyLockService.checkDutyStatus();
-                                              if (status['isLocked'] == true) {
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (context) => AlertDialog(
-                                                    title: const Row(
-                                                      children: [
-                                                        Icon(Icons.lock_clock, color: darkRed),
-                                                        SizedBox(width: 8),
-                                                        Text(
-                                                          'Academic Duty Lock',
-                                                          style: TextStyle(
-                                                            fontSize: 16,
-                                                            fontWeight: FontWeight.bold,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    content: Column(
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      children: [
-                                                        const Text(
-                                                          'Runner Mode is locked due to an active class session:',
-                                                          style: TextStyle(fontWeight: FontWeight.bold),
-                                                        ),
-                                                        const SizedBox(height: 8),
-                                                        Text(
-                                                          status['reason'] ?? '',
-                                                          style: const TextStyle(color: darkRed),
-                                                        ),
-                                                        const SizedBox(height: 12),
-                                                        const Text(
-                                                          'D-DART enforces Duty Lock to ensure academic priorities come first. Please fulfill your class duties before accepting deliveries.',
-                                                          style: TextStyle(fontSize: 12, color: Colors.black87),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    actions: [
-                                                      TextButton(
-                                                        onPressed: () {
-                                                          Navigator.pop(context);
-                                                          Navigator.push(
-                                                            context,
-                                                            MaterialPageRoute(
-                                                              builder: (context) => const CorUploadScreen(),
-                                                            ),
-                                                          );
-                                                        },
-                                                        child: const Text(
-                                                          'Update Study Load',
-                                                          style: TextStyle(color: darkRed),
-                                                        ),
-                                                      ),
-                                                      TextButton(
-                                                        onPressed: () => Navigator.pop(context),
-                                                        child: const Text('OK'),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                );
-                                              } else {
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (context) => const RunnerGigBoardScreen(),
-                                                  ),
-                                                );
-                                              }
-                                            }
-                                          },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: darkRed,
-
-                                      disabledBackgroundColor:
-                                          darkRed.withOpacity(0.35),
-
-                                      foregroundColor: Colors.white,
-
-                                      disabledForegroundColor:
-                                          Colors.white,
-
-                                      elevation: 0,
-
-                                      padding: EdgeInsets.zero,
-
-                                      shape: const StadiumBorder(),
-                                    ),
-
-                                    child: const Text(
-                                      'Proceed',
-                                      style: TextStyle(
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.w400,
+                                            },
+                                            child: const Text('Update Study Load', style: TextStyle(color: darkRed)),
+                                          ),
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(context),
+                                            child: const Text('OK'),
+                                          ),
+                                        ],
                                       ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-
-                              const SizedBox(height: 8),
-
-                              // Secondary Action: Manage / Update Study Load
-                              TextButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => const CorUploadScreen(),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.school_outlined, size: 14, color: darkRed),
-                                label: const Text(
-                                  'Manage / Update Study Load',
-                                  style: TextStyle(
-                                    fontSize: 10.5,
-                                    color: darkRed,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-
-                              const SizedBox(height: 14),
-                            ],
-                          ),
+                                    );
+                                  } else {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => const RunnerGigBoardScreen(),
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: darkRed,
+                          disabledBackgroundColor: darkRed.withOpacity(0.35),
+                          foregroundColor: Colors.white,
+                          disabledForegroundColor: Colors.white70,
+                          elevation: 0,
+                          padding: EdgeInsets.zero,
+                          shape: const StadiumBorder(),
+                        ),
+                        child: const Text(
+                          'Proceed',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Update Study Load Button
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const CorUploadScreen()),
+                        );
+                      },
+                      icon: const Icon(Icons.school_outlined, size: 16, color: darkRed),
+                      label: const Text(
+                        'Manage / Update Study Load',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: darkRed,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
         ),
-      ),
+      ],
+    );
+
+    return Scaffold(
+      backgroundColor: isDesktopOrTablet ? const Color(0xFF2B2B2B) : Colors.white,
+      body: isDesktopOrTablet
+          ? Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 450, maxHeight: 900),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: content,
+                ),
+              ),
+            )
+          : content,
     );
   }
 }
-
-// ============================================================
-// ROLE CARD
-// ============================================================
 
 class _RoleCard extends StatelessWidget {
   const _RoleCard({
@@ -423,103 +310,75 @@ class _RoleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-
         width: double.infinity,
-        height: 68,
-
-        padding: const EdgeInsets.symmetric(
-          horizontal: 10,
-          vertical: 7,
-        ),
-
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.88),
-
-          borderRadius: BorderRadius.circular(6),
-
+          color: Colors.white.withOpacity(0.92),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? gold : darkRed,
+            color: selected ? gold : darkRed.withOpacity(0.6),
             width: selected ? 2 : 1,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: selected ? gold.withOpacity(0.2) : Colors.black12,
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-
         child: Row(
           children: [
-            // ==================================================
-            // ROLE IMAGE
-            // ==================================================
-
-            SizedBox(
-              width: 70,
-              height: 62,
-
-              child: Image.network(
-                imageUrl,
-                fit: BoxFit.contain,
-
-                errorBuilder: (
-                  context,
-                  error,
-                  stackTrace,
-                ) {
-                  return const Icon(
-                    Icons.image_not_supported_outlined,
-                    color: Colors.grey,
-                    size: 30,
-                  );
-                },
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                width: 52,
+                height: 52,
+                color: Colors.grey.shade100,
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Icon(
+                    title == 'Customer' ? Icons.shopping_bag_outlined : Icons.directions_run,
+                    color: darkRed,
+                    size: 28,
+                  ),
+                ),
               ),
             ),
-
-            const SizedBox(width: 12),
-
-            // ==================================================
-            // ROLE INFORMATION
-            // ==================================================
-
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
-
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     title,
-
-                    style: const TextStyle(
-                      color: darkRed,
-                      fontFamily: 'serif',
-                      fontSize: 20,
-                      fontWeight: FontWeight.w400,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: selected ? darkRed : Colors.black87,
                     ),
                   ),
-
-                  const SizedBox(height: 1),
-
+                  const SizedBox(height: 3),
                   Text(
                     description,
-
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-
                     style: const TextStyle(
+                      fontSize: 11,
                       color: Colors.black54,
-                      fontSize: 6.5,
-                      height: 1.15,
+                      height: 1.25,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             Icon(
-              selected
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked,
-              color: selected ? darkRed : Colors.grey,
+              selected ? Icons.check_circle : Icons.circle_outlined,
+              color: selected ? gold : Colors.grey.shade400,
+              size: 22,
             ),
           ],
         ),
