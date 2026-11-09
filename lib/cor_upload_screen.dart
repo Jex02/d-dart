@@ -33,17 +33,46 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
     });
 
     try {
-      final sessions = await GeminiService.extractScheduleFromCOR(bytes);
+      final result = await GeminiService.verifyAndExtractCOR(bytes);
+      if (!result.isValid) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.error_outline, color: primaryMaroon),
+                  SizedBox(width: 8),
+                  Text('Invalid Document'),
+                ],
+              ),
+              content: Text(result.message),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Try Again'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
       setState(() {
-        _extractedSessions = sessions;
+        _extractedSessions = result.sessions;
         _isReviewMode = true;
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Schedule parsing error: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Schedule parsing error: $e')),
+        );
+      }
     } finally {
-      setState(() => _isProcessing = false);
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
     }
   }
 

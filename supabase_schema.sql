@@ -123,5 +123,17 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- 9. Enable Realtime on delivery_requests table
+-- 9. Backfill any existing auth users into public.profiles
+insert into public.profiles (id, full_name, email, phone_number, student_id, role)
+select 
+  id,
+  coalesce(raw_user_meta_data->>'full_name', ''),
+  email,
+  coalesce(raw_user_meta_data->>'phone_number', ''),
+  coalesce(raw_user_meta_data->>'student_id', ''),
+  coalesce(raw_user_meta_data->>'role', 'customer')
+from auth.users
+on conflict (id) do nothing;
+
+-- 10. Enable Realtime on delivery_requests table
 alter publication supabase_realtime add table public.delivery_requests;

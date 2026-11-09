@@ -55,9 +55,13 @@ class _LoginPageState extends State<LoginPage> {
       }
     } on AuthException catch (e) {
       if (mounted) {
+        String msg = e.message;
+        if (msg.toLowerCase().contains('invalid login credentials')) {
+          msg = 'Invalid credentials or email not confirmed yet. Check your inbox or turn off "Confirm email" in Supabase.';
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.message),
+            content: Text(msg),
             backgroundColor: Colors.redAccent,
           ),
         );

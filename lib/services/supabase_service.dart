@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/delivery_order.dart';
 import '../models/class_schedule.dart';
@@ -47,8 +48,8 @@ class SupabaseService {
           'role': 'customer',
           'updated_at': DateTime.now().toIso8601String(),
         });
-      } catch (_) {
-        // Table may still be creating or RLS policy applied
+      } catch (e) {
+        debugPrint('Warning: Could not save to profiles table: $e');
       }
     }
 

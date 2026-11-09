@@ -26,8 +26,8 @@ class DutyLockService {
   static Map<String, dynamic> checkDutyStatus() {
     if (!isRunnerScheduleUploaded || verifiedSchedule.isEmpty) {
       return {
-        'isLocked': false,
-        'reason': 'No schedule uploaded yet.',
+        'isLocked': true,
+        'reason': 'No verified COR schedule uploaded. Please upload your study load to activate Runner mode.',
       };
     }
 

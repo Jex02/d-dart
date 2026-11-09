@@ -1,28 +1,90 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../constants/gemini_constants.dart';
 import '../models/class_schedule.dart';
 
 class GeminiService {
-  // Replace with your Google AI Studio API Key
-  static String apiKey = 'AIzaSyDemoKeyReplaceWithYours';
+  /// Active Gemini API Key (defaults to GeminiConstants.apiKey)
+  static String apiKey = GeminiConstants.apiKey;
 
+  /// Check whether a real API key is configured
+  static bool get hasRealApiKey =>
+      apiKey.isNotEmpty && !apiKey.contains('ReplaceWithYours') && !apiKey.startsWith('AIzaSyDemo');
+
+  /// Main AI Gatekeeper: Inspects uploaded document, determines if it is a valid
+  /// CIT-U Certificate of Registration (COR) / Study Load, and extracts enrolled class schedules.
+  static Future<CorVerificationResult> verifyAndExtractCOR(
+    Uint8List imageBytes, {
+    String? expectedStudentId,
+    String? expectedName,
+  }) async {
+    if (imageBytes.isEmpty) {
+      return CorVerificationResult.invalid('No document image provided. Please select an image.');
+    }
+
+    // If using live Gemini API key
+    if (hasRealApiKey) {
+      return await _callLiveGeminiVision(imageBytes, expectedStudentId: expectedStudentId, expectedName: expectedName);
+    } else {
+      // Development Demo Mode (resilient mock validator so testing works before inserting key)
+      debugPrint('[GeminiService] Running in Development Demo Mode (no live API key set).');
+      return _generateDemoVerificationResult(imageBytes, expectedStudentId: expectedStudentId, expectedName: expectedName);
+    }
+  }
+
+  /// Backward-compatible method used by legacy screens
   static Future<List<ClassSession>> extractScheduleFromCOR(Uint8List imageBytes) async {
+    final result = await verifyAndExtractCOR(imageBytes);
+    return result.sessions;
+  }
+
+  /// Calls Google Gemini Vision API to analyze and validate the COR image
+  static Future<CorVerificationResult> _callLiveGeminiVision(
+    Uint8List imageBytes, {
+    String? expectedStudentId,
+    String? expectedName,
+  }) async {
     final base64Image = base64Encode(imageBytes);
     final url = Uri.parse(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey',
+      'https://generativelanguage.googleapis.com/v1beta/models/${GeminiConstants.model}:generateContent?key=$apiKey',
     );
 
-    const prompt = """
-      You are an OCR and academic timetable extractor for Cebu Institute of Technology - University (CIT-U) Certificate of Registration (COR) and study load documents.
-      Extract all class meeting sessions with their day, start time, end time, and subject code/name.
-      Return strictly a raw JSON array of objects with keys:
-      - "day": full weekday name (Monday, Tuesday, Wednesday, Thursday, Friday, Saturday)
-      - "start_time": 24-hour format "HH:mm" (e.g. "09:00", "13:30")
-      - "end_time": 24-hour format "HH:mm" (e.g. "10:30", "15:00")
-      - "subject": course subject or code
-      Do not include markdown tags, code blocks, or backticks. Return valid parseable JSON only.
-    """;
+    const systemPrompt = """
+You are an official academic document validator and OCR specialist for Cebu Institute of Technology - University (CIT-U).
+Your task is to analyze the provided image and determine whether it is an authentic Certificate of Registration (COR), Study Load, or Enrollment Assessment document from CIT-U.
+
+CRITICAL VALIDATION RULES:
+1. Verify if the image is an authentic academic document from CIT-U or contains a legitimate study load schedule with course codes and meeting times.
+2. If the image is unrelated (e.g. food, animals, random objects, selfies, memes, receipts, blank images), set "is_valid": false and provide an explanatory "rejection_reason".
+3. If it is valid:
+   - Extract "student_name" (or null if unreadable)
+   - Extract "student_id" (e.g. "23-1626-937") (or null if unreadable)
+   - Extract all enrolled course sessions in "sessions". For each session:
+     - "day": Full English weekday name ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+     - "start_time": 24-hour time "HH:mm" (e.g. "07:30", "13:00")
+     - "end_time": 24-hour time "HH:mm" (e.g. "09:00", "15:30")
+     - "subject": Course code or subject name (e.g. "CS 321", "MATH 101")
+   If a course meets multiple days (e.g. "MWF" or "TTH"), generate separate session items for each day.
+   If no classes or schedules are found on the document, set "is_valid": false and state that no class schedule was detected.
+
+Output strictly valid JSON with this exact schema:
+{
+  "is_valid": true,
+  "rejection_reason": "",
+  "student_name": "Jerick Ivan L. Davidon",
+  "student_id": "23-1626-937",
+  "sessions": [
+    {
+      "day": "Monday",
+      "start_time": "09:00",
+      "end_time": "12:00",
+      "subject": "CS 321 - Software Dev 2"
+    }
+  ]
+}
+""";
 
     try {
       final response = await http.post(
@@ -32,7 +94,7 @@ class GeminiService {
           "contents": [
             {
               "parts": [
-                {"text": prompt},
+                {"text": systemPrompt},
                 {
                   "inline_data": {
                     "mime_type": "image/jpeg",
@@ -41,31 +103,95 @@ class GeminiService {
                 }
               ]
             }
-          ]
+          ],
+          "generationConfig": {
+            "response_mime_type": "application/json",
+            "temperature": 0.1,
+          }
         }),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final rawText = data['candidates'][0]['content']['parts'][0]['text'] as String;
-        final cleanJson = rawText.replaceAll('```json', '').replaceAll('```', '').trim();
-        final List<dynamic> parsedList = jsonDecode(cleanJson);
-        return parsedList.map((item) => ClassSession.fromJson(item)).toList();
+        final Map<String, dynamic> parsed = jsonDecode(rawText);
+
+        final bool isValid = parsed['is_valid'] == true;
+        final String rejectionReason = parsed['rejection_reason'] ?? 'Invalid document.';
+        final String? detectedStudentName = parsed['student_name'];
+        final String? detectedStudentId = parsed['student_id'];
+
+        if (!isValid) {
+          return CorVerificationResult.invalid(
+            rejectionReason.isNotEmpty
+                ? rejectionReason
+                : 'The uploaded image was not recognized as a valid CIT-U Certificate of Registration.',
+          );
+        }
+
+        final List<dynamic> sessionList = parsed['sessions'] ?? [];
+        if (sessionList.isEmpty) {
+          return CorVerificationResult.invalid(
+            'The document was recognized, but no enrolled class schedule sessions could be found.',
+          );
+        }
+
+        final sessions = sessionList.map((item) => ClassSession.fromJson(item)).toList();
+
+        // Optional cross-validation with signup input
+        if (expectedStudentId != null &&
+            detectedStudentId != null &&
+            detectedStudentId.trim().isNotEmpty &&
+            !detectedStudentId.replaceAll(RegExp(r'[^0-9]'), '').contains(expectedStudentId.replaceAll(RegExp(r'[^0-9]'), ''))) {
+          // Warning or soft notification if IDs differ
+          debugPrint('[GeminiService] Note: Extracted ID ($detectedStudentId) differs from input ($expectedStudentId)');
+        }
+
+        return CorVerificationResult.valid(
+          message: 'CIT-U COR verified successfully! Enrolled schedule confirmed.',
+          studentName: detectedStudentName,
+          studentId: detectedStudentId,
+          sessions: sessions,
+        );
       } else {
-        // Fallback demo schedule if network or quota limits fail during evaluation
-        return [
-          ClassSession(day: 'Monday', startTime: '09:00', endTime: '12:00', subject: 'CS 321 - Software Dev 2'),
-          ClassSession(day: 'Wednesday', startTime: '13:00', endTime: '15:30', subject: 'IT 312 - Database Systems'),
-          ClassSession(day: 'Friday', startTime: '10:00', endTime: '12:00', subject: 'GE 108 - Ethics'),
-        ];
+        debugPrint('[GeminiService] API error ${response.statusCode}: ${response.body}');
+        return CorVerificationResult.invalid(
+          'Gemini AI service returned status ${response.statusCode}. Please try again.',
+        );
       }
     } catch (e) {
-      // Fallback for local testing and demo resilience
-      return [
-        ClassSession(day: 'Monday', startTime: '09:00', endTime: '12:00', subject: 'CS 321 - Software Dev 2'),
-        ClassSession(day: 'Wednesday', startTime: '13:00', endTime: '15:30', subject: 'IT 312 - Database Systems'),
-        ClassSession(day: 'Friday', startTime: '10:00', endTime: '12:00', subject: 'GE 108 - Ethics'),
-      ];
+      debugPrint('[GeminiService] Network/parsing exception: $e');
+      return CorVerificationResult.invalid('Failed to connect to Gemini AI: ${e.toString()}');
     }
+  }
+
+  /// Development demo validator when API key is not yet provided
+  static CorVerificationResult _generateDemoVerificationResult(
+    Uint8List imageBytes, {
+    String? expectedStudentId,
+    String? expectedName,
+  }) {
+    // If the image is very small (< 1 KB), consider it corrupt or blank
+    if (imageBytes.length < 1000) {
+      return CorVerificationResult.invalid(
+        'The uploaded image file is too small or corrupt. Please upload a clear photo of your COR.',
+      );
+    }
+
+    final demoSessions = [
+      ClassSession(day: 'Monday', startTime: '09:00', endTime: '12:00', subject: 'CS 321 - Software Dev 2'),
+      ClassSession(day: 'Tuesday', startTime: '13:00', endTime: '15:30', subject: 'CS 323 - Mobile Computing'),
+      ClassSession(day: 'Wednesday', startTime: '09:00', endTime: '12:00', subject: 'CS 321 - Software Dev 2'),
+      ClassSession(day: 'Thursday', startTime: '13:00', endTime: '15:30', subject: 'CS 323 - Mobile Computing'),
+      ClassSession(day: 'Friday', startTime: '10:00', endTime: '12:00', subject: 'GE 108 - Ethics'),
+    ];
+
+    return CorVerificationResult.valid(
+      message: 'Demo Mode: Validated CIT-U COR with 5 class sessions.',
+      studentName: expectedName ?? 'Jerick Ivan L. Davidon',
+      studentId: expectedStudentId ?? '23-1626-937',
+      sessions: demoSessions,
+      isDemoFallback: true,
+    );
   }
 }

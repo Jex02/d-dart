@@ -27,3 +27,46 @@ class ClassSession {
     );
   }
 }
+
+class CorVerificationResult {
+  final bool isValid;
+  final String message;
+  final String? studentName;
+  final String? studentId;
+  final List<ClassSession> sessions;
+  final bool isDemoFallback;
+
+  CorVerificationResult({
+    required this.isValid,
+    required this.message,
+    this.studentName,
+    this.studentId,
+    this.sessions = const [],
+    this.isDemoFallback = false,
+  });
+
+  factory CorVerificationResult.invalid(String message) {
+    return CorVerificationResult(
+      isValid: false,
+      message: message,
+      sessions: const [],
+    );
+  }
+
+  factory CorVerificationResult.valid({
+    required String message,
+    String? studentName,
+    String? studentId,
+    required List<ClassSession> sessions,
+    bool isDemoFallback = false,
+  }) {
+    return CorVerificationResult(
+      isValid: true,
+      message: message,
+      studentName: studentName,
+      studentId: studentId,
+      sessions: sessions,
+      isDemoFallback: isDemoFallback,
+    );
+  }
+}

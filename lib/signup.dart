@@ -61,7 +61,7 @@ class _SignupPageState extends State<SignupPage> {
     setState(() => _isLoading = true);
 
     try {
-      await SupabaseService().signUp(
+      final response = await SupabaseService().signUp(
         email: email,
         password: password,
         fullName: name,
@@ -70,12 +70,15 @@ class _SignupPageState extends State<SignupPage> {
       );
 
       if (mounted) {
+        final needsConfirmation = response.session == null;
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Account Created'),
-            content: const Text(
-              'Your CIT-U D-Dart account has been created successfully! You can now log in.',
+            content: Text(
+              needsConfirmation
+                  ? 'Your account was created! If "Confirm Email" is active in Supabase, please verify the confirmation link sent to $email before logging in (or disable "Confirm email" in Supabase Authentication settings for instant login).'
+                  : 'Your CIT-U D-Dart account has been created successfully! You can now log in.',
             ),
             actions: [
               TextButton(

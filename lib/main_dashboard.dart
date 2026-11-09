@@ -19,6 +19,12 @@ class _MainDashboardState extends State<MainDashboard> {
   String? selectedRole;
 
   @override
+  void initState() {
+    super.initState();
+    DutyLockService.syncFromSupabase();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktopOrTablet = screenWidth > 600;
