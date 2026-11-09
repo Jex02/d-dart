@@ -18,6 +18,18 @@ class DutyLockService {
       if (sessions.isNotEmpty) {
         verifiedSchedule = sessions;
         isRunnerScheduleUploaded = true;
+      } else {
+        // Check if schedule was saved in user metadata during signup
+        final metaSchedule = SupabaseService().currentUser?.userMetadata?['schedule'];
+        if (metaSchedule is List && metaSchedule.isNotEmpty) {
+          final parsed = metaSchedule
+              .map((m) => ClassSession.fromJson(Map<String, dynamic>.from(m)))
+              .toList();
+          verifiedSchedule = parsed;
+          isRunnerScheduleUploaded = true;
+          // Now that user is authenticated, save directly into runner_schedules table
+          await SupabaseService().saveClassSchedule(parsed);
+        }
       }
     } catch (_) {}
   }

@@ -25,6 +25,7 @@ class SupabaseService {
     required String fullName,
     required String phoneNumber,
     required String studentId,
+    List<ClassSession>? initialSchedule,
   }) async {
     final response = await client.auth.signUp(
       email: email,
@@ -34,6 +35,8 @@ class SupabaseService {
         'phone_number': phoneNumber,
         'student_id': studentId,
         'role': 'customer',
+        if (initialSchedule != null && initialSchedule.isNotEmpty)
+          'schedule': initialSchedule.map((s) => s.toJson()).toList(),
       },
     );
 
@@ -50,6 +53,15 @@ class SupabaseService {
         });
       } catch (e) {
         debugPrint('Warning: Could not save to profiles table: $e');
+      }
+
+      // If already has an authenticated session (e.g. autoconfirm is true)
+      if (initialSchedule != null && initialSchedule.isNotEmpty && response.session != null) {
+        try {
+          await saveClassSchedule(initialSchedule);
+        } catch (e) {
+          debugPrint('Warning: Could not save initial schedule: $e');
+        }
       }
     }
 
