@@ -2,7 +2,8 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
 
 const _signupPanelColor = Color(0xFF8F1F0D);
 
@@ -14,6 +15,104 @@ class SignupPage extends StatefulWidget {
 }
 
 class _SignupPageState extends State<SignupPage> {
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _studentIdController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _studentIdController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleSignUp() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final phone = _phoneController.text.trim();
+    final studentId = _studentIdController.text.trim();
+    final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
+
+    if (name.isEmpty || email.isEmpty || phone.isEmpty || studentId.isEmpty || password.isEmpty) {
+      _showSnackbar('Please fill in all fields.', Colors.redAccent);
+      return;
+    }
+
+    if (password != confirmPassword) {
+      _showSnackbar('Passwords do not match.', Colors.redAccent);
+      return;
+    }
+
+    if (password.length < 6) {
+      _showSnackbar('Password must be at least 6 characters.', Colors.redAccent);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      await SupabaseService().signUp(
+        email: email,
+        password: password,
+        fullName: name,
+        phoneNumber: phone,
+        studentId: studentId,
+      );
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Account Created'),
+            content: const Text(
+              'Your CIT-U D-Dart account has been created successfully! You can now log in.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  _returnToLogin();
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } on AuthException catch (e) {
+      _showSnackbar(e.message, Colors.redAccent);
+    } catch (e) {
+      _showSnackbar('Signup failed: ${e.toString()}', Colors.redAccent);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _showSnackbar(String message, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: color),
+    );
+  }
+
+  void _returnToLogin() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -33,14 +132,45 @@ class _SignupPageState extends State<SignupPage> {
                   children: [
                     const _SignupHeader(),
                     Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final compact = constraints.maxHeight < 620;
-                          return _SignupPanel(
-                            compact: compact,
-                            onLoginTap: _returnToLogin,
-                          );
-                        },
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          color: _signupPanelColor,
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              const Positioned.fill(
+                                child: CustomPaint(painter: _SignupTexturePainter()),
+                              ),
+                              SingleChildScrollView(
+                                padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    _SignupFields(
+                                      nameController: _nameController,
+                                      emailController: _emailController,
+                                      phoneController: _phoneController,
+                                      studentIdController: _studentIdController,
+                                      passwordController: _passwordController,
+                                      confirmPasswordController: _confirmPasswordController,
+                                    ),
+                                    const SizedBox(height: 24),
+                                    _SignupButton(
+                                      isLoading: _isLoading,
+                                      onPressed: _handleSignUp,
+                                    ),
+                                    const SizedBox(height: 20),
+                                    _LoginFooter(onTap: _returnToLogin),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -51,12 +181,6 @@ class _SignupPageState extends State<SignupPage> {
         ),
       ),
     );
-  }
-
-  void _returnToLogin() {
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    }
   }
 }
 
@@ -84,95 +208,26 @@ class _SignupHeader extends StatelessWidget {
   }
 }
 
-class _SignupPanel extends StatelessWidget {
-  const _SignupPanel({
-    required this.compact,
-    required this.onLoginTap,
-  });
-
-  final bool compact;
-  final VoidCallback onLoginTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final fields = _SignupFields(compact: compact);
-
-    if (compact) {
-      return Container(
-        decoration: const BoxDecoration(
-          color: _signupPanelColor,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              const Positioned.fill(
-                child: CustomPaint(painter: _SignupTexturePainter()),
-              ),
-              SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(22, 24, 22, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    fields,
-                    const SizedBox(height: 32),
-                    const _SignupButton(),
-                    const SizedBox(height: 30),
-                    _LoginFooter(onTap: onLoginTap),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: _signupPanelColor,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            const Positioned.fill(
-              child: CustomPaint(painter: _SignupTexturePainter()),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 26, 22, 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  fields,
-                  const Spacer(),
-                  const _SignupButton(),
-                  const SizedBox(height: 39),
-                  _LoginFooter(onTap: onLoginTap),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _SignupFields extends StatelessWidget {
   const _SignupFields({
-    required this.compact,
+    required this.nameController,
+    required this.emailController,
+    required this.phoneController,
+    required this.studentIdController,
+    required this.passwordController,
+    required this.confirmPasswordController,
   });
 
-  final bool compact;
+  final TextEditingController nameController;
+  final TextEditingController emailController;
+  final TextEditingController phoneController;
+  final TextEditingController studentIdController;
+  final TextEditingController passwordController;
+  final TextEditingController confirmPasswordController;
 
   @override
   Widget build(BuildContext context) {
-    final gap = compact ? 9.0 : 12.0;
+    const gap = 9.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -195,27 +250,37 @@ class _SignupFields extends StatelessWidget {
             letterSpacing: 1,
           ),
         ),
-        SizedBox(height: compact ? 12 : 15),
-        const _SignupTextField(hintText: 'Full Name'),
-        SizedBox(height: gap),
-        const _SignupTextField(
+        const SizedBox(height: 14),
+        _SignupTextField(
+          controller: nameController,
+          hintText: 'Full Name',
+        ),
+        const SizedBox(height: gap),
+        _SignupTextField(
+          controller: emailController,
           hintText: 'Email Address',
           keyboardType: TextInputType.emailAddress,
         ),
-        SizedBox(height: gap),
-        const _SignupTextField(
+        const SizedBox(height: gap),
+        _SignupTextField(
+          controller: phoneController,
           hintText: 'Phone Number',
           keyboardType: TextInputType.phone,
         ),
-        SizedBox(height: gap),
-        const _SignupTextField(hintText: 'Student Id/Teacher Id'),
-        SizedBox(height: gap),
+        const SizedBox(height: gap),
         _SignupTextField(
+          controller: studentIdController,
+          hintText: 'Student Id/Teacher Id',
+        ),
+        const SizedBox(height: gap),
+        _SignupTextField(
+          controller: passwordController,
           hintText: 'Password',
           obscureText: true,
         ),
-        SizedBox(height: gap),
+        const SizedBox(height: gap),
         _SignupTextField(
+          controller: confirmPasswordController,
           hintText: 'Confirm Password',
           obscureText: true,
         ),
@@ -226,11 +291,13 @@ class _SignupFields extends StatelessWidget {
 
 class _SignupTextField extends StatelessWidget {
   const _SignupTextField({
+    required this.controller,
     required this.hintText,
     this.keyboardType,
     this.obscureText = false,
   });
 
+  final TextEditingController controller;
   final String hintText;
   final TextInputType? keyboardType;
   final bool obscureText;
@@ -240,6 +307,7 @@ class _SignupTextField extends StatelessWidget {
     return SizedBox(
       height: 42,
       child: TextField(
+        controller: controller,
         keyboardType: keyboardType,
         obscureText: obscureText,
         textAlign: TextAlign.center,
@@ -274,14 +342,20 @@ class _SignupTextField extends StatelessWidget {
 }
 
 class _SignupButton extends StatelessWidget {
-  const _SignupButton();
+  const _SignupButton({
+    required this.isLoading,
+    required this.onPressed,
+  });
+
+  final bool isLoading;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       height: 38,
       child: ElevatedButton(
-        onPressed: () {},
+        onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFFD4AF37),
           foregroundColor: Colors.black,
@@ -289,10 +363,16 @@ class _SignupButton extends StatelessWidget {
           padding: EdgeInsets.zero,
           shape: const StadiumBorder(),
         ),
-        child: const Text(
-          'Sign Up',
-          style: TextStyle(fontSize: 14),
-        ),
+        child: isLoading
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+              )
+            : const Text(
+                'Sign Up',
+                style: TextStyle(fontSize: 14),
+              ),
       ),
     );
   }
@@ -308,7 +388,7 @@ class _LoginFooter extends StatelessWidget {
     return Column(
       children: [
         const Divider(color: Colors.white38, height: 1),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [

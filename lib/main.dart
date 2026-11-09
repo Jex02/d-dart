@@ -1,7 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'constants/supabase_constants.dart';
 import 'get_started.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await Supabase.initialize(
+      url: SupabaseConstants.url,
+      anonKey: SupabaseConstants.anonKey,
+    );
+  } catch (e) {
+    debugPrint('Supabase initialization error: $e');
+  }
+
   runApp(const DDartApp());
 }
 

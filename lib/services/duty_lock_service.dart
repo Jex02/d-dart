@@ -1,4 +1,5 @@
 import '../models/class_schedule.dart';
+import 'supabase_service.dart';
 
 class DutyLockService {
   // Global verified runner schedule stored in memory
@@ -9,6 +10,17 @@ class DutyLockService {
   ];
 
   static bool isRunnerScheduleUploaded = true;
+
+  /// Sync schedule from Supabase for logged-in user
+  static Future<void> syncFromSupabase() async {
+    try {
+      final sessions = await SupabaseService().fetchClassSchedule();
+      if (sessions.isNotEmpty) {
+        verifiedSchedule = sessions;
+        isRunnerScheduleUploaded = true;
+      }
+    } catch (_) {}
+  }
 
   // Returns true if current time falls within any confirmed class session + 15 min buffer
   static Map<String, dynamic> checkDutyStatus() {

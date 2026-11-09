@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'models/class_schedule.dart';
 import 'services/gemini_service.dart';
 import 'services/duty_lock_service.dart';
+import 'services/supabase_service.dart';
 
 class CorUploadScreen extends StatefulWidget {
   const CorUploadScreen({super.key});
@@ -49,6 +50,7 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
   void _confirmSchedule() {
     DutyLockService.verifiedSchedule = _extractedSessions;
     DutyLockService.isRunnerScheduleUploaded = true;
+    SupabaseService().saveClassSchedule(_extractedSessions);
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(

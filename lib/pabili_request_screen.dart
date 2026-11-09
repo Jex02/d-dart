@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'services/supabase_service.dart';
 import 'mock_data.dart';
 
 class PabiliRequestScreen extends StatefulWidget {
@@ -15,6 +16,8 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
   final _itemController = TextEditingController();
   final _priceController = TextEditingController();
   final _notesController = TextEditingController();
+
+  bool _isSubmitting = false;
 
   String _selectedPickup = 'Main Canteen';
   String _selectedDropoff = 'ALLIED Building';
@@ -34,26 +37,74 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
     'Department Offices',
   ];
 
-  void _submitOrder() {
-    if (_formKey.currentState!.validate()) {
-      final double estimatedPrice = double.tryParse(_priceController.text) ?? 50.0;
+  @override
+  void dispose() {
+    _itemController.dispose();
+    _priceController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
 
+  Future<void> _submitOrder() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final double estimatedPrice = double.tryParse(_priceController.text) ?? 50.0;
+    final description = _itemController.text.trim();
+    final instructions = _notesController.text.trim();
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      // 1. Save to Supabase delivery_requests table
+      await SupabaseService().createOrder(
+        pickup: _selectedPickup,
+        dropoff: _selectedDropoff,
+        description: description,
+        price: estimatedPrice,
+        instructions: instructions,
+      );
+
+      // 2. Also keep local mock data in sync for seamless fallback
       addPabiliRequest(
         pickup: _selectedPickup,
         dropoff: _selectedDropoff,
-        description: _itemController.text,
+        description: description,
         price: estimatedPrice,
-        instructions: _notesController.text,
+        instructions: instructions,
       );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: primaryMaroon,
-          content: Text('Delivery request posted successfully!'),
-        ),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: primaryMaroon,
+            content: Text('Delivery request posted to Supabase!'),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      // Fallback to local memory if offline or database table pending
+      addPabiliRequest(
+        pickup: _selectedPickup,
+        dropoff: _selectedDropoff,
+        description: description,
+        price: estimatedPrice,
+        instructions: instructions,
       );
 
-      Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: primaryMaroon,
+            content: Text('Order saved (Offline fallback: $e)'),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
     }
   }
 
@@ -165,12 +216,18 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                     width: double.infinity,
                     height: 48,
                     child: ElevatedButton(
-                      onPressed: _submitOrder,
+                      onPressed: _isSubmitting ? null : _submitOrder,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryMaroon,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text('Post Delivery Request', style: TextStyle(color: Colors.white, fontSize: 15)),
+                      child: _isSubmitting
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Text('Post Delivery Request', style: TextStyle(color: Colors.white, fontSize: 15)),
                     ),
                   ),
                 ],

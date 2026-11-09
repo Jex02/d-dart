@@ -3,6 +3,7 @@ import 'customer_home_screen.dart';
 import 'runner_gig_board_screen.dart';
 import 'cor_upload_screen.dart';
 import 'services/duty_lock_service.dart';
+import 'services/supabase_service.dart';
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({super.key});
@@ -247,6 +248,7 @@ class _MainDashboardState extends State<MainDashboard> {
                                     onPressed: selectedRole == null
                                         ? null
                                         : () {
+                                            SupabaseService().updateUserRole(selectedRole!.toLowerCase());
                                             if (selectedRole == 'Customer') {
                                               Navigator.pushReplacement(
                                                 context,
