@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../constants/gemini_constants.dart';
@@ -11,36 +10,130 @@ class GeminiService {
 
   /// Check whether a real API key is configured
   static bool get hasRealApiKey =>
-      apiKey.isNotEmpty && !apiKey.contains('ReplaceWithYours') && !apiKey.startsWith('AIzaSyDemo');
+      apiKey.isNotEmpty &&
+      !apiKey.contains('ReplaceWithYours') &&
+      !apiKey.startsWith('AIzaSyDemo');
 
-  /// Main AI Gatekeeper: Inspects uploaded document, determines if it is a valid
-  /// CIT-U Certificate of Registration (COR) / Study Load, and extracts enrolled class schedules.
+  /// Inspects uploaded document, verifies if it is a valid CIT-U COR / Study Load,
+  /// and extracts enrolled class schedules.
   static Future<CorVerificationResult> verifyAndExtractCOR(
     Uint8List imageBytes, {
     String? expectedStudentId,
     String? expectedName,
   }) async {
     if (imageBytes.isEmpty) {
-      return CorVerificationResult.invalid('No document image provided. Please select an image.');
+      return CorVerificationResult.invalid(
+        'No document image provided. Please select an image.',
+      );
     }
 
-    // If using live Gemini API key
     if (hasRealApiKey) {
-      return await _callLiveGeminiVision(imageBytes, expectedStudentId: expectedStudentId, expectedName: expectedName);
-    } else {
-      // Development Demo Mode (resilient mock validator so testing works before inserting key)
-      debugPrint('[GeminiService] Running in Development Demo Mode (no live API key set).');
-      return _generateDemoVerificationResult(imageBytes, expectedStudentId: expectedStudentId, expectedName: expectedName);
+      return _callLiveGeminiVision(
+        imageBytes,
+        expectedStudentId: expectedStudentId,
+        expectedName: expectedName,
+      );
     }
+
+    debugPrint('[GeminiService] Running in Development Demo Mode (no live API key set).');
+    return _generateDemoVerificationResult(
+      imageBytes,
+      expectedStudentId: expectedStudentId,
+      expectedName: expectedName,
+    );
   }
 
-  /// Backward-compatible method used by legacy screens
   static Future<List<ClassSession>> extractScheduleFromCOR(Uint8List imageBytes) async {
     final result = await verifyAndExtractCOR(imageBytes);
     return result.sessions;
   }
 
-  /// Calls Google Gemini Vision API to analyze and validate the COR image
+  /// Parses raw JSON text returned by Gemini into a structured [CorVerificationResult].
+  @visibleForTesting
+  static CorVerificationResult parseGeminiResponseJson(
+    String rawText, {
+    String? expectedStudentId,
+  }) {
+    try {
+      String cleaned = rawText.trim();
+      if (cleaned.startsWith('```')) {
+        cleaned = cleaned
+            .replaceFirst(RegExp(r'^```(?:json)?\s*'), '')
+            .replaceFirst(RegExp(r'\s*```$'), '')
+            .trim();
+      }
+
+      final dynamic decoded = jsonDecode(cleaned);
+      if (decoded is! Map<String, dynamic>) {
+        return CorVerificationResult.invalid(
+          'Unexpected response format from AI schedule extractor.',
+        );
+      }
+
+      final bool isValid = decoded['is_valid'] == true;
+      final String rejectionReason = decoded['rejection_reason']?.toString() ?? '';
+      final String? detectedStudentName = decoded['student_name']?.toString();
+      final String? detectedStudentId = decoded['student_id']?.toString();
+
+      if (!isValid) {
+        return CorVerificationResult.invalid(
+          rejectionReason.isNotEmpty
+              ? rejectionReason
+              : 'The uploaded image was not recognized as a valid CIT-U Certificate of Registration.',
+        );
+      }
+
+      final List<dynamic> sessionList =
+          (decoded['sessions'] is List) ? decoded['sessions'] as List<dynamic> : [];
+      if (sessionList.isEmpty) {
+        return CorVerificationResult.invalid(
+          'The document was recognized, but no enrolled class schedule sessions could be found.',
+        );
+      }
+
+      final sessions = <ClassSession>[];
+      for (final item in sessionList) {
+        if (item is Map) {
+          final session = ClassSession.fromJson(Map<String, dynamic>.from(item));
+          if (ClassSession.validDays.contains(session.day) && session.hasValidTimeRange) {
+            sessions.add(session);
+          }
+        }
+      }
+
+      if (sessions.isEmpty) {
+        return CorVerificationResult.invalid(
+          'Class schedule rows were detected, but none had valid days or start/end times.',
+        );
+      }
+
+      if (expectedStudentId != null &&
+          detectedStudentId != null &&
+          detectedStudentId.trim().isNotEmpty) {
+        final expectedDigits = expectedStudentId.replaceAll(RegExp(r'[^0-9]'), '');
+        final detectedDigits = detectedStudentId.replaceAll(RegExp(r'[^0-9]'), '');
+        if (expectedDigits.isNotEmpty &&
+            detectedDigits.isNotEmpty &&
+            expectedDigits != detectedDigits) {
+          debugPrint(
+            '[GeminiService] Note: Extracted ID ($detectedStudentId) differs from input ($expectedStudentId)',
+          );
+        }
+      }
+
+      return CorVerificationResult.valid(
+        message: 'CIT-U COR verified successfully! Enrolled schedule confirmed.',
+        studentName: detectedStudentName,
+        studentId: detectedStudentId,
+        sessions: sessions,
+      );
+    } catch (e) {
+      return CorVerificationResult.invalid(
+        'Could not parse extracted schedule data: ${e.toString()}',
+      );
+    }
+  }
+
   static Future<CorVerificationResult> _callLiveGeminiVision(
     Uint8List imageBytes, {
     String? expectedStudentId,
@@ -114,44 +207,9 @@ Output strictly valid JSON with this exact schema:
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final rawText = data['candidates'][0]['content']['parts'][0]['text'] as String;
-        final Map<String, dynamic> parsed = jsonDecode(rawText);
-
-        final bool isValid = parsed['is_valid'] == true;
-        final String rejectionReason = parsed['rejection_reason'] ?? 'Invalid document.';
-        final String? detectedStudentName = parsed['student_name'];
-        final String? detectedStudentId = parsed['student_id'];
-
-        if (!isValid) {
-          return CorVerificationResult.invalid(
-            rejectionReason.isNotEmpty
-                ? rejectionReason
-                : 'The uploaded image was not recognized as a valid CIT-U Certificate of Registration.',
-          );
-        }
-
-        final List<dynamic> sessionList = parsed['sessions'] ?? [];
-        if (sessionList.isEmpty) {
-          return CorVerificationResult.invalid(
-            'The document was recognized, but no enrolled class schedule sessions could be found.',
-          );
-        }
-
-        final sessions = sessionList.map((item) => ClassSession.fromJson(item)).toList();
-
-        // Optional cross-validation with signup input
-        if (expectedStudentId != null &&
-            detectedStudentId != null &&
-            detectedStudentId.trim().isNotEmpty &&
-            !detectedStudentId.replaceAll(RegExp(r'[^0-9]'), '').contains(expectedStudentId.replaceAll(RegExp(r'[^0-9]'), ''))) {
-          // Warning or soft notification if IDs differ
-          debugPrint('[GeminiService] Note: Extracted ID ($detectedStudentId) differs from input ($expectedStudentId)');
-        }
-
-        return CorVerificationResult.valid(
-          message: 'CIT-U COR verified successfully! Enrolled schedule confirmed.',
-          studentName: detectedStudentName,
-          studentId: detectedStudentId,
-          sessions: sessions,
+        return parseGeminiResponseJson(
+          rawText,
+          expectedStudentId: expectedStudentId,
         );
       } else {
         debugPrint('[GeminiService] API error ${response.statusCode}: ${response.body}');
@@ -161,7 +219,9 @@ Output strictly valid JSON with this exact schema:
       }
     } catch (e) {
       debugPrint('[GeminiService] Network/parsing exception: $e');
-      return CorVerificationResult.invalid('Failed to connect to Gemini AI: ${e.toString()}');
+      return CorVerificationResult.invalid(
+        'Failed to connect to Gemini AI: ${e.toString()}',
+      );
     }
   }
 
@@ -171,7 +231,6 @@ Output strictly valid JSON with this exact schema:
     String? expectedStudentId,
     String? expectedName,
   }) {
-    // If the image is very small (< 1 KB), consider it corrupt or blank
     if (imageBytes.length < 1000) {
       return CorVerificationResult.invalid(
         'The uploaded image file is too small or corrupt. Please upload a clear photo of your COR.',

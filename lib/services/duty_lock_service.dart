@@ -1,66 +1,116 @@
 import '../models/class_schedule.dart';
+import '../models/user_profile.dart';
 import 'supabase_service.dart';
 
 class DutyLockService {
-  // Global verified runner schedule stored in memory
-  static List<ClassSession> verifiedSchedule = [
-    ClassSession(day: 'Monday', startTime: '09:00', endTime: '12:00', subject: 'CS 321 - Software Dev 2'),
-    ClassSession(day: 'Wednesday', startTime: '13:00', endTime: '15:30', subject: 'IT 312 - Database Systems'),
-    ClassSession(day: 'Thursday', startTime: '18:00', endTime: '21:00', subject: 'CS 322 - Algorithms'),
-  ];
+  /// Confirmed runner schedule for the active user (empty until synced/uploaded).
+  static List<ClassSession> verifiedSchedule = [];
 
-  static bool isRunnerScheduleUploaded = true;
+  static bool isRunnerScheduleUploaded = false;
 
-  /// Sync schedule from Supabase for logged-in user
+  /// Reset in-memory schedule state (e.g., on sign out).
+  static void reset() {
+    verifiedSchedule = [];
+    isRunnerScheduleUploaded = false;
+  }
+
+  /// Sync profile and schedule from Supabase for the logged-in user.
   static Future<void> syncFromSupabase() async {
     try {
+      final profile = await SupabaseService().fetchUserProfileModel();
       final sessions = await SupabaseService().fetchClassSchedule();
       if (sessions.isNotEmpty) {
         verifiedSchedule = sessions;
         isRunnerScheduleUploaded = true;
-      } else {
-        // Check if schedule was saved in user metadata during signup
-        final metaSchedule = SupabaseService().currentUser?.userMetadata?['schedule'];
-        if (metaSchedule is List && metaSchedule.isNotEmpty) {
-          final parsed = metaSchedule
-              .map((m) => ClassSession.fromJson(Map<String, dynamic>.from(m)))
-              .toList();
-          verifiedSchedule = parsed;
-          isRunnerScheduleUploaded = true;
-          // Now that user is authenticated, save directly into runner_schedules table
-          await SupabaseService().saveClassSchedule(parsed);
-        }
+        return;
+      }
+
+      // Check if schedule was captured in auth user metadata during signup
+      final metaSchedule = SupabaseService().currentUser?.userMetadata?['schedule'];
+      if (metaSchedule is List && metaSchedule.isNotEmpty) {
+        final parsed = metaSchedule
+            .map((m) => ClassSession.fromJson(Map<String, dynamic>.from(m)))
+            .toList();
+        verifiedSchedule = parsed;
+        isRunnerScheduleUploaded = true;
+        await SupabaseService().saveClassSchedule(parsed);
+        return;
+      }
+
+      if (profile != null && !profile.corVerified) {
+        verifiedSchedule = [];
+        isRunnerScheduleUploaded = false;
       }
     } catch (_) {}
   }
 
-  // Returns true if current time falls within any confirmed class session + 15 min buffer
-  static Map<String, dynamic> checkDutyStatus() {
+  /// Evaluates whether the user is currently eligible to enter Runner Mode or claim requests.
+  /// Checks account type, verification status, COR schedule existence, and class time + buffer.
+  static Map<String, dynamic> checkDutyStatus({
+    DateTime? now,
+    UserProfile? profile,
+    int preClassBufferMinutes = 15,
+  }) {
+    if (profile != null) {
+      if (profile.isRejected) {
+        return {
+          'isLocked': true,
+          'code': 'account_rejected',
+          'reason': 'Your account verification was rejected. Runner access is disabled.',
+        };
+      }
+      if (!profile.isStudent) {
+        return {
+          'isLocked': true,
+          'code': 'not_student',
+          'reason': 'Runner Mode is restricted to verified CIT-U student accounts.',
+        };
+      }
+      if (!profile.isVerified || !profile.corVerified) {
+        return {
+          'isLocked': true,
+          'code': 'unverified_cor',
+          'reason': 'Your student COR verification is pending. Please upload and confirm your study load first.',
+        };
+      }
+    }
+
     if (!isRunnerScheduleUploaded || verifiedSchedule.isEmpty) {
       return {
         'isLocked': true,
-        'reason': 'No verified COR schedule uploaded. Please upload your study load to activate Runner mode.',
+        'code': 'no_schedule',
+        'reason': 'No verified COR schedule uploaded. Please upload your study load to activate Runner Mode.',
       };
     }
 
-    final now = DateTime.now();
-    final weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    final currentDay = weekdays[now.weekday - 1];
+    final ref = now ?? DateTime.now();
+    const weekdays = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    final currentDay = weekdays[ref.weekday - 1];
+    final currentMinutes = ref.hour * 60 + ref.minute;
 
-    for (var session in verifiedSchedule) {
+    for (final session in verifiedSchedule) {
       if (session.day.toLowerCase() == currentDay.toLowerCase()) {
-        final startParts = session.startTime.split(':');
-        final endParts = session.endTime.split(':');
+        final start = ClassSession.parseTimeMinutes(session.startTime);
+        final end = ClassSession.parseTimeMinutes(session.endTime);
 
-        if (startParts.length == 2 && endParts.length == 2) {
-          final startMinutes = int.parse(startParts[0]) * 60 + int.parse(startParts[1]) - 15; // 15-min pre-class buffer
-          final endMinutes = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
-          final currentMinutes = now.hour * 60 + now.minute;
-
-          if (currentMinutes >= startMinutes && currentMinutes <= endMinutes) {
+        if (start != null && end != null) {
+          final bufferedStart = start - preClassBufferMinutes;
+          if (currentMinutes >= bufferedStart && currentMinutes <= end) {
+            final inBufferOnly = currentMinutes < start;
             return {
               'isLocked': true,
-              'reason': 'Active Class: ${session.subject} (${session.startTime} - ${session.endTime})',
+              'code': inBufferOnly ? 'pre_class_buffer' : 'in_class',
+              'reason': inBufferOnly
+                  ? 'Pre-Class Buffer ($preClassBufferMinutes min): ${session.subject} starts at ${session.startTime}.'
+                  : 'Active Class: ${session.subject} (${session.startTime} - ${session.endTime}).',
               'currentSession': session,
             };
           }
@@ -70,6 +120,7 @@ class DutyLockService {
 
     return {
       'isLocked': false,
+      'code': 'authorized',
       'reason': 'Vacant period. Runner Mode is authorized.',
     };
   }

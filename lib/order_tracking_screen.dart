@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'models/delivery_order.dart';
 import 'services/supabase_service.dart';
 import 'mock_data.dart';
 
@@ -18,9 +19,18 @@ class OrderTrackingScreen extends StatefulWidget {
 
 class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   static const Color primaryMaroon = Color(0xFF7F0000);
-  final _otpInputController = TextEditingController();
+  static const List<String> _flowSteps = [
+    'pending',
+    'claimed',
+    'purchasing',
+    'en_route',
+    'arrived',
+    'completed',
+  ];
 
+  final _otpInputController = TextEditingController();
   Map<String, dynamic> _fallbackOrder = {};
+  bool _isBusy = false;
 
   @override
   void initState() {
@@ -32,7 +42,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           'id': widget.orderId,
           'status': 'pending',
           'description': 'Pabili delivery item',
-          'dropoff_location': 'Campus dropoff',
+          'pickup_location': 'Campus Canteen',
+          'dropoff_location': 'Campus Drop-off',
+          'estimated_price': 0.0,
+          'delivery_fee': 20.0,
           'verification_code': '0000',
         },
       );
@@ -55,51 +68,138 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       nextStatus = 'arrived';
     }
 
+    setState(() => _isBusy = true);
     try {
       await SupabaseService().updateOrderStatus(widget.orderId, nextStatus);
-    } catch (_) {}
-
-    setState(() {
-      _fallbackOrder['status'] = nextStatus;
-    });
+      setState(() => _fallbackOrder['status'] = nextStatus);
+    } catch (e) {
+      if (widget.orderId.startsWith('ORD-')) {
+        setState(() => _fallbackOrder['status'] = nextStatus);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text('Could not update status: $e'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
   }
 
   Future<void> _verifyOtp(String expectedOtp) async {
     final input = _otpInputController.text.trim();
+    if (input.length != 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Please enter the 4-digit handover code.'),
+        ),
+      );
+      return;
+    }
 
+    setState(() => _isBusy = true);
     bool verified = false;
     try {
       verified = await SupabaseService().verifyAndCompleteOrder(widget.orderId, input);
     } catch (_) {
-      verified = (input == expectedOtp);
-    }
-
-    if (!verified && input == expectedOtp) {
-      verified = true;
+      // Only allow local mock completion when offline / running local ORD-xxx mock order
+      if (widget.orderId.startsWith('ORD-') || !SupabaseService().isAuthenticated) {
+        verified = (input == expectedOtp);
+      }
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
     }
 
     if (verified) {
-      setState(() {
-        _fallbackOrder['status'] = 'completed';
-      });
+      setState(() => _fallbackOrder['status'] = 'completed');
       if (mounted) {
-        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Colors.green,
             content: Text('Delivery verified and completed!'),
           ),
         );
+        Navigator.pop(context, true);
       }
-    } else {
-      if (mounted) {
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Invalid 4-digit code. Handover blocked until verified.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleCancelOrder() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Request?'),
+        content: const Text(
+          'Only unclaimed pending requests can be cancelled. Are you sure you want to cancel this request?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep Request'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Cancel Request'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _isBusy = true);
+    final cancelled = await SupabaseService().cancelOrder(widget.orderId);
+    if (mounted) {
+      setState(() => _isBusy = false);
+      if (cancelled) {
+        setState(() => _fallbackOrder['status'] = 'cancelled');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Delivery request cancelled.')),
+        );
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            backgroundColor: Colors.red,
-            content: Text('Invalid 4-digit code. Please verify with customer.'),
+            backgroundColor: Colors.orange,
+            content: Text('Could not cancel — request may already be claimed or expired.'),
           ),
         );
       }
+    }
+  }
+
+  String _formatStatusLabel(String status) {
+    switch (status) {
+      case 'pending':
+        return 'Waiting for Runner';
+      case 'claimed':
+        return 'Runner Claimed';
+      case 'purchasing':
+        return 'Purchasing Items';
+      case 'en_route':
+        return 'En Route to Drop-off';
+      case 'arrived':
+        return 'Arrived at Drop-off';
+      case 'completed':
+        return 'Completed';
+      case 'cancelled':
+        return 'Cancelled';
+      case 'expired':
+        return 'Expired';
+      default:
+        return status.toUpperCase();
     }
   }
 
@@ -108,118 +208,338 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: SupabaseService().streamOrder(widget.orderId),
       builder: (context, snapshot) {
-        Map<String, dynamic> order = _fallbackOrder;
-
+        Map<String, dynamic> raw = _fallbackOrder;
         if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-          order = snapshot.data!.first;
+          raw = snapshot.data!.first;
         }
-
-        final status = (order['status'] ?? 'pending').toString();
-        final isCompleted = status == 'completed';
-        final verificationCode = (order['verification_code'] ?? '----').toString();
+        final order = DeliveryOrder.fromJson(raw);
+        final effectiveStatus = order.effectiveStatus();
+        final isCompleted = effectiveStatus == 'completed';
+        final isTerminated =
+            effectiveStatus == 'cancelled' || effectiveStatus == 'expired';
+        final currentStepIndex = _flowSteps.indexOf(effectiveStatus);
 
         return Scaffold(
           backgroundColor: Colors.white,
           appBar: AppBar(
-            title: Text('Order Status: ${order['id'] ?? widget.orderId}', style: const TextStyle(color: Colors.white, fontSize: 18)),
+            title: Text(
+              'Order ${order.id.length > 8 ? order.id.substring(0, 8) : order.id}',
+              style: const TextStyle(color: Colors.white, fontSize: 18),
+            ),
             backgroundColor: primaryMaroon,
             iconTheme: const IconThemeData(color: Colors.white),
           ),
           body: SafeArea(
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 430),
+                constraints: const BoxConstraints(maxWidth: 440),
                 child: SingleChildScrollView(
                   physics: const ClampingScrollPhysics(),
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: primaryMaroon.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        'STATUS: ${status.toUpperCase()}',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: primaryMaroon),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Text('Items: ${order['description'] ?? ''}', style: const TextStyle(fontSize: 14)),
-                    const SizedBox(height: 4),
-                    Text('Drop-off: ${order['dropoff_location'] ?? ''}', style: const TextStyle(fontSize: 14)),
-                    const SizedBox(height: 20),
-
-                    if (!widget.isRunner && !isCompleted) ...[
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF5EBEB),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: primaryMaroon),
+                          color: isTerminated
+                              ? Colors.grey.shade200
+                              : isCompleted
+                                  ? Colors.green.withOpacity(0.12)
+                                  : primaryMaroon.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Column(
+                        child: Row(
                           children: [
-                            const Text('Handover Verification Code', style: TextStyle(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 6),
-                            Text(
-                              verificationCode,
-                              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: 8, color: primaryMaroon),
+                            Icon(
+                              isCompleted
+                                  ? Icons.check_circle
+                                  : isTerminated
+                                      ? Icons.cancel_outlined
+                                      : Icons.local_shipping_outlined,
+                              color: isCompleted
+                                  ? Colors.green
+                                  : isTerminated
+                                      ? Colors.black54
+                                      : primaryMaroon,
                             ),
-                            const SizedBox(height: 4),
-                            const Text('Give this 4-digit code to the runner when receiving your meal.', textAlign: TextAlign.center, style: TextStyle(fontSize: 11)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _formatStatusLabel(effectiveStatus),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: isCompleted
+                                      ? Colors.green.shade800
+                                      : isTerminated
+                                          ? Colors.black87
+                                          : primaryMaroon,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
-                    ],
+                      const SizedBox(height: 16),
 
-                    if (widget.isRunner && !isCompleted) ...[
-                      if (status != 'arrived')
+                      // Progress Stepper
+                      if (!isTerminated) ...[
+                        _DeliveryProgressStepper(
+                          steps: _flowSteps,
+                          currentIndex: currentStepIndex,
+                          labelBuilder: _formatStatusLabel,
+                        ),
+                        const SizedBox(height: 18),
+                      ],
+
+                      // Order details card
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _detailRow('Pickup', order.pickupLocation),
+                            const SizedBox(height: 6),
+                            _detailRow('Drop-off', order.dropoffLocation),
+                            const SizedBox(height: 6),
+                            _detailRow('Items', order.description),
+                            if (order.specialInstructions.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              _detailRow('Notes', order.specialInstructions),
+                            ],
+                            const Divider(height: 18),
+                            _detailRow(
+                              'Estimated Food Cost',
+                              '₱${order.estimatedPrice.toStringAsFixed(2)}',
+                            ),
+                            const SizedBox(height: 4),
+                            _detailRow(
+                              'Delivery Fee',
+                              '₱${order.deliveryFee.toStringAsFixed(2)}',
+                            ),
+                            const SizedBox(height: 4),
+                            _detailRow(
+                              'Estimated Total',
+                              '₱${order.totalAmount.toStringAsFixed(2)}',
+                              bold: true,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+
+                      // Customer 4-digit OTP box
+                      if (!widget.isRunner && !isCompleted && !isTerminated) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5EBEB),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: primaryMaroon),
+                          ),
+                          child: Column(
+                            children: [
+                              const Text(
+                                'Handover Verification Code',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                order.verificationCode.isEmpty
+                                    ? '----'
+                                    : order.verificationCode,
+                                style: const TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 8,
+                                  color: primaryMaroon,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Share this 4-digit code with your runner only upon receiving your items.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
+
+                      // Customer Cancel Action while still pending
+                      if (!widget.isRunner && order.canCancelAt()) ...[
                         SizedBox(
                           width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () => _advanceStatus(status),
-                            style: ElevatedButton.styleFrom(backgroundColor: primaryMaroon),
-                            child: Text(
-                              status == 'claimed'
-                                  ? 'Mark as Purchasing Food'
-                                  : status == 'purchasing'
-                                      ? 'Mark as En Route'
-                                      : 'Mark as Arrived',
-                              style: const TextStyle(color: Colors.white),
+                          height: 44,
+                          child: OutlinedButton.icon(
+                            onPressed: _isBusy ? null : _handleCancelOrder,
+                            icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+                            label: const Text(
+                              'Cancel Unclaimed Request',
+                              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Colors.red),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
                             ),
                           ),
                         ),
-                      if (status == 'arrived') ...[
-                        const Text('Enter Customer 4-Digit Code:', style: TextStyle(fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _otpInputController,
-                          keyboardType: TextInputType.number,
-                          maxLength: 4,
-                          decoration: const InputDecoration(border: OutlineInputBorder(), hintText: '1234'),
-                        ),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () => _verifyOtp(verificationCode),
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                            child: const Text('Confirm Handover & Complete', style: TextStyle(color: Colors.white)),
+                      ],
+
+                      // Runner Delivery Controls
+                      if (widget.isRunner && !isCompleted && !isTerminated) ...[
+                        if (effectiveStatus != 'arrived')
+                          SizedBox(
+                            width: double.infinity,
+                            height: 46,
+                            child: ElevatedButton(
+                              onPressed: _isBusy ? null : () => _advanceStatus(effectiveStatus),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryMaroon,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: _isBusy
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : Text(
+                                      effectiveStatus == 'claimed'
+                                          ? 'Mark as Purchasing Items'
+                                          : effectiveStatus == 'purchasing'
+                                              ? 'Mark as En Route'
+                                              : 'Mark as Arrived',
+                                    ),
+                            ),
                           ),
-                        ),
+                        if (effectiveStatus == 'arrived') ...[
+                          const Text(
+                            'Enter Customer 4-Digit Code:',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _otpInputController,
+                            keyboardType: TextInputType.number,
+                            maxLength: 4,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              hintText: '1234',
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 46,
+                            child: ElevatedButton(
+                              onPressed: _isBusy
+                                  ? null
+                                  : () => _verifyOtp(order.verificationCode),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Confirm Handover & Complete'),
+                            ),
+                          ),
+                        ],
                       ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      );
+        );
       },
+    );
+  }
+
+  Widget _detailRow(String label, String value, {bool bold = false}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 130,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.black54,
+              fontWeight: bold ? FontWeight.bold : FontWeight.w500,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: bold ? FontWeight.bold : FontWeight.w600,
+              color: bold ? primaryMaroon : Colors.black87,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DeliveryProgressStepper extends StatelessWidget {
+  const _DeliveryProgressStepper({
+    required this.steps,
+    required this.currentIndex,
+    required this.labelBuilder,
+  });
+
+  final List<String> steps;
+  final int currentIndex;
+  final String Function(String) labelBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(steps.length, (i) {
+        final done = currentIndex >= i;
+        final isCurrent = currentIndex == i;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(
+            children: [
+              Icon(
+                done ? Icons.check_circle : Icons.radio_button_unchecked,
+                size: 18,
+                color: done ? const Color(0xFF7F0000) : Colors.grey.shade400,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                labelBuilder(steps[i]),
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                  color: done ? Colors.black87 : Colors.black45,
+                ),
+              ),
+            ],
+          ),
+        );
+      }),
     );
   }
 }

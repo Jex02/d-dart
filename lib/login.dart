@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
 import 'signup.dart';
 import 'main_dashboard.dart';
+import 'utils/validators.dart';
 
 const Color panelColor = Color(0xFF8F1F0D);
 const Color accentColor = Color(0xFFD4AF37);
@@ -33,10 +35,11 @@ class _LoginPageState extends State<LoginPage> {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
-    if (email.isEmpty || password.isEmpty) {
+    final emailErr = Validators.validateEmail(email);
+    if (emailErr != null || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter both email and password.'),
+        SnackBar(
+          content: Text(emailErr ?? 'Please enter your password.'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -47,6 +50,22 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       await SupabaseService().signIn(email: email, password: password);
+      await DutyLockService.syncFromSupabase();
+      final profile = await SupabaseService().fetchUserProfileModel();
+
+      if (profile != null && profile.isRejected) {
+        await SupabaseService().signOut();
+        DutyLockService.reset();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Account verification was rejected. Please contact campus admin.'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+        return;
+      }
 
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -57,13 +76,11 @@ class _LoginPageState extends State<LoginPage> {
       if (mounted) {
         String msg = e.message;
         if (msg.toLowerCase().contains('invalid login credentials')) {
-          msg = 'Invalid credentials or email not confirmed yet. Check your inbox or turn off "Confirm email" in Supabase.';
+          msg =
+              'Invalid credentials or email not confirmed yet. Check your inbox or turn off "Confirm email" in Supabase.';
         }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(msg),
-            backgroundColor: Colors.redAccent,
-          ),
+          SnackBar(content: Text(msg), backgroundColor: Colors.redAccent),
         );
       }
     } catch (e) {
@@ -82,6 +99,60 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  Future<void> _handleForgotPassword() async {
+    final resetEmailCtrl = TextEditingController(text: _emailController.text.trim());
+    final submitted = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset Password'),
+        content: TextField(
+          controller: resetEmailCtrl,
+          keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(
+            labelText: 'Account Email',
+            hintText: 'you@cit.edu',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, resetEmailCtrl.text.trim()),
+            child: const Text('Send Reset Link'),
+          ),
+        ],
+      ),
+    );
+    resetEmailCtrl.dispose();
+
+    if (submitted == null || submitted.isEmpty) return;
+    final err = Validators.validateEmail(submitted);
+    if (err != null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      }
+      return;
+    }
+
+    try {
+      await SupabaseService().resetPassword(submitted);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Password reset link sent to $submitted')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Reset failed: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -89,22 +160,12 @@ class _LoginPageState extends State<LoginPage> {
 
     Widget content = Stack(
       children: [
-        // Background Image
         Positioned.fill(
-          child: Image.asset(
-            'assets/lrac.jpg',
-            fit: BoxFit.cover,
-          ),
+          child: Image.asset('assets/lrac.jpg', fit: BoxFit.cover),
         ),
-
-        // Light Overlay
         Positioned.fill(
-          child: Container(
-            color: Colors.white.withOpacity(0.62),
-          ),
+          child: Container(color: Colors.white.withOpacity(0.62)),
         ),
-
-        // Responsive Scrollable Auto-Layout
         SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -117,14 +178,7 @@ class _LoginPageState extends State<LoginPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Top Branding (Flexes with space)
-                        const Expanded(
-                          child: Center(
-                            child: _Branding(),
-                          ),
-                        ),
-
-                        // Login Panel at Bottom
+                        const Expanded(child: Center(child: _Branding())),
                         _LoginPanel(
                           rememberMe: _rememberMe,
                           obscurePassword: _obscurePassword,
@@ -132,6 +186,7 @@ class _LoginPageState extends State<LoginPage> {
                           emailController: _emailController,
                           passwordController: _passwordController,
                           onLogin: _handleLogin,
+                          onForgotPassword: _handleForgotPassword,
                           onRememberChanged: (value) {
                             setState(() => _rememberMe = value);
                           },
@@ -222,6 +277,7 @@ class _LoginPanel extends StatelessWidget {
     required this.emailController,
     required this.passwordController,
     required this.onLogin,
+    required this.onForgotPassword,
     required this.onRememberChanged,
     required this.onPasswordVisibilityChanged,
   });
@@ -232,6 +288,7 @@ class _LoginPanel extends StatelessWidget {
   final TextEditingController emailController;
   final TextEditingController passwordController;
   final VoidCallback onLogin;
+  final VoidCallback onForgotPassword;
   final ValueChanged<bool> onRememberChanged;
   final VoidCallback onPasswordVisibilityChanged;
 
@@ -267,14 +324,12 @@ class _LoginPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-
           _LoginTextField(
             controller: emailController,
             hintText: 'Email',
             keyboardType: TextInputType.emailAddress,
           ),
           const SizedBox(height: 14),
-
           _LoginTextField(
             controller: passwordController,
             hintText: 'Password',
@@ -282,17 +337,13 @@ class _LoginPanel extends StatelessWidget {
             suffix: IconButton(
               onPressed: onPasswordVisibilityChanged,
               icon: Icon(
-                obscurePassword
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined,
+                obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                 color: Colors.black45,
                 size: 21,
               ),
             ),
           ),
-
           const SizedBox(height: 10),
-
           Row(
             children: [
               SizedBox(
@@ -314,7 +365,7 @@ class _LoginPanel extends StatelessWidget {
               ),
               const Spacer(),
               TextButton(
-                onPressed: () {},
+                onPressed: onForgotPassword,
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.zero,
@@ -325,9 +376,7 @@ class _LoginPanel extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 24),
-
           Center(
             child: SizedBox(
               width: 140,
@@ -345,10 +394,7 @@ class _LoginPanel extends StatelessWidget {
                     ? const SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.black,
-                        ),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                       )
                     : const Text(
                         'Login',
@@ -357,15 +403,13 @@ class _LoginPanel extends StatelessWidget {
               ),
             ),
           ),
-
           const SizedBox(height: 22),
-
           const Divider(color: Colors.white38, height: 1),
           const SizedBox(height: 16),
-
           Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 const Text(
                   "Don't have account yet ?  ",

@@ -1,8 +1,15 @@
 class GeminiConstants {
-  /// Google AI Studio Gemini API Key
-  /// Get your free API key at: https://aistudio.google.com/
-  static const String apiKey = 'AIzaSyDemoKeyReplaceWithYours';
+  /// Google AI Studio Gemini API Key.
+  /// Pass at build/run time via:
+  ///   flutter run --dart-define=GEMINI_API_KEY=your_key_here
+  static const String apiKey = String.fromEnvironment(
+    'GEMINI_API_KEY',
+    defaultValue: 'AIzaSyDemoKeyReplaceWithYours',
+  );
 
-  /// Preferred Gemini Vision model
-  static const String model = 'gemini-1.5-flash';
+  /// Preferred Gemini Vision model (overrideable via --dart-define=GEMINI_MODEL=...)
+  static const String model = String.fromEnvironment(
+    'GEMINI_MODEL',
+    defaultValue: 'gemini-2.5-flash',
+  );
 }

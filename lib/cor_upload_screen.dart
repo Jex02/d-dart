@@ -1,10 +1,12 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'constants/gemini_constants.dart';
 import 'models/class_schedule.dart';
 import 'services/gemini_service.dart';
 import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
+import 'widgets/schedule_editor.dart';
 
 class CorUploadScreen extends StatefulWidget {
   const CorUploadScreen({super.key});
@@ -19,11 +21,18 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
 
   Uint8List? _selectedImageBytes;
   bool _isProcessing = false;
+  bool _isSaving = false;
+  bool _isDemoFallback = false;
   List<ClassSession> _extractedSessions = [];
   bool _isReviewMode = false;
 
   Future<void> _pickAndProcessCOR() async {
-    final XFile? file = await _picker.pickImage(source: ImageSource.gallery);
+    final XFile? file = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1920,
+      maxHeight: 1920,
+      imageQuality: 85,
+    );
     if (file == null) return;
 
     final bytes = await file.readAsBytes();
@@ -33,7 +42,12 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
     });
 
     try {
-      final result = await GeminiService.verifyAndExtractCOR(bytes);
+      final profile = await SupabaseService().fetchUserProfileModel();
+      final result = await GeminiService.verifyAndExtractCOR(
+        bytes,
+        expectedStudentId: profile?.studentId,
+        expectedName: profile?.fullName,
+      );
       if (!result.isValid) {
         if (mounted) {
           showDialog(
@@ -61,6 +75,7 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
 
       setState(() {
         _extractedSessions = result.sessions;
+        _isDemoFallback = result.isDemoFallback;
         _isReviewMode = true;
       });
     } catch (e) {
@@ -76,18 +91,30 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
     }
   }
 
-  void _confirmSchedule() {
-    DutyLockService.verifiedSchedule = _extractedSessions;
-    DutyLockService.isRunnerScheduleUploaded = true;
-    SupabaseService().saveClassSchedule(_extractedSessions);
+  Future<void> _confirmSchedule() async {
+    setState(() => _isSaving = true);
+    try {
+      DutyLockService.verifiedSchedule = _extractedSessions;
+      DutyLockService.isRunnerScheduleUploaded = _extractedSessions.isNotEmpty;
+      await SupabaseService().saveClassSchedule(
+        _extractedSessions,
+        corImageBytes: _selectedImageBytes,
+      );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        backgroundColor: Colors.green,
-        content: Text('Study load confirmed. Academic Duty Lock is now active!'),
-      ),
-    );
-    Navigator.pop(context, true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.green,
+            content: Text('Study load confirmed. Academic Duty Lock is now active!'),
+          ),
+        );
+        Navigator.pop(context, true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
   @override
@@ -95,7 +122,10 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Study Load / COR Verification', style: TextStyle(color: Colors.white, fontSize: 18)),
+        title: const Text(
+          'Study Load / COR Verification',
+          style: TextStyle(color: Colors.white, fontSize: 18),
+        ),
         backgroundColor: primaryMaroon,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
@@ -104,7 +134,18 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
           constraints: const BoxConstraints(maxWidth: 480),
           child: Padding(
             padding: const EdgeInsets.all(20),
-            child: _isReviewMode ? _buildReviewUI() : _buildUploadPromptUI(),
+            child: _isSaving
+                ? const Center(child: CircularProgressIndicator(color: primaryMaroon))
+                : _isReviewMode
+                    ? ScheduleReviewSection(
+                        sessions: _extractedSessions,
+                        isDemoFallback: _isDemoFallback,
+                        onChanged: (updated) {
+                          setState(() => _extractedSessions = updated);
+                        },
+                        onConfirm: _confirmSchedule,
+                      )
+                    : _buildUploadPromptUI(),
           ),
         ),
       ),
@@ -127,7 +168,7 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
             ),
             const SizedBox(height: 10),
             const Text(
-              'D-DART uses Google Gemini AI to read your enrolled class hours. This automatically protects your studies by preventing gig requests while class is in session.',
+              'D-DART uses Google Gemini AI to extract your enrolled class hours. This protects your studies by preventing gig claims while class is in session.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.black87, fontSize: 13),
             ),
@@ -135,7 +176,10 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
             if (_isProcessing) ...[
               const CircularProgressIndicator(color: primaryMaroon),
               const SizedBox(height: 16),
-              const Text('Analyzing study load with Gemini 2.5 Flash...', style: TextStyle(fontWeight: FontWeight.w600)),
+              Text(
+                'Analyzing study load with ${GeminiConstants.model}...',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
             ] else ...[
               SizedBox(
                 width: double.infinity,
@@ -143,81 +187,32 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _pickAndProcessCOR,
                   icon: const Icon(Icons.upload_file, color: Colors.white),
-                  label: const Text('Select COR Photo / PDF', style: TextStyle(color: Colors.white, fontSize: 15)),
+                  label: const Text(
+                    'Select COR Photo from Gallery',
+                    style: TextStyle(color: Colors.white, fontSize: 15),
+                  ),
                   style: ElevatedButton.styleFrom(backgroundColor: primaryMaroon),
                 ),
               ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: () {
-                  // Load demo preview
-                  setState(() {
-                    _extractedSessions = DutyLockService.verifiedSchedule;
-                    _isReviewMode = true;
-                  });
-                },
-                child: const Text('Or view existing verified schedule', style: TextStyle(color: primaryMaroon)),
-              ),
+              if (DutyLockService.verifiedSchedule.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _extractedSessions = List.from(DutyLockService.verifiedSchedule);
+                      _isReviewMode = true;
+                    });
+                  },
+                  child: const Text(
+                    'Edit existing verified schedule',
+                    style: TextStyle(color: primaryMaroon),
+                  ),
+                ),
+              ],
             ]
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildReviewUI() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Confirm AI-Extracted Schedule',
-          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: primaryMaroon),
-        ),
-        const SizedBox(height: 6),
-        const Text(
-          'Please verify that all enrolled subject times match your study load. You may edit sessions before finalizing.',
-          style: TextStyle(fontSize: 12, color: Colors.black54),
-        ),
-        const Divider(height: 24),
-        Expanded(
-          child: ListView.builder(
-            itemCount: _extractedSessions.length,
-            itemBuilder: (context, index) {
-              final session = _extractedSessions[index];
-              return Card(
-                elevation: 1,
-                margin: const EdgeInsets.only(bottom: 10),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: primaryMaroon.withOpacity(0.15),
-                    child: Text(session.day.substring(0, 3), style: const TextStyle(fontWeight: FontWeight.bold, color: primaryMaroon, fontSize: 12)),
-                  ),
-                  title: Text(session.subject, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: Text('${session.day}: ${session.startTime} - ${session.endTime}'),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.red),
-                    onPressed: () {
-                      setState(() {
-                        _extractedSessions.removeAt(index);
-                      });
-                    },
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 14),
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: ElevatedButton(
-            onPressed: _confirmSchedule,
-            style: ElevatedButton.styleFrom(backgroundColor: primaryMaroon),
-            child: const Text('Confirm Schedule & Activate Duty Lock', style: TextStyle(color: Colors.white, fontSize: 15)),
-          ),
-        ),
-      ],
     );
   }
 }

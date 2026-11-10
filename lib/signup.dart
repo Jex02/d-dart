@@ -9,8 +9,11 @@ import 'models/class_schedule.dart';
 import 'services/gemini_service.dart';
 import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
+import 'utils/validators.dart';
+import 'widgets/schedule_editor.dart';
 
 const _signupPanelColor = Color(0xFF8F1F0D);
+const _goldAccent = Color(0xFFD4AF37);
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -23,11 +26,15 @@ class _SignupPageState extends State<SignupPage> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _studentIdController = TextEditingController();
+  final _idNumberController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
   final _picker = ImagePicker();
+
+  String _accountType = 'student'; // 'student' or 'faculty_staff'
+  Uint8List? _idImageBytes;
+  String? _idImageName;
   Uint8List? _corImageBytes;
   String? _corImageName;
 
@@ -39,13 +46,13 @@ class _SignupPageState extends State<SignupPage> {
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
-    _studentIdController.dispose();
+    _idNumberController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  Future<void> _pickCORImage() async {
+  Future<void> _pickDocumentImage({required bool isCor}) async {
     try {
       final XFile? file = await _picker.pickImage(
         source: ImageSource.gallery,
@@ -57,39 +64,55 @@ class _SignupPageState extends State<SignupPage> {
 
       final bytes = await file.readAsBytes();
       setState(() {
-        _corImageBytes = bytes;
-        _corImageName = file.name;
+        if (isCor) {
+          _corImageBytes = bytes;
+          _corImageName = file.name;
+        } else {
+          _idImageBytes = bytes;
+          _idImageName = file.name;
+        }
       });
     } catch (e) {
       _showSnackbar('Could not select image: $e', Colors.redAccent);
     }
   }
 
+  String _extractFileExtension(String? filename) {
+    if (filename == null || !filename.contains('.')) return 'jpg';
+    return filename.split('.').last.toLowerCase();
+  }
+
   Future<void> _handleSignUp() async {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final phone = _phoneController.text.trim();
-    final studentId = _studentIdController.text.trim();
+    final idNumber = _idNumberController.text.trim();
     final password = _passwordController.text;
     final confirmPassword = _confirmPasswordController.text;
 
-    if (name.isEmpty || email.isEmpty || phone.isEmpty || studentId.isEmpty || password.isEmpty) {
-      _showSnackbar('Please fill in all fields.', Colors.redAccent);
+    final validationError = Validators.validateFullName(name) ??
+        Validators.validateEmail(email) ??
+        Validators.validatePhoneNumber(phone) ??
+        Validators.validateIdNumber(idNumber, _accountType) ??
+        Validators.validatePassword(password) ??
+        Validators.validateConfirmPassword(confirmPassword, password);
+
+    if (validationError != null) {
+      _showSnackbar(validationError, Colors.redAccent);
       return;
     }
 
-    if (password != confirmPassword) {
-      _showSnackbar('Passwords do not match.', Colors.redAccent);
+    if (_idImageBytes == null) {
+      _showSnackbar(
+        _accountType == 'student'
+            ? 'Please upload a photo of your Student ID.'
+            : 'Please upload a photo of your Faculty / Employee ID.',
+        Colors.redAccent,
+      );
       return;
     }
 
-    if (password.length < 6) {
-      _showSnackbar('Password must be at least 6 characters.', Colors.redAccent);
-      return;
-    }
-
-    // MANDATORY COR REQUIREMENT
-    if (_corImageBytes == null) {
+    if (_accountType == 'student' && _corImageBytes == null) {
       _showSnackbar(
         'Please upload your CIT-U Certificate of Registration (COR) to verify your student account.',
         Colors.redAccent,
@@ -99,93 +122,108 @@ class _SignupPageState extends State<SignupPage> {
 
     setState(() {
       _isLoading = true;
-      _loadingMessage = 'Analyzing COR with Gemini AI...';
+      _loadingMessage = _accountType == 'student'
+          ? 'Analyzing COR with Gemini AI...'
+          : 'Creating account...';
     });
 
     try {
-      // 1. AI Gatekeeper Verification
-      final verification = await GeminiService.verifyAndExtractCOR(
-        _corImageBytes!,
-        expectedStudentId: studentId,
-        expectedName: name,
-      );
+      List<ClassSession> confirmedSessions = [];
 
-      if (!verification.isValid) {
-        if (mounted) {
-          showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Row(
-                children: [
-                  Icon(Icons.gpp_bad, color: Colors.redAccent),
-                  SizedBox(width: 8),
-                  Text('COR Verification Failed'),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(verification.message),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'D-DART requires an authentic CIT-U Certificate of Registration (COR) showing your enrolled class schedule to activate your student account.',
-                    style: TextStyle(fontSize: 12, color: Colors.black54),
+      if (_accountType == 'student') {
+        final verification = await GeminiService.verifyAndExtractCOR(
+          _corImageBytes!,
+          expectedStudentId: idNumber,
+          expectedName: name,
+        );
+
+        if (!verification.isValid) {
+          if (mounted) {
+            await showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Row(
+                  children: [
+                    Icon(Icons.gpp_bad, color: Colors.redAccent),
+                    SizedBox(width: 8),
+                    Text('COR Verification Failed'),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(verification.message),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'D-DART requires an authentic CIT-U Certificate of Registration (COR) showing your enrolled class schedule to activate Student Runner privileges.',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('Try Another Image'),
                   ),
                 ],
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('Try Another Image'),
-                ),
-              ],
-            ),
-          );
+            );
+          }
+          return;
         }
-        return;
-      }
 
-      if (verification.sessions.isEmpty) {
-        if (mounted) {
-          _showSnackbar(
-            'No class schedule detected on this COR. Please upload a clear photo of your study load.',
-            Colors.redAccent,
-          );
+        if (!mounted) return;
+        final reviewed = await showScheduleReviewDialog(
+          context,
+          verification.sessions,
+          isDemoFallback: verification.isDemoFallback,
+        );
+        if (reviewed == null || reviewed.isEmpty) {
+          _showSnackbar('Registration cancelled. Confirm your schedule to proceed.', Colors.orange);
+          return;
         }
-        return;
+        confirmedSessions = reviewed;
       }
 
       if (mounted) {
         setState(() {
-          _loadingMessage = 'Creating your student account...';
+          _loadingMessage = 'Saving account & documents...';
         });
       }
 
-      // 2. Register Account in Supabase with Verified Schedule metadata
       final response = await SupabaseService().signUp(
         email: email,
         password: password,
         fullName: name,
         phoneNumber: phone,
-        studentId: studentId,
-        initialSchedule: verification.sessions,
+        studentId: idNumber,
+        accountType: _accountType,
+        corVerified: _accountType == 'student' && confirmedSessions.isNotEmpty,
+        initialSchedule: confirmedSessions,
+        idDocumentBytes: _idImageBytes,
+        idDocumentExt: _extractFileExtension(_idImageName),
+        corDocumentBytes: _corImageBytes,
+        corDocumentExt: _extractFileExtension(_corImageName),
       );
 
-      // 3. Save to DutyLockService in memory
-      DutyLockService.verifiedSchedule = verification.sessions;
-      DutyLockService.isRunnerScheduleUploaded = true;
+      if (_accountType == 'student') {
+        DutyLockService.verifiedSchedule = confirmedSessions;
+        DutyLockService.isRunnerScheduleUploaded = true;
+      } else {
+        DutyLockService.reset();
+      }
 
       if (mounted) {
         final needsConfirmation = response.session == null;
-        showDialog(
+        await showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Row(
               children: [
                 Icon(Icons.verified, color: Colors.green),
                 SizedBox(width: 8),
-                Text('Account & COR Verified!'),
+                Flexible(child: Text('Account Registered!')),
               ],
             ),
             content: Column(
@@ -193,9 +231,13 @@ class _SignupPageState extends State<SignupPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Welcome, $name!\n\n'
-                  'Gemini AI successfully verified your CIT-U COR with ${verification.sessions.length} enrolled class sessions.\n\n'
-                  'Academic Duty Lock is now active: you can request errands as a Customer anytime, while Runner mode will only be authorized during your vacant study periods.',
+                  _accountType == 'student'
+                      ? 'Welcome, $name!\n\n'
+                          'Your Student ID and COR (${confirmedSessions.length} class sessions) have been verified.\n\n'
+                          'You can place Pabili orders anytime and switch to Runner Mode during vacant periods.'
+                      : 'Welcome, $name!\n\n'
+                          'Your Faculty / Staff account has been registered.\n\n'
+                          'You can place Pabili delivery requests across campus in Customer Mode (Runner Mode is reserved for verified students).',
                   style: const TextStyle(fontSize: 13, height: 1.4),
                 ),
                 if (needsConfirmation) ...[
@@ -208,8 +250,12 @@ class _SignupPageState extends State<SignupPage> {
                       border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
                     ),
                     child: Text(
-                      'Please verify the confirmation link sent to $email before logging in (or toggle "Confirm email" off in Supabase for instant login).',
-                      style: const TextStyle(fontSize: 11, color: Colors.blueAccent, fontWeight: FontWeight.bold),
+                      'Please verify the confirmation link sent to $email before logging in (or disable "Confirm email" in Supabase Auth settings for instant login).',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.blueAccent,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
@@ -282,16 +328,52 @@ class _SignupPageState extends State<SignupPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          const Text(
+                            'Create an Account',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'serif',
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Sign up and start ordering, requesting errands,\nand delivering around CIT-U campus.',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                              height: 1.3,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+
+                          // Account Type Selector (WBS 2.1)
+                          _AccountTypeSelector(
+                            selectedType: _accountType,
+                            onChanged: (type) {
+                              setState(() {
+                                _accountType = type;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 12),
+
                           _SignupFields(
+                            accountType: _accountType,
                             nameController: _nameController,
                             emailController: _emailController,
                             phoneController: _phoneController,
-                            studentIdController: _studentIdController,
+                            idNumberController: _idNumberController,
                             passwordController: _passwordController,
                             confirmPasswordController: _confirmPasswordController,
+                            idImageBytes: _idImageBytes,
+                            idImageName: _idImageName,
                             corImageBytes: _corImageBytes,
                             corImageName: _corImageName,
-                            onPickCOR: _pickCORImage,
+                            onPickId: () => _pickDocumentImage(isCor: false),
+                            onPickCOR: () => _pickDocumentImage(isCor: true),
                           ),
                           const SizedBox(height: 20),
                           _SignupButton(
@@ -330,6 +412,109 @@ class _SignupPageState extends State<SignupPage> {
   }
 }
 
+class _AccountTypeSelector extends StatelessWidget {
+  const _AccountTypeSelector({
+    required this.selectedType,
+    required this.onChanged,
+  });
+
+  final String selectedType;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _TypePill(
+            label: 'Student',
+            subtitle: 'Customer + Runner',
+            icon: Icons.school_outlined,
+            selected: selectedType == 'student',
+            onTap: () => onChanged('student'),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _TypePill(
+            label: 'Faculty / Staff',
+            subtitle: 'Customer Only',
+            icon: Icons.badge_outlined,
+            selected: selectedType == 'faculty_staff',
+            onTap: () => onChanged('faculty_staff'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TypePill extends StatelessWidget {
+  const _TypePill({
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final String subtitle;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+        decoration: BoxDecoration(
+          color: selected ? _goldAccent : Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? _goldAccent : Colors.white30,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: selected ? Colors.black : Colors.white70,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: selected ? Colors.black : Colors.white,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      color: selected ? Colors.black87 : Colors.white70,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SignupHeader extends StatelessWidget {
   const _SignupHeader();
 
@@ -345,8 +530,8 @@ class _SignupHeader extends StatelessWidget {
           style: TextStyle(fontSize: 18, letterSpacing: 3, fontWeight: FontWeight.w500),
           children: [
             TextSpan(text: 'Order.', style: TextStyle(color: Colors.black87)),
-            TextSpan(text: 'Run.', style: TextStyle(color: Color(0xFFD4AF37))),
-            TextSpan(text: 'Deliver.', style: TextStyle(color: Color(0xFF8F1F0D))),
+            TextSpan(text: 'Run.', style: TextStyle(color: _goldAccent)),
+            TextSpan(text: 'Deliver.', style: TextStyle(color: _signupPanelColor)),
           ],
         ),
       ),
@@ -356,54 +541,43 @@ class _SignupHeader extends StatelessWidget {
 
 class _SignupFields extends StatelessWidget {
   const _SignupFields({
+    required this.accountType,
     required this.nameController,
     required this.emailController,
     required this.phoneController,
-    required this.studentIdController,
+    required this.idNumberController,
     required this.passwordController,
     required this.confirmPasswordController,
+    required this.idImageBytes,
+    required this.idImageName,
     required this.corImageBytes,
     required this.corImageName,
+    required this.onPickId,
     required this.onPickCOR,
   });
 
+  final String accountType;
   final TextEditingController nameController;
   final TextEditingController emailController;
   final TextEditingController phoneController;
-  final TextEditingController studentIdController;
+  final TextEditingController idNumberController;
   final TextEditingController passwordController;
   final TextEditingController confirmPasswordController;
+  final Uint8List? idImageBytes;
+  final String? idImageName;
   final Uint8List? corImageBytes;
   final String? corImageName;
+  final VoidCallback onPickId;
   final VoidCallback onPickCOR;
 
   @override
   Widget build(BuildContext context) {
     const gap = 10.0;
+    final isStudent = accountType == 'student';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
-          'Create an Account',
-          style: TextStyle(
-            color: Colors.white,
-            fontFamily: 'serif',
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 6),
-        const Text(
-          'Sign up and start ordering, request errands and\nget things delivered in campus',
-          style: TextStyle(
-            color: Colors.white70,
-            fontSize: 11,
-            height: 1.3,
-            letterSpacing: 0.5,
-          ),
-        ),
-        const SizedBox(height: 16),
         _SignupTextField(
           controller: nameController,
           hintText: 'Full Name',
@@ -417,18 +591,20 @@ class _SignupFields extends StatelessWidget {
         const SizedBox(height: gap),
         _SignupTextField(
           controller: phoneController,
-          hintText: 'Phone Number',
+          hintText: 'Phone Number (e.g. 09171234567)',
           keyboardType: TextInputType.phone,
         ),
         const SizedBox(height: gap),
         _SignupTextField(
-          controller: studentIdController,
-          hintText: 'Student Id (e.g. 23-1626-937)',
+          controller: idNumberController,
+          hintText: isStudent
+              ? 'Student ID (e.g. 23-1626-937)'
+              : 'Employee / Faculty ID (e.g. EMP-1024)',
         ),
         const SizedBox(height: gap),
         _SignupTextField(
           controller: passwordController,
-          hintText: 'Password',
+          hintText: 'Password (min 6 chars)',
           obscureText: true,
         ),
         const SizedBox(height: gap),
@@ -439,102 +615,152 @@ class _SignupFields extends StatelessWidget {
         ),
         const SizedBox(height: 14),
 
-        // COR UPLOAD SECTION
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: corImageBytes != null ? const Color(0xFFD4AF37) : Colors.white24,
-              width: 1.2,
-            ),
+        // Student ID / Faculty-Employee ID Upload Card (WBS 2.4)
+        _DocumentUploadCard(
+          title: isStudent ? 'CIT-U Student ID Photo' : 'Faculty / Employee ID Photo',
+          subtitle: isStudent
+              ? 'Upload a clear photo of your official CIT-U Student ID card.'
+              : 'Upload a clear photo of your CIT-U Faculty or Employee ID card.',
+          icon: Icons.badge_outlined,
+          buttonLabel: isStudent ? 'Select Student ID Photo' : 'Select Employee ID Photo',
+          fileName: idImageName,
+          hasFile: idImageBytes != null,
+          onTap: onPickId,
+        ),
+
+        if (isStudent) ...[
+          const SizedBox(height: 12),
+          _DocumentUploadCard(
+            title: 'CIT-U COR / Study Load',
+            subtitle:
+                'Upload your Certificate of Registration to verify schedule & unlock Runner Mode.',
+            icon: Icons.document_scanner,
+            buttonLabel: 'Select COR Photo from Gallery',
+            fileName: corImageName,
+            hasFile: corImageBytes != null,
+            onTap: onPickCOR,
           ),
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        ],
+      ],
+    );
+  }
+}
+
+class _DocumentUploadCard extends StatelessWidget {
+  const _DocumentUploadCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.buttonLabel,
+    required this.fileName,
+    required this.hasFile,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final String buttonLabel;
+  final String? fileName;
+  final bool hasFile;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: hasFile ? _goldAccent : Colors.white24,
+          width: 1.2,
+        ),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Icon(
-                    corImageBytes != null ? Icons.verified : Icons.document_scanner,
-                    color: corImageBytes != null ? const Color(0xFFD4AF37) : Colors.white70,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 6),
-                  const Text(
-                    'CIT-U COR / Study Load',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: corImageBytes != null
-                          ? Colors.green.withOpacity(0.25)
-                          : const Color(0xFFD4AF37).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      corImageBytes != null ? 'ATTACHED' : 'REQUIRED',
-                      style: TextStyle(
-                        color: corImageBytes != null ? Colors.lightGreenAccent : const Color(0xFFD4AF37),
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
+              Icon(
+                hasFile ? Icons.verified : icon,
+                color: hasFile ? _goldAccent : Colors.white70,
+                size: 18,
               ),
-              const SizedBox(height: 6),
-              const Text(
-                'Upload your Certificate of Registration to verify student eligibility & schedule for runner vacant duty.',
-                style: TextStyle(color: Colors.white60, fontSize: 10, height: 1.2),
-              ),
-              const SizedBox(height: 10),
-              InkWell(
-                onTap: onPickCOR,
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0F0F0),
-                    borderRadius: BorderRadius.circular(8),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        corImageBytes != null ? Icons.photo : Icons.add_photo_alternate_outlined,
-                        color: const Color(0xFF8F1F0D),
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          corImageName != null
-                              ? 'Selected: $corImageName (Tap to change)'
-                              : 'Select COR Photo from Gallery',
-                          style: const TextStyle(
-                            color: Color(0xFF8F1F0D),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: hasFile
+                      ? Colors.green.withOpacity(0.25)
+                      : _goldAccent.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  hasFile ? 'ATTACHED' : 'REQUIRED',
+                  style: TextStyle(
+                    color: hasFile ? Colors.lightGreenAccent : _goldAccent,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
             ],
           ),
-        ),
-      ],
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: const TextStyle(color: Colors.white60, fontSize: 10, height: 1.2),
+          ),
+          const SizedBox(height: 10),
+          InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F0F0),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    hasFile ? Icons.photo : Icons.add_photo_alternate_outlined,
+                    color: _signupPanelColor,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      fileName != null
+                          ? 'Selected: $fileName (Tap to change)'
+                          : buttonLabel,
+                      style: const TextStyle(
+                        color: _signupPanelColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -567,7 +793,7 @@ class _SignupTextField extends StatelessWidget {
           hintStyle: const TextStyle(
             color: Colors.black45,
             fontSize: 12,
-            letterSpacing: 0.8,
+            letterSpacing: 0.6,
           ),
           isDense: true,
           filled: true,
@@ -583,7 +809,7 @@ class _SignupTextField extends StatelessWidget {
           ),
           focusedBorder: const OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(12)),
-            borderSide: BorderSide(color: Color(0xFFD4AF37), width: 1.5),
+            borderSide: BorderSide(color: _goldAccent, width: 1.5),
           ),
         ),
       ),
@@ -609,7 +835,7 @@ class _SignupButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFD4AF37),
+          backgroundColor: _goldAccent,
           foregroundColor: Colors.black,
           elevation: 0,
           padding: EdgeInsets.zero,
@@ -625,9 +851,12 @@ class _SignupButton extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                   ),
                   const SizedBox(width: 10),
-                  Text(
-                    loadingMessage,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  Flexible(
+                    child: Text(
+                      loadingMessage,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ],
               )
@@ -651,8 +880,9 @@ class _LoginFooter extends StatelessWidget {
       children: [
         const Divider(color: Colors.white38, height: 1),
         const SizedBox(height: 14),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             const Text(
               'Already have an account ?  ',
