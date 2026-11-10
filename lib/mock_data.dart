@@ -12,7 +12,8 @@ List<Map<String, dynamic>> mockDeliveryRequests = [
     'status': 'pending',
     'verification_code': '4821',
     'special_instructions': 'Extra chili oil please',
-    'expires_at': DateTime.now().toUtc().add(const Duration(minutes: 30)).toIso8601String(),
+    'expires_at':
+        DateTime.now().toUtc().add(const Duration(minutes: 30)).toIso8601String(),
     'created_at': DateTime.now().toUtc().toIso8601String(),
   },
 ];
@@ -22,6 +23,7 @@ Map<String, dynamic> addPabiliRequest({
   required String dropoff,
   required String description,
   required double price,
+  double deliveryFee = 20.0,
   String? instructions,
   String? orderId,
   String? verificationCode,
@@ -32,12 +34,12 @@ Map<String, dynamic> addPabiliRequest({
   final now = DateTime.now().toUtc();
   final record = <String, dynamic>{
     'id': orderId ?? 'ORD-${Random().nextInt(900) + 100}',
-    if (customerId != null) 'customer_id': customerId,
+    'customer_id': ?customerId,
     'pickup_location': pickup,
     'dropoff_location': dropoff,
     'description': description,
     'estimated_price': price,
-    'delivery_fee': 20.00,
+    'delivery_fee': deliveryFee,
     'status': 'pending',
     'verification_code': otp,
     'special_instructions': instructions ?? '',
@@ -50,7 +52,8 @@ Map<String, dynamic> addPabiliRequest({
 
 bool claimMockOrder(String orderId, {String? runnerId, DateTime? now}) {
   expireStaleMockOrders(now: now);
-  final index = mockDeliveryRequests.indexWhere((r) => r['id'].toString() == orderId);
+  final index =
+      mockDeliveryRequests.indexWhere((r) => r['id'].toString() == orderId);
   if (index == -1) return false;
   final current = mockDeliveryRequests[index];
   if (current['status'] != 'pending') return false;
@@ -62,7 +65,8 @@ bool claimMockOrder(String orderId, {String? runnerId, DateTime? now}) {
 
 bool cancelMockOrder(String orderId, {DateTime? now}) {
   expireStaleMockOrders(now: now);
-  final index = mockDeliveryRequests.indexWhere((r) => r['id'].toString() == orderId);
+  final index =
+      mockDeliveryRequests.indexWhere((r) => r['id'].toString() == orderId);
   if (index == -1) return false;
   final current = mockDeliveryRequests[index];
   if (current['status'] != 'pending') return false;

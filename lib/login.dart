@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'services/duty_lock_service.dart';
+import 'services/app_router.dart';
 import 'services/supabase_service.dart';
 import 'signup.dart';
-import 'main_dashboard.dart';
 import 'utils/validators.dart';
 
 const Color panelColor = Color(0xFF8F1F0D);
@@ -20,7 +19,7 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  bool _rememberMe = false;
+  bool _rememberMe = true;
   bool _obscurePassword = true;
   bool _isLoading = false;
 
@@ -50,26 +49,11 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       await SupabaseService().signIn(email: email, password: password);
-      await DutyLockService.syncFromSupabase();
-      final profile = await SupabaseService().fetchUserProfileModel();
-
-      if (profile != null && profile.isRejected) {
-        await SupabaseService().signOut();
-        DutyLockService.reset();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Account verification was rejected. Please contact campus admin.'),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
-        }
-        return;
-      }
+      final targetScreen = await AppRouter.resolveHomeForProfile();
 
       if (mounted) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainDashboard()),
+          MaterialPageRoute(builder: (_) => targetScreen),
         );
       }
     } on AuthException catch (e) {
@@ -164,7 +148,7 @@ class _LoginPageState extends State<LoginPage> {
           child: Image.asset('assets/lrac.jpg', fit: BoxFit.cover),
         ),
         Positioned.fill(
-          child: Container(color: Colors.white.withOpacity(0.62)),
+          child: Container(color: Colors.white.withValues(alpha: 0.62)),
         ),
         SafeArea(
           child: LayoutBuilder(

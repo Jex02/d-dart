@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/campus_location.dart';
 import '../models/class_schedule.dart';
+import '../models/problem_report.dart';
+import '../models/system_config.dart';
 import '../models/user_profile.dart';
 import '../mock_data.dart';
 
@@ -10,6 +12,7 @@ enum ClaimOrderStatus {
   claimed,
   alreadyClaimed,
   ineligible,
+  dailyLimitReached,
   expired,
   failed,
 }
@@ -37,10 +40,17 @@ class SupabaseService {
   // AUTHENTICATION & PROFILES
   // ==========================================
 
-  User? get currentUser => client.auth.currentUser;
+  User? get currentUser {
+    try {
+      return client.auth.currentUser;
+    } catch (_) {
+      return null;
+    }
+  }
+
   bool get isAuthenticated => currentUser != null;
 
-  /// Sign up user (Student or Faculty/Staff) and persist profile, documents, and initial schedule.
+  /// Sign up user (Student or Faculty/Staff) with pending admin verification per SRS 3.1.1.
   Future<AuthResponse> signUp({
     required String email,
     required String password,
@@ -56,9 +66,7 @@ class SupabaseService {
     String corDocumentExt = 'jpg',
   }) async {
     final isStudent = accountType == 'student';
-    // AI-verified student COR or valid Faculty/Staff ID upload marks verified for WBS 1-6 flow.
-    final verificationStatus =
-        isStudent ? (corVerified ? 'verified' : 'pending') : 'verified';
+    const verificationStatus = 'pending';
 
     final response = await client.auth.signUp(
       email: email,
@@ -80,7 +88,6 @@ class SupabaseService {
       String? idDocPath;
       String? corDocPath;
 
-      // Upload verification documents to Supabase Storage when authenticated session exists
       if (response.session != null) {
         final uid = response.user!.id;
         if (idDocumentBytes != null && idDocumentBytes.isNotEmpty) {
@@ -110,8 +117,8 @@ class SupabaseService {
           'account_type': accountType,
           'verification_status': verificationStatus,
           'cor_verified': isStudent && corVerified,
-          if (idDocPath != null) 'id_document_path': idDocPath,
-          if (corDocPath != null) 'cor_document_path': corDocPath,
+          'id_document_path': ?idDocPath,
+          'cor_document_path': ?corDocPath,
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         });
       } catch (e) {
@@ -130,7 +137,6 @@ class SupabaseService {
     return response;
   }
 
-  /// Upload ID or COR image to private Supabase Storage bucket.
   Future<String?> uploadVerificationDocument({
     required String userId,
     required String fileName,
@@ -150,7 +156,18 @@ class SupabaseService {
     }
   }
 
-  /// Sign in existing user with email and password
+  /// Generates a short-lived signed URL so Admins or the owner can inspect private docs.
+  Future<String?> getSignedDocumentUrl(String storagePath) async {
+    if (storagePath.trim().isEmpty) return null;
+    try {
+      return await client.storage
+          .from(verificationBucket)
+          .createSignedUrl(storagePath, 300);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<AuthResponse> signIn({
     required String email,
     required String password,
@@ -163,18 +180,15 @@ class SupabaseService {
     return res;
   }
 
-  /// Send password reset email
   Future<void> resetPassword(String email) async {
     await client.auth.resetPasswordForEmail(email.trim());
   }
 
-  /// Sign out current user
   Future<void> signOut() async {
     cachedProfile = null;
     await client.auth.signOut();
   }
 
-  /// Update user active mode ('customer' or 'runner') without overwriting account_type
   Future<void> updateUserRole(String role) async {
     final userId = currentUser?.id;
     if (userId == null) return;
@@ -187,7 +201,6 @@ class SupabaseService {
     } catch (_) {}
   }
 
-  /// Fetch raw user profile map
   Future<Map<String, dynamic>?> fetchUserProfile() async {
     final userId = currentUser?.id;
     if (userId == null) return null;
@@ -200,7 +213,6 @@ class SupabaseService {
     }
   }
 
-  /// Fetch typed [UserProfile], falling back cleanly to auth user metadata if needed.
   Future<UserProfile?> fetchUserProfileModel() async {
     final user = currentUser;
     if (user == null) return null;
@@ -227,10 +239,41 @@ class SupabaseService {
   }
 
   // ==========================================
-  // CAMPUS LOCATIONS
+  // SYSTEM CONFIGURATION & LOCATIONS
   // ==========================================
 
-  /// Fetch active campus pickup or dropoff locations with offline fallback.
+  Future<SystemConfig> fetchSystemConfig() async {
+    try {
+      final rows = await client.from('system_configurations').select();
+      final list = (rows as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      if (list.isNotEmpty) {
+        return SystemConfig.fromConfigRows(list);
+      }
+    } catch (_) {}
+    return const SystemConfig();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchRawConfigs() async {
+    final rows = await client
+        .from('system_configurations')
+        .select()
+        .order('config_key');
+    return (rows as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  Future<void> updateSystemConfig(String configKey, String configValue) async {
+    await client.from('system_configurations').upsert({
+      'config_key': configKey,
+      'config_value': configValue,
+      'updated_by': currentUser?.id,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'config_key');
+  }
+
   Future<List<CampusLocation>> fetchLocations(String category) async {
     try {
       final rows = await client
@@ -250,16 +293,44 @@ class SupabaseService {
         : CampusLocation.defaultDropoffs;
   }
 
+  Future<List<CampusLocation>> fetchAllLocations() async {
+    final rows = await client.from('locations').select().order('category').order('name');
+    return (rows as List)
+        .map((row) => CampusLocation.fromJson(Map<String, dynamic>.from(row)))
+        .toList();
+  }
+
+  Future<void> upsertLocation({
+    String? id,
+    required String name,
+    required String category,
+    String buildingCode = '',
+    bool isActive = true,
+  }) async {
+    final payload = <String, dynamic>{
+      'id': ?id,
+      'name': name.trim(),
+      'category': category,
+      'building_code': buildingCode.trim(),
+      'is_active': isActive,
+    };
+    await client.from('locations').upsert(payload);
+  }
+
+  Future<void> toggleLocationActive(String id, bool isActive) async {
+    await client.from('locations').update({'is_active': isActive}).eq('id', id);
+  }
+
   // ==========================================
   // DELIVERY / PABILI REQUESTS
   // ==========================================
 
-  /// Create a new delivery request in `delivery_requests` table
   Future<Map<String, dynamic>> createOrder({
     required String pickup,
     required String dropoff,
     required String description,
     required double price,
+    double deliveryFee = 20.0,
     String? instructions,
     Duration expiresIn = const Duration(minutes: 30),
   }) async {
@@ -272,12 +343,12 @@ class SupabaseService {
       'dropoff_location': dropoff,
       'description': description,
       'estimated_price': price,
-      'delivery_fee': 20.0,
+      'delivery_fee': deliveryFee,
       'status': 'pending',
       'verification_code': otp,
       'special_instructions': instructions ?? '',
       'expires_at': now.add(expiresIn).toIso8601String(),
-      if (userId != null) 'customer_id': userId,
+      'customer_id': ?userId,
       'created_at': now.toIso8601String(),
     };
 
@@ -290,7 +361,25 @@ class SupabaseService {
     return response;
   }
 
-  /// Mark stale pending orders as expired in Supabase and mock data.
+  Future<int> fetchRunnerCompletedTodayCount() async {
+    final userId = currentUser?.id;
+    if (userId == null) return 0;
+
+    try {
+      final nowLocal = DateTime.now();
+      final localMidnight = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
+      final rows = await client
+          .from('delivery_requests')
+          .select('id')
+          .eq('runner_id', userId)
+          .eq('status', 'completed')
+          .gte('completed_at', localMidnight.toUtc().toIso8601String());
+      return (rows as List).length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   Future<void> expireStaleOrders() async {
     expireStaleMockOrders();
     try {
@@ -309,7 +398,6 @@ class SupabaseService {
     }
   }
 
-  /// Stream of pending delivery requests for runners (Realtime)
   Stream<List<Map<String, dynamic>>> streamAvailableOrders() {
     return client
         .from('delivery_requests')
@@ -318,7 +406,6 @@ class SupabaseService {
         .order('created_at', ascending: false);
   }
 
-  /// Stream of current customer's orders (Realtime)
   Stream<List<Map<String, dynamic>>> streamCustomerOrders() {
     final userId = currentUser?.id;
     if (userId == null) {
@@ -331,7 +418,6 @@ class SupabaseService {
         .order('created_at', ascending: false);
   }
 
-  /// Stream of orders claimed by the current runner (Realtime)
   Stream<List<Map<String, dynamic>>> streamRunnerAssignedOrders() {
     final userId = currentUser?.id;
     if (userId == null) {
@@ -346,7 +432,13 @@ class SupabaseService {
         .order('created_at', ascending: false);
   }
 
-  /// Stream a single order by ID for live order tracking
+  Stream<List<Map<String, dynamic>>> streamAllDeliveries() {
+    return client
+        .from('delivery_requests')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: false);
+  }
+
   Stream<List<Map<String, dynamic>>> streamOrder(String orderId) {
     return client
         .from('delivery_requests')
@@ -354,11 +446,9 @@ class SupabaseService {
         .eq('id', orderId);
   }
 
-  /// Atomically claim a pending delivery request (first-come-first-served).
   Future<ClaimOrderResult> claimOrder(String orderId) async {
     final runnerId = currentUser?.id;
 
-    // Try server-side atomic RPC first
     try {
       final rpcRes = await client.rpc(
         'claim_delivery_request',
@@ -376,19 +466,20 @@ class SupabaseService {
       );
     } on PostgrestException catch (e) {
       final msg = e.message.toLowerCase();
+      if (msg.contains('daily delivery limit reached')) {
+        return ClaimOrderResult(ClaimOrderStatus.dailyLimitReached, e.message);
+      }
       if (msg.contains('only verified student runners')) {
         return ClaimOrderResult(ClaimOrderStatus.ineligible, e.message);
       }
-      // Fall through to conditional REST update if RPC isn't deployed yet
     } catch (_) {}
 
-    // Conditional REST fallback (still atomic against status = 'pending')
     try {
       final updated = await client
           .from('delivery_requests')
           .update({
             'status': 'claimed',
-            if (runnerId != null) 'runner_id': runnerId,
+            'runner_id': ?runnerId,
             'claimed_at': DateTime.now().toUtc().toIso8601String(),
             'updated_at': DateTime.now().toUtc().toIso8601String(),
           })
@@ -407,8 +498,7 @@ class SupabaseService {
         ClaimOrderStatus.alreadyClaimed,
         'Too late — another runner already claimed this request.',
       );
-    } catch (e) {
-      // Offline mock fallback
+    } catch (_) {
       if (claimMockOrder(orderId, runnerId: runnerId)) {
         return const ClaimOrderResult(
           ClaimOrderStatus.claimed,
@@ -422,7 +512,6 @@ class SupabaseService {
     }
   }
 
-  /// Cancel an unclaimed ('pending') delivery request.
   Future<bool> cancelOrder(String orderId) async {
     try {
       final rpcRes = await client.rpc(
@@ -458,7 +547,6 @@ class SupabaseService {
     }
   }
 
-  /// Advance delivery order status (purchasing -> en_route -> arrived)
   Future<void> updateOrderStatus(String orderId, String newStatus) async {
     await client.from('delivery_requests').update({
       'status': newStatus,
@@ -466,7 +554,6 @@ class SupabaseService {
     }).eq('id', orderId);
   }
 
-  /// Verify 4-digit code against DB record and mark delivery as completed.
   Future<bool> verifyAndCompleteOrder(String orderId, String inputOtp) async {
     final trimmed = inputOtp.trim();
     if (trimmed.length != 4) return false;
@@ -495,11 +582,86 @@ class SupabaseService {
     return false;
   }
 
+  Future<List<Map<String, dynamic>>> fetchStatusLogs(String requestId) async {
+    final rows = await client
+        .from('delivery_status_logs')
+        .select()
+        .eq('request_id', requestId)
+        .order('created_at', ascending: true);
+    return (rows as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  // ==========================================
+  // PROBLEM REPORTS & ADMIN MANAGEMENT (WBS 7)
+  // ==========================================
+
+  Future<void> submitProblemReport({
+    String? requestId,
+    required String category,
+    required String description,
+  }) async {
+    final uid = currentUser?.id;
+    await client.from('problem_reports').insert({
+      'request_id': ?requestId,
+      'reporter_id': ?uid,
+      'category': category,
+      'description': description.trim(),
+      'status': 'open',
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
+
+  Future<List<ProblemReport>> fetchProblemReports() async {
+    final rows = await client
+        .from('problem_reports')
+        .select()
+        .order('created_at', ascending: false);
+    return (rows as List)
+        .map((e) => ProblemReport.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  Future<void> updateProblemReportStatus(
+    String reportId, {
+    required String status,
+    String? adminNotes,
+  }) async {
+    await client.from('problem_reports').update({
+      'status': status,
+      'admin_notes': ?adminNotes,
+      'reviewed_by': currentUser?.id,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', reportId);
+  }
+
+  Future<List<UserProfile>> fetchAllProfiles() async {
+    final rows = await client
+        .from('profiles')
+        .select()
+        .order('created_at', ascending: false);
+    return (rows as List)
+        .map((e) => UserProfile.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  Future<void> updateUserVerification(
+    String userId, {
+    required String status,
+    String? rejectionReason,
+  }) async {
+    await client.from('profiles').update({
+      'verification_status': status,
+      'rejection_reason': status == 'rejected' ? (rejectionReason ?? '') : null,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', userId);
+  }
+
   // ==========================================
   // RUNNER SCHEDULES (COR SYNC)
   // ==========================================
 
-  /// Save extracted/confirmed COR class sessions to `runner_schedules` and mark profile verified.
   Future<void> saveClassSchedule(
     List<ClassSession> sessions, {
     Uint8List? corImageBytes,
@@ -536,17 +698,15 @@ class SupabaseService {
     try {
       await client.from('profiles').update({
         'cor_verified': true,
-        'verification_status': 'verified',
-        if (corDocPath != null) 'cor_document_path': corDocPath,
+        'cor_document_path': ?corDocPath,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', userId);
       await fetchUserProfileModel();
     } catch (_) {}
   }
 
-  /// Fetch saved class schedule for duty lock checks
-  Future<List<ClassSession>> fetchClassSchedule() async {
-    final userId = currentUser?.id;
+  Future<List<ClassSession>> fetchClassSchedule([String? targetUserId]) async {
+    final userId = targetUserId ?? currentUser?.id;
     if (userId == null) return [];
 
     try {

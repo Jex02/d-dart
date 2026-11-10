@@ -10,6 +10,7 @@ class UserProfile {
   final bool corVerified;
   final String? idDocumentPath;
   final String? corDocumentPath;
+  final String? rejectionReason;
 
   const UserProfile({
     required this.id,
@@ -23,6 +24,7 @@ class UserProfile {
     this.corVerified = false,
     this.idDocumentPath,
     this.corDocumentPath,
+    this.rejectionReason,
   });
 
   bool get isStudent => accountType == 'student';
@@ -70,6 +72,7 @@ class UserProfile {
       corVerified: json['cor_verified'] == true,
       idDocumentPath: json['id_document_path']?.toString(),
       corDocumentPath: json['cor_document_path']?.toString(),
+      rejectionReason: json['rejection_reason']?.toString(),
     );
   }
 }

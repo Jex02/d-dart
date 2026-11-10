@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'admin_dashboard_screen.dart';
 import 'cor_upload_screen.dart';
 import 'customer_home_screen.dart';
 import 'login.dart';
 import 'models/user_profile.dart';
+import 'pending_verification_screen.dart';
 import 'runner_gig_board_screen.dart';
 import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
+import 'widgets/responsive_shell.dart';
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({super.key});
@@ -15,8 +18,8 @@ class MainDashboard extends StatefulWidget {
 }
 
 class _MainDashboardState extends State<MainDashboard> {
-  static const Color darkRed = Color(0xFF8F1F0D);
-  static const Color gold = Color(0xFFD4AF37);
+  static const Color darkRed = DDartTheme.panelMaroon;
+  static const Color gold = DDartTheme.gold;
 
   String? selectedRole;
   UserProfile? _profile;
@@ -32,12 +35,21 @@ class _MainDashboardState extends State<MainDashboard> {
     setState(() => _isSyncing = true);
     await DutyLockService.syncFromSupabase();
     final profile = await SupabaseService().fetchUserProfileModel();
-    if (mounted) {
-      setState(() {
-        _profile = profile;
-        _isSyncing = false;
-      });
+    if (!mounted) return;
+
+    if (profile != null && !profile.isAdmin && !profile.isVerified) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => PendingVerificationScreen(initialProfile: profile),
+        ),
+      );
+      return;
     }
+
+    setState(() {
+      _profile = profile;
+      _isSyncing = false;
+    });
   }
 
   Future<void> _handleProceed() async {
@@ -45,7 +57,6 @@ class _MainDashboardState extends State<MainDashboard> {
     if (_isSyncing) {
       await _syncAccountState();
     }
-
     if (!mounted) return;
 
     if (selectedRole == 'Customer') {
@@ -58,24 +69,30 @@ class _MainDashboardState extends State<MainDashboard> {
       return;
     }
 
-    // Runner Mode eligibility + Academic Duty Lock checks (WBS 2.5, 4.3, 4.6)
     final dutyStatus = DutyLockService.checkDutyStatus(profile: _profile);
     if (dutyStatus['isLocked'] == true) {
       final code = dutyStatus['code']?.toString() ?? '';
-      final isNotStudent = code == 'not_student' || code == 'account_rejected';
+      final isScheduleIssue =
+          code == 'no_schedule' || code == 'unverified_cor' || code == 'in_class' || code == 'pre_class_buffer';
+      final buffer = DutyLockService.activeConfig.preClassBufferMinutes;
+
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
           title: Row(
             children: [
               Icon(
-                isNotStudent ? Icons.block : Icons.lock_clock,
+                code == 'daily_limit_reached'
+                    ? Icons.hourglass_disabled
+                    : Icons.lock_clock,
                 color: darkRed,
               ),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
-                  isNotStudent ? 'Runner Access Restricted' : 'Academic Duty Lock',
+                  code == 'daily_limit_reached'
+                      ? 'Daily Delivery Limit'
+                      : 'Academic Duty Lock',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -91,15 +108,15 @@ class _MainDashboardState extends State<MainDashboard> {
               ),
               const SizedBox(height: 10),
               Text(
-                isNotStudent
-                    ? 'Faculty, Staff, and Administrator accounts can use Customer Mode to place Pabili requests, while Runner Mode is exclusive to verified students.'
-                    : 'D-DART enforces Duty Lock during class periods (including a 15-minute pre-class buffer) and requires a verified COR study load.',
+                code == 'daily_limit_reached'
+                    ? 'You have completed the configured daily maximum deliveries. Try again tomorrow!'
+                    : 'D-DART enforces Duty Lock during scheduled classes (with a $buffer-minute pre-class buffer) to protect academics.',
                 style: const TextStyle(fontSize: 12, color: Colors.black87),
               ),
             ],
           ),
           actions: [
-            if (!isNotStudent)
+            if (isScheduleIssue)
               TextButton(
                 onPressed: () async {
                   Navigator.pop(ctx);
@@ -126,7 +143,7 @@ class _MainDashboardState extends State<MainDashboard> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const RunnerGigBoardScreen()),
-    );
+    ).then((_) => _syncAccountState());
   }
 
   Future<void> _handleSignOut() async {
@@ -144,8 +161,9 @@ class _MainDashboardState extends State<MainDashboard> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktopOrTablet = screenWidth > 600;
-    final runnerRestrictedForRole =
-        _profile != null && (_profile!.isFacultyOrStaff || _profile!.isAdmin);
+    final showRunnerOption = _profile == null || _profile!.isStudent;
+    final dailyLimit = DutyLockService.activeConfig.dailyDeliveryLimit;
+    final completedToday = DutyLockService.completedDeliveriesToday;
 
     Widget content = Stack(
       children: [
@@ -153,7 +171,7 @@ class _MainDashboardState extends State<MainDashboard> {
           child: Image.asset('assets/lrac.jpg', fit: BoxFit.cover),
         ),
         Positioned.fill(
-          child: Container(color: Colors.white.withOpacity(0.84)),
+          child: Container(color: Colors.white.withValues(alpha: 0.86)),
         ),
         SafeArea(
           child: Center(
@@ -168,13 +186,16 @@ class _MainDashboardState extends State<MainDashboard> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Order.Run.Deliver.',
-                          style: TextStyle(
-                            color: Colors.black87,
-                            fontSize: 13,
-                            letterSpacing: 2.2,
-                            fontWeight: FontWeight.w500,
+                        const Flexible(
+                          child: Text(
+                            'Order.Run.Deliver.',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.black87,
+                              fontSize: 13,
+                              letterSpacing: 2.2,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
                         IconButton(
@@ -222,13 +243,9 @@ class _MainDashboardState extends State<MainDashboard> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: _profile!.isVerified
-                              ? Colors.green.withOpacity(0.12)
-                              : Colors.orange.withOpacity(0.14),
+                          color: Colors.green.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: _profile!.isVerified ? Colors.green : Colors.orange,
-                          ),
+                          border: Border.all(color: Colors.green),
                         ),
                         child: Text(
                           '${_profile!.fullName.isEmpty ? _profile!.email : _profile!.fullName}  •  ${_profile!.accountTypeLabel} (${_profile!.verificationLabel})',
@@ -236,7 +253,7 @@ class _MainDashboardState extends State<MainDashboard> {
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: _profile!.isVerified ? Colors.green.shade800 : Colors.orange.shade900,
+                            color: Colors.green.shade800,
                           ),
                         ),
                       ),
@@ -244,21 +261,29 @@ class _MainDashboardState extends State<MainDashboard> {
                     ],
 
                     if (_profile != null && _profile!.isAdmin) ...[
-                      Container(
+                      SizedBox(
                         width: double.infinity,
-                        padding: const EdgeInsets.all(10),
-                        margin: const EdgeInsets.only(bottom: 14),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.blue.shade200),
-                        ),
-                        child: const Text(
-                          'Administrator account detected. Admin review & monitoring tools are scheduled in Week 7 (WBS 7).',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 11, color: Colors.black87),
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const AdminDashboardScreen(),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: gold,
+                            foregroundColor: Colors.black,
+                          ),
+                          icon: const Icon(Icons.admin_panel_settings_outlined),
+                          label: const Text(
+                            'Open Admin Console',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ),
+                      const SizedBox(height: 16),
                     ],
 
                     const Text(
@@ -272,9 +297,10 @@ class _MainDashboardState extends State<MainDashboard> {
                     const SizedBox(height: 4),
                     const Text(
                       'Select how you want to use D-DART right now',
+                      textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.black54, fontSize: 12),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 18),
 
                     _RoleCard(
                       title: 'Customer',
@@ -283,19 +309,20 @@ class _MainDashboardState extends State<MainDashboard> {
                       selected: selectedRole == 'Customer',
                       onTap: () => setState(() => selectedRole = 'Customer'),
                     ),
-                    const SizedBox(height: 14),
 
-                    _RoleCard(
-                      title: 'Runner',
-                      description: runnerRestrictedForRole
-                          ? 'Restricted to verified CIT-U student accounts.'
-                          : 'Accept delivery requests during your vacant periods.',
-                      icon: Icons.directions_run,
-                      selected: selectedRole == 'Runner',
-                      badgeText: runnerRestrictedForRole ? 'Students Only' : null,
-                      onTap: () => setState(() => selectedRole = 'Runner'),
-                    ),
-                    const SizedBox(height: 24),
+                    if (showRunnerOption) ...[
+                      const SizedBox(height: 14),
+                      _RoleCard(
+                        title: 'Runner',
+                        description:
+                            'Accept delivery requests during vacant hours ($completedToday/$dailyLimit today).',
+                        icon: Icons.directions_run,
+                        selected: selectedRole == 'Runner',
+                        onTap: () => setState(() => selectedRole = 'Runner'),
+                      ),
+                    ],
+
+                    const SizedBox(height: 22),
 
                     SizedBox(
                       width: 160,
@@ -304,7 +331,7 @@ class _MainDashboardState extends State<MainDashboard> {
                         onPressed: selectedRole == null || _isSyncing ? null : _handleProceed,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: darkRed,
-                          disabledBackgroundColor: darkRed.withOpacity(0.35),
+                          disabledBackgroundColor: darkRed.withValues(alpha: 0.35),
                           foregroundColor: Colors.white,
                           disabledForegroundColor: Colors.white70,
                           elevation: 0,
@@ -327,7 +354,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       ),
                     ),
 
-                    if (!runnerRestrictedForRole) ...[
+                    if (showRunnerOption) ...[
                       const SizedBox(height: 14),
                       TextButton.icon(
                         onPressed: () async {
@@ -359,17 +386,11 @@ class _MainDashboardState extends State<MainDashboard> {
 
     return Scaffold(
       backgroundColor: isDesktopOrTablet ? const Color(0xFF2B2B2B) : Colors.white,
-      body: isDesktopOrTablet
-          ? Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 450, maxHeight: 900),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(28),
-                  child: content,
-                ),
-              ),
-            )
-          : content,
+      body: ResponsiveMobileShell(
+        maxWidth: 450,
+        maxHeight: 900,
+        child: content,
+      ),
     );
   }
 }
@@ -381,7 +402,6 @@ class _RoleCard extends StatelessWidget {
     required this.icon,
     required this.selected,
     required this.onTap,
-    this.badgeText,
   });
 
   final String title;
@@ -389,10 +409,9 @@ class _RoleCard extends StatelessWidget {
   final IconData icon;
   final bool selected;
   final VoidCallback onTap;
-  final String? badgeText;
 
-  static const Color darkRed = Color(0xFF8F1F0D);
-  static const Color gold = Color(0xFFD4AF37);
+  static const Color darkRed = DDartTheme.panelMaroon;
+  static const Color gold = DDartTheme.gold;
 
   @override
   Widget build(BuildContext context) {
@@ -403,15 +422,15 @@ class _RoleCard extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.94),
+          color: Colors.white.withValues(alpha: 0.94),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? gold : darkRed.withOpacity(0.6),
+            color: selected ? gold : darkRed.withValues(alpha: 0.6),
             width: selected ? 2 : 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: selected ? gold.withOpacity(0.2) : Colors.black12,
+              color: selected ? gold.withValues(alpha: 0.2) : Colors.black12,
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -423,7 +442,7 @@ class _RoleCard extends StatelessWidget {
               width: 50,
               height: 50,
               decoration: BoxDecoration(
-                color: darkRed.withOpacity(0.08),
+                color: darkRed.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon, color: darkRed, size: 28),
@@ -434,31 +453,13 @@ class _RoleCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: selected ? darkRed : Colors.black87,
-                        ),
-                      ),
-                      if (badgeText != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            badgeText!,
-                            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    ],
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: selected ? darkRed : Colors.black87,
+                    ),
                   ),
                   const SizedBox(height: 3),
                   Text(

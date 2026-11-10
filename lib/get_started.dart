@@ -22,7 +22,7 @@ class GetStartedPage extends StatelessWidget {
         // Light overlay matching Figma
         Positioned.fill(
           child: Container(
-            color: Colors.white.withOpacity(0.58),
+            color: Colors.white.withValues(alpha: 0.58),
           ),
         ),
 

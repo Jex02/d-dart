@@ -3,11 +3,13 @@ import 'cor_upload_screen.dart';
 import 'login.dart';
 import 'main_dashboard.dart';
 import 'models/delivery_order.dart';
+import 'models/problem_report.dart';
 import 'models/user_profile.dart';
 import 'order_tracking_screen.dart';
 import 'pabili_request_screen.dart';
 import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
+import 'widgets/responsive_shell.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -21,8 +23,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   UserProfile? _profile;
   final _searchController = TextEditingController();
 
-  static const Color primaryMaroon = Color(0xFF7A0000);
-  static const Color accentGold = Color(0xFFE5A824);
+  static const Color primaryMaroon = DDartTheme.deepMaroon;
+  static const Color accentGold = DDartTheme.brightGold;
   static const Color searchFieldBg = Color(0xFFF4EDED);
   static const Color outlineBorderColor = Color(0xFFB0B0B0);
 
@@ -77,17 +79,82 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     }
   }
 
+  Future<void> _openGeneralReportDialog() async {
+    String category = 'app_issue';
+    final descCtrl = TextEditingController();
+    final submit = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Report a Problem'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: category,
+                decoration: const InputDecoration(
+                  labelText: 'Category',
+                  border: OutlineInputBorder(),
+                ),
+                items: ProblemReport.categoryLabels.entries
+                    .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) setDialogState(() => category = v);
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: descCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Describe the issue',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryMaroon,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Submit'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final text = descCtrl.text.trim();
+    descCtrl.dispose();
+    if (submit == true && text.isNotEmpty) {
+      await SupabaseService().submitProblemReport(
+        category: category,
+        description: text,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Problem report submitted to Administrators.')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final firstName = (_profile?.fullName.trim().isNotEmpty ?? false)
         ? _profile!.fullName.trim().split(' ').first
         : 'Wildcat';
+    final canSwitchToRunner = _profile == null || _profile!.isStudent;
 
     return Scaffold(
       floatingActionButton: _selectedIndex == 2
           ? null
           : FloatingActionButton.extended(
-              backgroundColor: const Color(0xFF7F0000),
+              backgroundColor: DDartTheme.primaryMaroon,
               foregroundColor: Colors.white,
               icon: const Icon(Icons.add_shopping_cart),
               label: const Text('New Pabili'),
@@ -98,16 +165,18 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         bottom: false,
         child: Column(
           children: [
-            // Top Bar
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+              padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
               child: Row(
                 children: [
-                  IconButton(
-                    tooltip: 'Switch Mode',
-                    icon: const Icon(Icons.swap_horiz, color: Colors.white),
-                    onPressed: _switchMode,
-                  ),
+                  if (canSwitchToRunner)
+                    IconButton(
+                      tooltip: 'Switch Mode',
+                      icon: const Icon(Icons.swap_horiz, color: Colors.white),
+                      onPressed: _switchMode,
+                    )
+                  else
+                    const SizedBox(width: 8),
                   RichText(
                     text: const TextSpan(
                       style: TextStyle(
@@ -122,6 +191,24 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       ],
                     ),
                   ),
+                  if (_profile != null && _profile!.isFacultyOrStaff) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: accentGold.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        'FACULTY',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
                   const Spacer(),
                   IconButton(
                     tooltip: 'Active Orders',
@@ -135,7 +222,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       backgroundColor: Colors.white,
                       child: CircleAvatar(
                         radius: 15,
-                        backgroundColor: accentGold.withOpacity(0.25),
+                        backgroundColor: accentGold.withValues(alpha: 0.25),
                         child: Text(
                           firstName.substring(0, 1).toUpperCase(),
                           style: const TextStyle(
@@ -150,7 +237,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               ),
             ),
 
-            // Main Body Content
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -160,13 +246,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 ),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 460),
+                    constraints: const BoxConstraints(maxWidth: 480),
                     child: IndexedStack(
                       index: _selectedIndex,
                       children: [
                         _buildHomeTab(firstName),
                         _buildOrdersTab(),
-                        _buildProfileTab(),
+                        _buildProfileTab(canSwitchToRunner),
                       ],
                     ),
                   ),
@@ -250,7 +336,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Search Box -> opens Pabili request prefilled with query
           Container(
             height: 44,
             decoration: BoxDecoration(
@@ -276,7 +361,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Categories
           Row(
             children: [
               Expanded(
@@ -309,12 +393,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Choose Pickup Canteen',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E1E1E),
+              const Flexible(
+                child: Text(
+                  'Choose Pickup Canteen',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E1E1E),
+                  ),
                 ),
               ),
               InkWell(
@@ -435,6 +522,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             .toList();
 
         final activeOrder = orders.isNotEmpty ? orders.first : null;
+        final activeStatus = activeOrder?.effectiveStatus() ?? '';
+        final showOtp = activeStatus == 'arrived';
 
         return InkWell(
           onTap: activeOrder != null
@@ -476,22 +565,32 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'LIVE: ${activeOrder.effectiveStatus().toUpperCase()}',
+                        'LIVE: ${activeStatus.toUpperCase()}',
                         style: const TextStyle(
                           fontSize: 9.5,
                           fontWeight: FontWeight.bold,
                           color: primaryMaroon,
                         ),
                       ),
-                      Text(
-                        'OTP: ${activeOrder.verificationCode}',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 3,
-                          color: primaryMaroon,
+                      if (showOtp)
+                        Text(
+                          'OTP: ${activeOrder.verificationCode}',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 3,
+                            color: primaryMaroon,
+                          ),
+                        )
+                      else
+                        const Text(
+                          'Tap to Track Live',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: primaryMaroon,
+                          ),
                         ),
-                      ),
                       Text(
                         activeOrder.description,
                         maxLines: 2,
@@ -555,7 +654,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                               ),
                               decoration: BoxDecoration(
                                 color: isActive
-                                    ? primaryMaroon.withOpacity(0.12)
+                                    ? primaryMaroon.withValues(alpha: 0.12)
                                     : Colors.grey.shade200,
                                 borderRadius: BorderRadius.circular(6),
                               ),
@@ -593,15 +692,17 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'OTP Code: ${order.verificationCode}',
+                                status == 'arrived'
+                                    ? 'OTP Code: ${order.verificationCode}'
+                                    : 'OTP unlocks on arrival',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: primaryMaroon,
-                                  fontSize: 12,
+                                  fontSize: 11.5,
                                 ),
                               ),
                               const Text(
-                                'Tap to Track / Manage →',
+                                'Tap to Track →',
                                 style: TextStyle(fontSize: 11, color: Colors.black54),
                               ),
                             ],
@@ -619,7 +720,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 
-  Widget _buildProfileTab() {
+  Widget _buildProfileTab(bool canSwitchToRunner) {
     final profile = _profile;
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -657,12 +758,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           ),
         ),
         const SizedBox(height: 14),
-        ListTile(
-          leading: const Icon(Icons.swap_horiz, color: primaryMaroon),
-          title: const Text('Switch Mode (Customer / Runner)'),
-          onTap: _switchMode,
-        ),
-        if (profile == null || profile.isStudent)
+        if (canSwitchToRunner) ...[
+          ListTile(
+            leading: const Icon(Icons.swap_horiz, color: primaryMaroon),
+            title: const Text('Switch Mode (Customer / Runner)'),
+            onTap: _switchMode,
+          ),
           ListTile(
             leading: const Icon(Icons.school_outlined, color: primaryMaroon),
             title: const Text('Manage COR / Study Load'),
@@ -673,6 +774,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               );
             },
           ),
+        ],
+        ListTile(
+          leading: const Icon(Icons.report_problem_outlined, color: primaryMaroon),
+          title: const Text('Report a Problem'),
+          onTap: _openGeneralReportDialog,
+        ),
         ListTile(
           leading: const Icon(Icons.logout, color: Colors.red),
           title: const Text('Sign Out', style: TextStyle(color: Colors.red)),
@@ -775,7 +882,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: primaryMaroon.withOpacity(0.55), width: 1.0),
+        border: Border.all(color: primaryMaroon.withValues(alpha: 0.55), width: 1.0),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,

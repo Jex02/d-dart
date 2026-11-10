@@ -233,11 +233,11 @@ class _SignupPageState extends State<SignupPage> {
                 Text(
                   _accountType == 'student'
                       ? 'Welcome, $name!\n\n'
-                          'Your Student ID and COR (${confirmedSessions.length} class sessions) have been verified.\n\n'
-                          'You can place Pabili orders anytime and switch to Runner Mode during vacant periods.'
+                          'Your Student ID and COR (${confirmedSessions.length} class sessions) have been submitted.\n\n'
+                          'Your account is now pending Administrator verification before Customer and Runner modes unlock.'
                       : 'Welcome, $name!\n\n'
-                          'Your Faculty / Staff account has been registered.\n\n'
-                          'You can place Pabili delivery requests across campus in Customer Mode (Runner Mode is reserved for verified students).',
+                          'Your Faculty / Staff account and ID have been submitted.\n\n'
+                          'Your account is now pending Administrator verification before Customer Mode unlocks.',
                   style: const TextStyle(fontSize: 13, height: 1.4),
                 ),
                 if (needsConfirmation) ...[
@@ -245,9 +245,9 @@ class _SignupPageState extends State<SignupPage> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
+                      color: Colors.blue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+                      border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       'Please verify the confirmation link sent to $email before logging in (or disable "Confirm email" in Supabase Auth settings for instant login).',
@@ -472,7 +472,7 @@ class _TypePill extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
         decoration: BoxDecoration(
-          color: selected ? _goldAccent : Colors.white.withOpacity(0.1),
+          color: selected ? _goldAccent : Colors.white.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: selected ? _goldAccent : Colors.white30,
@@ -669,7 +669,7 @@ class _DocumentUploadCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
+        color: Colors.white.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: hasFile ? _goldAccent : Colors.white24,
@@ -702,8 +702,8 @@ class _DocumentUploadCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: hasFile
-                      ? Colors.green.withOpacity(0.25)
-                      : _goldAccent.withOpacity(0.2),
+                      ? Colors.green.withValues(alpha: 0.25)
+                      : _goldAccent.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -940,14 +940,14 @@ class _SignupTexturePainter extends CustomPainter {
         ui.PointMode.points,
         darkSpecks,
         Paint()
-          ..color = Colors.black.withOpacity(0.08)
+          ..color = Colors.black.withValues(alpha: 0.08)
           ..strokeWidth = 0.7,
       )
       ..drawPoints(
         ui.PointMode.points,
         lightSpecks,
         Paint()
-          ..color = Colors.white.withOpacity(0.04)
+          ..color = Colors.white.withValues(alpha: 0.04)
           ..strokeWidth = 0.6,
       );
   }

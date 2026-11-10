@@ -235,7 +235,7 @@ class ScheduleReviewSection extends StatelessWidget {
                       margin: const EdgeInsets.only(bottom: 10),
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: _primaryMaroon.withOpacity(0.15),
+                          backgroundColor: _primaryMaroon.withValues(alpha: 0.15),
                           child: Text(
                             session.day.length >= 3
                                 ? session.day.substring(0, 3)

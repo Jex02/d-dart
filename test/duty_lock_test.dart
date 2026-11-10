@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sd2/models/class_schedule.dart';
+import 'package:sd2/models/system_config.dart';
 import 'package:sd2/models/user_profile.dart';
 import 'package:sd2/services/duty_lock_service.dart';
 
@@ -33,14 +34,14 @@ void main() {
 
   tearDown(DutyLockService.reset);
 
-  test('blocks non-student, unverified, and empty-schedule accounts', () {
+  test('blocks non-student, pending-admin, and empty-schedule accounts', () {
     DutyLockService.verifiedSchedule = [
       ClassSession(day: 'Monday', startTime: '09:00', endTime: '11:00', subject: 'CS 321'),
     ];
     DutyLockService.isRunnerScheduleUploaded = true;
 
     final facultyCheck = DutyLockService.checkDutyStatus(
-      now: DateTime(2026, 11, 10, 14, 0), // Tuesday
+      now: DateTime(2026, 11, 10, 14, 0),
       profile: facultyAccount,
     );
     expect(facultyCheck['isLocked'], isTrue);
@@ -51,7 +52,7 @@ void main() {
       profile: unverifiedStudent,
     );
     expect(pendingCheck['isLocked'], isTrue);
-    expect(pendingCheck['code'], 'unverified_cor');
+    expect(pendingCheck['code'], 'pending_admin_verification');
 
     DutyLockService.reset();
     final noScheduleCheck = DutyLockService.checkDutyStatus(
@@ -62,41 +63,79 @@ void main() {
     expect(noScheduleCheck['code'], 'no_schedule');
   });
 
-  test('enforces active class and 15-minute pre-class buffer', () {
+  test('enforces active class and configurable pre-class buffer', () {
     DutyLockService.verifiedSchedule = [
       ClassSession(day: 'Tuesday', startTime: '09:00', endTime: '11:00', subject: 'CS 321'),
     ];
     DutyLockService.isRunnerScheduleUploaded = true;
 
-    // 08:44 on Tuesday (16 min before class) -> authorized
-    final beforeBuffer = DutyLockService.checkDutyStatus(
-      now: DateTime(2026, 11, 10, 8, 44),
-      profile: verifiedStudent,
+    // Default 15-min buffer: 08:44 -> authorized; 08:45 -> locked
+    expect(
+      DutyLockService.checkDutyStatus(
+        now: DateTime(2026, 11, 10, 8, 44),
+        profile: verifiedStudent,
+      )['isLocked'],
+      isFalse,
     );
-    expect(beforeBuffer['isLocked'], isFalse);
-    expect(beforeBuffer['code'], 'authorized');
 
-    // 08:45 on Tuesday (15 min before class) -> locked by pre-class buffer
-    final insideBuffer = DutyLockService.checkDutyStatus(
+    final insideDefaultBuffer = DutyLockService.checkDutyStatus(
       now: DateTime(2026, 11, 10, 8, 45),
       profile: verifiedStudent,
     );
-    expect(insideBuffer['isLocked'], isTrue);
-    expect(insideBuffer['code'], 'pre_class_buffer');
+    expect(insideDefaultBuffer['isLocked'], isTrue);
+    expect(insideDefaultBuffer['code'], 'pre_class_buffer');
 
-    // 09:30 on Tuesday (during class) -> locked by active class
+    // Configurable 30-min buffer: 08:30 -> locked
+    final insideCustomBuffer = DutyLockService.checkDutyStatus(
+      now: DateTime(2026, 11, 10, 8, 30),
+      profile: verifiedStudent,
+      preClassBufferMinutes: 30,
+    );
+    expect(insideCustomBuffer['isLocked'], isTrue);
+    expect(insideCustomBuffer['code'], 'pre_class_buffer');
+
+    // In class at 09:30 -> locked
     final inClass = DutyLockService.checkDutyStatus(
       now: DateTime(2026, 11, 10, 9, 30),
       profile: verifiedStudent,
     );
     expect(inClass['isLocked'], isTrue);
     expect(inClass['code'], 'in_class');
+  });
 
-    // 11:01 on Tuesday (after class) -> authorized
-    final afterClass = DutyLockService.checkDutyStatus(
-      now: DateTime(2026, 11, 10, 11, 1),
+  test('enforces configurable daily delivery limit and parses SystemConfig', () {
+    DutyLockService.verifiedSchedule = [
+      ClassSession(day: 'Monday', startTime: '09:00', endTime: '11:00', subject: 'CS 321'),
+    ];
+    DutyLockService.isRunnerScheduleUploaded = true;
+
+    final config = SystemConfig.fromConfigRows([
+      {'config_key': 'pre_class_buffer_minutes', 'config_value': '20'},
+      {'config_key': 'daily_delivery_limit', 'config_value': '3'},
+      {'config_key': 'request_expiration_minutes', 'config_value': '45'},
+      {'config_key': 'standard_delivery_fee', 'config_value': '25.00'},
+    ]);
+
+    expect(config.preClassBufferMinutes, 20);
+    expect(config.dailyDeliveryLimit, 3);
+    expect(config.requestExpirationMinutes, 45);
+    expect(config.standardDeliveryFee, 25.0);
+
+    final underCap = DutyLockService.checkDutyStatus(
+      now: DateTime(2026, 11, 10, 14, 0),
       profile: verifiedStudent,
+      dailyDeliveryLimit: config.dailyDeliveryLimit,
+      completedTodayCount: 2,
     );
-    expect(afterClass['isLocked'], isFalse);
+    expect(underCap['isLocked'], isFalse);
+
+    final atCap = DutyLockService.checkDutyStatus(
+      now: DateTime(2026, 11, 10, 14, 0),
+      profile: verifiedStudent,
+      dailyDeliveryLimit: config.dailyDeliveryLimit,
+      completedTodayCount: 3,
+    );
+    expect(atCap['isLocked'], isTrue);
+    expect(atCap['code'], 'daily_limit_reached');
   });
 }

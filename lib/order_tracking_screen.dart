@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'models/delivery_order.dart';
+import 'models/problem_report.dart';
 import 'services/supabase_service.dart';
 import 'mock_data.dart';
 
@@ -105,7 +106,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     try {
       verified = await SupabaseService().verifyAndCompleteOrder(widget.orderId, input);
     } catch (_) {
-      // Only allow local mock completion when offline / running local ORD-xxx mock order
       if (widget.orderId.startsWith('ORD-') || !SupabaseService().isAuthenticated) {
         verified = (input == expectedOtp);
       }
@@ -180,6 +180,74 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
   }
 
+  Future<void> _openReportProblemDialog() async {
+    String category = 'late_delivery';
+    final descCtrl = TextEditingController();
+
+    final submit = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Report a Delivery Problem'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: category,
+                decoration: const InputDecoration(
+                  labelText: 'Issue Category',
+                  border: OutlineInputBorder(),
+                ),
+                items: ProblemReport.categoryLabels.entries
+                    .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) setDialogState(() => category = v);
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: descCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Details',
+                  hintText: 'Explain what happened so an admin can review it.',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryMaroon,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Submit Report'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final description = descCtrl.text.trim();
+    descCtrl.dispose();
+
+    if (submit == true && description.isNotEmpty) {
+      await SupabaseService().submitProblemReport(
+        requestId: widget.orderId.startsWith('ORD-') ? null : widget.orderId,
+        category: category,
+        description: description,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Problem reported for Administrator review.')),
+        );
+      }
+    }
+  }
+
   String _formatStatusLabel(String status) {
     switch (status) {
       case 'pending':
@@ -218,6 +286,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         final isTerminated =
             effectiveStatus == 'cancelled' || effectiveStatus == 'expired';
         final currentStepIndex = _flowSteps.indexOf(effectiveStatus);
+        final isArrived = effectiveStatus == 'arrived';
 
         return Scaffold(
           backgroundColor: Colors.white,
@@ -228,11 +297,18 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             ),
             backgroundColor: primaryMaroon,
             iconTheme: const IconThemeData(color: Colors.white),
+            actions: [
+              IconButton(
+                tooltip: 'Report a problem',
+                icon: const Icon(Icons.report_problem_outlined),
+                onPressed: _openReportProblemDialog,
+              ),
+            ],
           ),
           body: SafeArea(
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
+                constraints: const BoxConstraints(maxWidth: 460),
                 child: SingleChildScrollView(
                   physics: const ClampingScrollPhysics(),
                   padding: const EdgeInsets.all(20),
@@ -246,8 +322,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                           color: isTerminated
                               ? Colors.grey.shade200
                               : isCompleted
-                                  ? Colors.green.withOpacity(0.12)
-                                  : primaryMaroon.withOpacity(0.1),
+                                  ? Colors.green.withValues(alpha: 0.12)
+                                  : primaryMaroon.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
@@ -284,7 +360,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Progress Stepper
                       if (!isTerminated) ...[
                         _DeliveryProgressStepper(
                           steps: _flowSteps,
@@ -294,7 +369,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         const SizedBox(height: 18),
                       ],
 
-                      // Order details card
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(14),
@@ -331,12 +405,17 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                               '₱${order.totalAmount.toStringAsFixed(2)}',
                               bold: true,
                             ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Direct Payment: Cash or personal GCash to runner on handover.',
+                              style: TextStyle(fontSize: 11, color: Colors.black54),
+                            ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 18),
 
-                      // Customer 4-digit OTP box
+                      // Customer 4-digit OTP box (SDD 6.3.6 / C.3: Revealed upon runner arrival)
                       if (!widget.isRunner && !isCompleted && !isTerminated) ...[
                         Container(
                           width: double.infinity,
@@ -353,30 +432,39 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                 style: TextStyle(fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 6),
-                              Text(
-                                order.verificationCode.isEmpty
-                                    ? '----'
-                                    : order.verificationCode,
-                                style: const TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 8,
-                                  color: primaryMaroon,
+                              if (isArrived) ...[
+                                Text(
+                                  order.verificationCode.isEmpty
+                                      ? '----'
+                                      : order.verificationCode,
+                                  style: const TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 8,
+                                    color: primaryMaroon,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'Share this 4-digit code with your runner only upon receiving your items.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 11),
-                              ),
+                                const SizedBox(height: 4),
+                                const Text(
+                                  'Your runner has arrived! Share this 4-digit code upon receiving your items.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontSize: 11),
+                                ),
+                              ] else ...[
+                                const Icon(Icons.lock_outline, size: 28, color: primaryMaroon),
+                                const SizedBox(height: 6),
+                                const Text(
+                                  'Your 4-digit code will appear here once the runner arrives at drop-off.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontSize: 11.5, color: Colors.black87),
+                                ),
+                              ],
                             ],
                           ),
                         ),
                         const SizedBox(height: 14),
                       ],
 
-                      // Customer Cancel Action while still pending
                       if (!widget.isRunner && order.canCancelAt()) ...[
                         SizedBox(
                           width: double.infinity,
@@ -398,9 +486,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         ),
                       ],
 
-                      // Runner Delivery Controls
                       if (widget.isRunner && !isCompleted && !isTerminated) ...[
-                        if (effectiveStatus != 'arrived')
+                        if (!isArrived)
                           SizedBox(
                             width: double.infinity,
                             height: 46,
@@ -428,7 +515,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                     ),
                             ),
                           ),
-                        if (effectiveStatus == 'arrived') ...[
+                        if (isArrived) ...[
                           const Text(
                             'Enter Customer 4-Digit Code:',
                             style: TextStyle(fontWeight: FontWeight.bold),
@@ -460,6 +547,18 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                           ),
                         ],
                       ],
+
+                      const SizedBox(height: 16),
+                      Center(
+                        child: TextButton.icon(
+                          onPressed: _openReportProblemDialog,
+                          icon: const Icon(Icons.flag_outlined, size: 16, color: Colors.black54),
+                          label: const Text(
+                            'Report a problem with this delivery',
+                            style: TextStyle(fontSize: 12, color: Colors.black54),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
