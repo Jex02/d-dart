@@ -224,7 +224,7 @@ class GeminiService {
   }) async {
     final base64Image = base64Encode(imageBytes);
     final url = Uri.parse(
-      'https://generativelanguage.googleapis.com/v1beta/models/${GeminiConstants.model}:generateContent?key=$apiKey',
+      'https://generativelanguage.googleapis.com/v1beta/models/${GeminiConstants.model}:generateContent',
     );
 
     const systemPrompt = """
@@ -265,7 +265,10 @@ Output strictly valid JSON with this exact schema:
     try {
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
         body: jsonEncode({
           "contents": [
             {
