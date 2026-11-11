@@ -1,8 +1,12 @@
 -- ============================================================
--- D-DART SUPABASE DATABASE SCHEMA (Weeks 1-7 Complete)
+-- D-DART SUPABASE DATABASE SCHEMA (Hardened & Idempotent)
 -- Run this in your Supabase Dashboard -> SQL Editor -> Run
 -- Safe and idempotent: can be re-run on an existing database.
 -- ============================================================
+
+-- Private schema for internal SECURITY DEFINER helpers (never exposed via Data API)
+create schema if not exists private;
+grant usage on schema private to authenticated;
 
 -- 1. Profiles Table (linked to Supabase Auth)
 create table if not exists public.profiles (
@@ -41,16 +45,24 @@ alter table public.profiles drop constraint if exists profiles_verification_stat
 alter table public.profiles add constraint profiles_verification_status_check
   check (verification_status in ('pending', 'verified', 'rejected'));
 
--- Helper function to check admin privileges safely without RLS recursion
-create or replace function public.is_admin()
-returns boolean as $$
+-- Helper function in private schema to check admin privileges without RLS recursion
+create or replace function private.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
   select exists (
     select 1
     from public.profiles
-    where id = auth.uid()
+    where id = (select auth.uid())
       and (account_type = 'admin' or role = 'admin')
   );
-$$ language sql stable security definer set search_path = public;
+$$;
+
+revoke all on function private.is_admin() from public, anon;
+grant execute on function private.is_admin() to authenticated;
 
 -- 2. Campus Pickup & Drop-off Locations Directory
 create table if not exists public.locations (
@@ -169,6 +181,21 @@ create table if not exists public.runner_schedules (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Covering Foreign-Key & Query Indexes
+create index if not exists idx_system_configurations_updated_by on public.system_configurations (updated_by);
+create index if not exists idx_delivery_requests_customer_id on public.delivery_requests (customer_id);
+create index if not exists idx_delivery_requests_runner_id on public.delivery_requests (runner_id);
+create index if not exists idx_delivery_requests_status_created on public.delivery_requests (status, created_at desc);
+create index if not exists idx_delivery_requests_runner_completed on public.delivery_requests (runner_id, status, completed_at);
+create index if not exists idx_delivery_status_logs_request_id on public.delivery_status_logs (request_id);
+create index if not exists idx_delivery_status_logs_changed_by on public.delivery_status_logs (changed_by);
+create index if not exists idx_delivery_records_customer_id on public.delivery_records (customer_id);
+create index if not exists idx_delivery_records_runner_id on public.delivery_records (runner_id);
+create index if not exists idx_problem_reports_request_id on public.problem_reports (request_id);
+create index if not exists idx_problem_reports_reporter_id on public.problem_reports (reporter_id);
+create index if not exists idx_problem_reports_reviewed_by on public.problem_reports (reviewed_by);
+create index if not exists idx_runner_schedules_user_id on public.runner_schedules (user_id);
+
 -- 9. Enable Row Level Security (RLS)
 alter table public.profiles enable row level security;
 alter table public.locations enable row level security;
@@ -179,140 +206,251 @@ alter table public.delivery_records enable row level security;
 alter table public.problem_reports enable row level security;
 alter table public.runner_schedules enable row level security;
 
--- 10. RLS Policies for Profiles
+-- Drop legacy policies before recreating & removing legacy public.is_admin()
 drop policy if exists "Allow authenticated read profiles" on public.profiles;
+drop policy if exists "Allow users to update their own profile" on public.profiles;
+drop policy if exists "Allow users to insert their own profile" on public.profiles;
+
+drop policy if exists "Allow read active locations" on public.locations;
+drop policy if exists "Allow admins manage locations" on public.locations;
+drop policy if exists "Allow admins insert locations" on public.locations;
+drop policy if exists "Allow admins update locations" on public.locations;
+drop policy if exists "Allow admins delete locations" on public.locations;
+
+drop policy if exists "Allow authenticated read configs" on public.system_configurations;
+drop policy if exists "Allow admins update configs" on public.system_configurations;
+drop policy if exists "Allow admins insert configs" on public.system_configurations;
+drop policy if exists "Allow admins modify configs" on public.system_configurations;
+drop policy if exists "Allow admins delete configs" on public.system_configurations;
+
+drop policy if exists "Allow read delivery requests" on public.delivery_requests;
+drop policy if exists "Allow insert delivery requests" on public.delivery_requests;
+drop policy if exists "Allow update delivery requests" on public.delivery_requests;
+
+drop policy if exists "Allow read delivery status logs" on public.delivery_status_logs;
+drop policy if exists "Allow participants read delivery records" on public.delivery_records;
+
+drop policy if exists "Allow create problem reports" on public.problem_reports;
+drop policy if exists "Allow read own or admin problem reports" on public.problem_reports;
+drop policy if exists "Allow admins update problem reports" on public.problem_reports;
+
+drop policy if exists "Allow read runner schedules" on public.runner_schedules;
+drop policy if exists "Allow users manage their schedules" on public.runner_schedules;
+drop policy if exists "Allow users insert own schedules" on public.runner_schedules;
+drop policy if exists "Allow users update own schedules" on public.runner_schedules;
+drop policy if exists "Allow users delete own schedules" on public.runner_schedules;
+
+drop policy if exists "Users upload own verification docs" on storage.objects;
+drop policy if exists "Users read own verification docs" on storage.objects;
+drop policy if exists "Users update own verification docs" on storage.objects;
+
+drop function if exists public.is_admin();
+
+-- 10. RLS Policies & Privilege Guard for Profiles
 create policy "Allow authenticated read profiles"
   on public.profiles for select
   to authenticated
-  using (true);
+  using ((select auth.uid()) = id or (select private.is_admin()));
 
-drop policy if exists "Allow users to update their own profile" on public.profiles;
-create policy "Allow users to update their own profile"
-  on public.profiles for update
-  to authenticated
-  using (auth.uid() = id or public.is_admin());
-
-drop policy if exists "Allow users to insert their own profile" on public.profiles;
 create policy "Allow users to insert their own profile"
   on public.profiles for insert
   to authenticated
-  with check (auth.uid() = id);
+  with check (
+    (select auth.uid()) = id
+    and account_type in ('student', 'faculty_staff')
+    and role in ('customer', 'runner')
+    and verification_status = 'pending'
+  );
 
--- 11. RLS Policies for Locations
-drop policy if exists "Allow read active locations" on public.locations;
+create policy "Allow users to update their own profile"
+  on public.profiles for update
+  to authenticated
+  using ((select auth.uid()) = id or (select private.is_admin()))
+  with check ((select auth.uid()) = id or (select private.is_admin()));
+
+create or replace function public.protect_profile_privileged_fields()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if current_user = 'authenticated' and not (select private.is_admin()) then
+    if new.account_type is distinct from old.account_type
+       or new.verification_status is distinct from old.verification_status
+       or new.rejection_reason is distinct from old.rejection_reason
+       or new.role = 'admin' then
+      raise exception 'Only administrators can modify account_type, verification_status, rejection_reason, or admin role.';
+    end if;
+
+    if new.role = 'runner'
+       and (old.account_type <> 'student'
+            or old.verification_status <> 'verified'
+            or old.cor_verified <> true) then
+      raise exception 'Only verified student accounts with a confirmed COR schedule may switch to runner role.';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.protect_profile_privileged_fields() from public, anon, authenticated;
+
+drop trigger if exists on_profile_protect_privileged_fields on public.profiles;
+create trigger on_profile_protect_privileged_fields
+  before update on public.profiles
+  for each row execute function public.protect_profile_privileged_fields();
+
+-- 11. RLS Policies for Locations (no overlapping FOR SELECT policies)
 create policy "Allow read active locations"
   on public.locations for select
   to authenticated
-  using (is_active = true or public.is_admin());
+  using (is_active = true or (select private.is_admin()));
 
-drop policy if exists "Allow admins manage locations" on public.locations;
-create policy "Allow admins manage locations"
-  on public.locations for all
+create policy "Allow admins insert locations"
+  on public.locations for insert
   to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  with check ((select private.is_admin()));
 
--- 12. RLS Policies for System Configurations
-drop policy if exists "Allow authenticated read configs" on public.system_configurations;
+create policy "Allow admins update locations"
+  on public.locations for update
+  to authenticated
+  using ((select private.is_admin()))
+  with check ((select private.is_admin()));
+
+create policy "Allow admins delete locations"
+  on public.locations for delete
+  to authenticated
+  using ((select private.is_admin()));
+
+-- 12. RLS Policies for System Configurations (no overlapping FOR SELECT policies)
 create policy "Allow authenticated read configs"
   on public.system_configurations for select
   to authenticated
   using (true);
 
-drop policy if exists "Allow admins update configs" on public.system_configurations;
-create policy "Allow admins update configs"
-  on public.system_configurations for all
+create policy "Allow admins insert configs"
+  on public.system_configurations for insert
   to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  with check ((select private.is_admin()));
+
+create policy "Allow admins modify configs"
+  on public.system_configurations for update
+  to authenticated
+  using ((select private.is_admin()))
+  with check ((select private.is_admin()));
+
+create policy "Allow admins delete configs"
+  on public.system_configurations for delete
+  to authenticated
+  using ((select private.is_admin()));
 
 -- 13. RLS Policies for Delivery Requests
-drop policy if exists "Allow read delivery requests" on public.delivery_requests;
 create policy "Allow read delivery requests"
   on public.delivery_requests for select
   to authenticated
-  using (true);
+  using (
+    status = 'pending'
+    or (select auth.uid()) = customer_id
+    or (select auth.uid()) = runner_id
+    or (select private.is_admin())
+  );
 
-drop policy if exists "Allow insert delivery requests" on public.delivery_requests;
 create policy "Allow insert delivery requests"
   on public.delivery_requests for insert
   to authenticated
-  with check (customer_id is null or auth.uid() = customer_id);
+  with check (
+    customer_id = (select auth.uid())
+    and status = 'pending'
+  );
 
-drop policy if exists "Allow update delivery requests" on public.delivery_requests;
+-- Direct updates only advance assigned delivery progress; claim/cancel/expire/complete use RPCs
 create policy "Allow update delivery requests"
   on public.delivery_requests for update
   to authenticated
   using (
-    (status = 'pending')
-    or auth.uid() = customer_id
-    or auth.uid() = runner_id
-    or public.is_admin()
+    ((select auth.uid()) = runner_id and status in ('claimed', 'purchasing', 'en_route'))
+    or (select private.is_admin())
+  )
+  with check (
+    ((select auth.uid()) = runner_id and status in ('purchasing', 'en_route', 'arrived'))
+    or (select private.is_admin())
   );
 
 -- 14. RLS Policies for Status Logs & Delivery Records
-drop policy if exists "Allow read delivery status logs" on public.delivery_status_logs;
 create policy "Allow read delivery status logs"
   on public.delivery_status_logs for select
   to authenticated
   using (
-    public.is_admin()
+    (select private.is_admin())
     or exists (
       select 1 from public.delivery_requests dr
       where dr.id = request_id
-        and (dr.customer_id = auth.uid() or dr.runner_id = auth.uid())
+        and (dr.customer_id = (select auth.uid()) or dr.runner_id = (select auth.uid()))
     )
   );
 
-drop policy if exists "Allow participants read delivery records" on public.delivery_records;
 create policy "Allow participants read delivery records"
   on public.delivery_records for select
   to authenticated
-  using (auth.uid() = customer_id or auth.uid() = runner_id or public.is_admin());
+  using (
+    (select auth.uid()) = customer_id
+    or (select auth.uid()) = runner_id
+    or (select private.is_admin())
+  );
 
 -- 15. RLS Policies for Problem Reports
-drop policy if exists "Allow create problem reports" on public.problem_reports;
 create policy "Allow create problem reports"
   on public.problem_reports for insert
   to authenticated
-  with check (reporter_id is null or auth.uid() = reporter_id);
+  with check (reporter_id = (select auth.uid()));
 
-drop policy if exists "Allow read own or admin problem reports" on public.problem_reports;
 create policy "Allow read own or admin problem reports"
   on public.problem_reports for select
   to authenticated
-  using (auth.uid() = reporter_id or public.is_admin());
+  using ((select auth.uid()) = reporter_id or (select private.is_admin()));
 
-drop policy if exists "Allow admins update problem reports" on public.problem_reports;
 create policy "Allow admins update problem reports"
   on public.problem_reports for update
   to authenticated
-  using (public.is_admin());
+  using ((select private.is_admin()))
+  with check ((select private.is_admin()));
 
--- 16. RLS Policies for Runner Schedules
-drop policy if exists "Allow read runner schedules" on public.runner_schedules;
+-- 16. RLS Policies for Runner Schedules (owner + admin only; no overlapping policies)
 create policy "Allow read runner schedules"
   on public.runner_schedules for select
   to authenticated
-  using (true);
+  using ((select auth.uid()) = user_id or (select private.is_admin()));
 
-drop policy if exists "Allow users manage their schedules" on public.runner_schedules;
-create policy "Allow users manage their schedules"
-  on public.runner_schedules for all
+create policy "Allow users insert own schedules"
+  on public.runner_schedules for insert
   to authenticated
-  using (auth.uid() = user_id or public.is_admin())
-  with check (auth.uid() = user_id or public.is_admin());
+  with check ((select auth.uid()) = user_id or (select private.is_admin()));
+
+create policy "Allow users update own schedules"
+  on public.runner_schedules for update
+  to authenticated
+  using ((select auth.uid()) = user_id or (select private.is_admin()))
+  with check ((select auth.uid()) = user_id or (select private.is_admin()));
+
+create policy "Allow users delete own schedules"
+  on public.runner_schedules for delete
+  to authenticated
+  using ((select auth.uid()) = user_id or (select private.is_admin()));
 
 -- 17. Delivery Status Log & Finalized Record Triggers
 create or replace function public.log_delivery_status_change()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
 begin
   if (tg_op = 'INSERT') or (old.status is distinct from new.status) then
     insert into public.delivery_status_logs (request_id, status, changed_by, remarks)
     values (
       new.id,
       new.status,
-      auth.uid(),
+      (select auth.uid()),
       case
         when tg_op = 'INSERT' then 'Request submitted'
         else 'Status changed to ' || new.status
@@ -335,7 +473,9 @@ begin
 
   return new;
 end;
-$$ language plpgsql security definer;
+$$;
+
+revoke all on function public.log_delivery_status_change() from public, anon, authenticated;
 
 drop trigger if exists on_delivery_finalized on public.delivery_requests;
 drop trigger if exists on_delivery_status_changed on public.delivery_requests;
@@ -343,17 +483,27 @@ create trigger on_delivery_status_changed
   after insert or update of status on public.delivery_requests
   for each row execute function public.log_delivery_status_change();
 
--- 18. Atomic FCFS Claim (with Daily Delivery Limit), Cancel, and Expiration RPCs
+-- 18. Atomic FCFS Claim (with Duty Lock + Daily Limit), Cancel, Expiration, and Handover RPCs
 create or replace function public.claim_delivery_request(p_order_id uuid)
-returns setof public.delivery_requests as $$
+returns setof public.delivery_requests
+language plpgsql
+security definer
+set search_path = ''
+as $$
 declare
-  v_uid uuid := auth.uid();
+  v_uid uuid := (select auth.uid());
   v_account_type text;
   v_verification_status text;
   v_cor_verified boolean;
   v_daily_limit integer := 5;
+  v_buffer_minutes integer := 15;
   v_completed_today integer := 0;
+  v_schedule_count integer := 0;
+  v_manila_now timestamp;
   v_day_start_utc timestamp with time zone;
+  v_current_day text;
+  v_current_minutes integer;
+  v_blocked_subject text;
 begin
   if v_uid is null then
     raise exception 'Authentication required to claim a delivery request.';
@@ -374,8 +524,51 @@ begin
     into v_daily_limit
     from public.system_configurations
     where config_key = 'daily_delivery_limit';
+  v_daily_limit := coalesce(v_daily_limit, 5);
 
-  v_day_start_utc := (date_trunc('day', timezone('Asia/Manila', now())) at time zone 'Asia/Manila');
+  select coalesce(nullif(config_value, '')::integer, 15)
+    into v_buffer_minutes
+    from public.system_configurations
+    where config_key = 'pre_class_buffer_minutes';
+  v_buffer_minutes := coalesce(v_buffer_minutes, 15);
+
+  select count(*)
+    into v_schedule_count
+    from public.runner_schedules
+    where user_id = v_uid;
+
+  if v_schedule_count = 0 then
+    raise exception 'Academic Duty Lock active: no verified COR schedule found.';
+  end if;
+
+  v_manila_now := timezone('Asia/Manila', now());
+  v_current_day := lower(trim(to_char(v_manila_now, 'FMDay')));
+  v_current_minutes := extract(hour from v_manila_now)::integer * 60
+                     + extract(minute from v_manila_now)::integer;
+
+  select rs.subject
+    into v_blocked_subject
+    from public.runner_schedules rs
+    where rs.user_id = v_uid
+      and lower(trim(rs.day)) = v_current_day
+      and rs.start_time ~ '^\d{1,2}:\d{2}$'
+      and rs.end_time ~ '^\d{1,2}:\d{2}$'
+      and v_current_minutes >= (
+        split_part(rs.start_time, ':', 1)::integer * 60
+        + split_part(rs.start_time, ':', 2)::integer
+        - v_buffer_minutes
+      )
+      and v_current_minutes <= (
+        split_part(rs.end_time, ':', 1)::integer * 60
+        + split_part(rs.end_time, ':', 2)::integer
+      )
+    limit 1;
+
+  if v_blocked_subject is not null then
+    raise exception 'Academic Duty Lock active for % (%-minute pre-class buffer).', v_blocked_subject, v_buffer_minutes;
+  end if;
+
+  v_day_start_utc := (date_trunc('day', v_manila_now) at time zone 'Asia/Manila');
 
   select count(*)
     into v_completed_today
@@ -384,7 +577,7 @@ begin
       and status = 'completed'
       and completed_at >= v_day_start_utc;
 
-  if v_completed_today >= v_daily_limit then
+  if v_daily_limit > 0 and v_completed_today >= v_daily_limit then
     raise exception 'Daily delivery limit reached (%/% completed today).', v_completed_today, v_daily_limit;
   end if;
 
@@ -399,12 +592,19 @@ begin
      and (expires_at is null or expires_at > timezone('utc'::text, now()))
    returning *;
 end;
-$$ language plpgsql security definer;
+$$;
+
+revoke all on function public.claim_delivery_request(uuid) from public, anon;
+grant execute on function public.claim_delivery_request(uuid) to authenticated;
 
 create or replace function public.cancel_delivery_request(p_order_id uuid)
-returns setof public.delivery_requests as $$
+returns setof public.delivery_requests
+language plpgsql
+security definer
+set search_path = ''
+as $$
 declare
-  v_uid uuid := auth.uid();
+  v_uid uuid := (select auth.uid());
 begin
   if v_uid is null then
     raise exception 'Authentication required to cancel a request.';
@@ -420,13 +620,59 @@ begin
      and (customer_id is null or customer_id = v_uid)
    returning *;
 end;
-$$ language plpgsql security definer;
+$$;
+
+revoke all on function public.cancel_delivery_request(uuid) from public, anon;
+grant execute on function public.cancel_delivery_request(uuid) to authenticated;
+
+create or replace function public.verify_and_complete_delivery(p_order_id uuid, p_code text)
+returns setof public.delivery_requests
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_trimmed text := trim(coalesce(p_code, ''));
+begin
+  if v_uid is null then
+    raise exception 'Authentication required to complete a delivery.';
+  end if;
+
+  if length(v_trimmed) <> 4 then
+    return;
+  end if;
+
+  return query
+  update public.delivery_requests
+     set status = 'completed',
+         completed_at = timezone('utc'::text, now()),
+         updated_at = timezone('utc'::text, now())
+   where id = p_order_id
+     and status = 'arrived'
+     and verification_code = v_trimmed
+     and (runner_id is null or runner_id = v_uid)
+   returning *;
+end;
+$$;
+
+revoke all on function public.verify_and_complete_delivery(uuid, text) from public, anon;
+grant execute on function public.verify_and_complete_delivery(uuid, text) to authenticated;
 
 create or replace function public.expire_stale_delivery_requests()
-returns integer as $$
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
 declare
+  v_uid uuid := (select auth.uid());
   v_count integer;
 begin
+  if v_uid is null then
+    raise exception 'Authentication required.';
+  end if;
+
   update public.delivery_requests
      set status = 'expired',
          updated_at = timezone('utc'::text, now())
@@ -436,11 +682,24 @@ begin
   get diagnostics v_count = row_count;
   return v_count;
 end;
-$$ language plpgsql security definer;
+$$;
 
--- 19. Auto-create profile trigger on auth signup
+revoke all on function public.expire_stale_delivery_requests() from public, anon;
+grant execute on function public.expire_stale_delivery_requests() to authenticated;
+
+-- 19. Auto-create profile trigger on auth signup (sanitizes user_metadata to prevent privilege escalation)
 create or replace function public.handle_new_user()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_raw_type text := new.raw_user_meta_data->>'account_type';
+  v_account_type text := case
+    when v_raw_type in ('student', 'faculty_staff') then v_raw_type
+    else 'student'
+  end;
 begin
   insert into public.profiles (
     id,
@@ -461,24 +720,29 @@ begin
     new.email,
     coalesce(new.raw_user_meta_data->>'phone_number', ''),
     coalesce(new.raw_user_meta_data->>'student_id', ''),
-    coalesce(new.raw_user_meta_data->>'role', 'customer'),
-    coalesce(new.raw_user_meta_data->>'account_type', 'student'),
-    coalesce(new.raw_user_meta_data->>'verification_status', 'pending'),
-    coalesce((new.raw_user_meta_data->>'cor_verified')::boolean, false),
+    'customer',
+    v_account_type,
+    'pending',
+    case
+      when v_account_type = 'student' then coalesce((new.raw_user_meta_data->>'cor_verified')::boolean, false)
+      else false
+    end,
     new.raw_user_meta_data->>'id_document_path',
     new.raw_user_meta_data->>'cor_document_path'
   )
   on conflict (id) do nothing;
   return new;
 end;
-$$ language plpgsql security definer;
+$$;
+
+revoke all on function public.handle_new_user() from public, anon, authenticated;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- 20. Backfill any existing auth users into public.profiles
+-- 20. Backfill any existing auth users into public.profiles safely
 insert into public.profiles (id, full_name, email, phone_number, student_id, role, account_type, verification_status, cor_verified)
 select
   id,
@@ -486,9 +750,13 @@ select
   email,
   coalesce(raw_user_meta_data->>'phone_number', ''),
   coalesce(raw_user_meta_data->>'student_id', ''),
-  coalesce(raw_user_meta_data->>'role', 'customer'),
-  coalesce(raw_user_meta_data->>'account_type', 'student'),
-  coalesce(raw_user_meta_data->>'verification_status', 'pending'),
+  'customer',
+  case
+    when raw_user_meta_data->>'account_type' in ('student', 'faculty_staff')
+      then raw_user_meta_data->>'account_type'
+    else 'student'
+  end,
+  'pending',
   coalesce((raw_user_meta_data->>'cor_verified')::boolean, false)
 from auth.users
 on conflict (id) do nothing;
@@ -498,34 +766,35 @@ insert into storage.buckets (id, name, public)
 values ('verification-documents', 'verification-documents', false)
 on conflict (id) do nothing;
 
-drop policy if exists "Users upload own verification docs" on storage.objects;
 create policy "Users upload own verification docs"
   on storage.objects for insert
   to authenticated
   with check (
     bucket_id = 'verification-documents'
-    and (storage.foldername(name))[1] = auth.uid()::text
+    and (storage.foldername(name))[1] = (select auth.uid())::text
   );
 
-drop policy if exists "Users read own verification docs" on storage.objects;
 create policy "Users read own verification docs"
   on storage.objects for select
   to authenticated
   using (
     bucket_id = 'verification-documents'
     and (
-      (storage.foldername(name))[1] = auth.uid()::text
-      or public.is_admin()
+      (storage.foldername(name))[1] = (select auth.uid())::text
+      or (select private.is_admin())
     )
   );
 
-drop policy if exists "Users update own verification docs" on storage.objects;
 create policy "Users update own verification docs"
   on storage.objects for update
   to authenticated
   using (
     bucket_id = 'verification-documents'
-    and (storage.foldername(name))[1] = auth.uid()::text
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  )
+  with check (
+    bucket_id = 'verification-documents'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
   );
 
 -- 22. Enable Realtime on delivery_requests table safely

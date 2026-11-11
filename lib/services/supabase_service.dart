@@ -168,6 +168,29 @@ class SupabaseService {
     }
   }
 
+  /// Uploads or replaces the signed-in user's ID document and saves its path on profiles.
+  Future<String?> uploadMyIdDocument(
+    Uint8List bytes, {
+    String ext = 'jpg',
+  }) async {
+    final userId = currentUser?.id;
+    if (userId == null || bytes.isEmpty) return null;
+
+    final path = await uploadVerificationDocument(
+      userId: userId,
+      fileName: 'id_document.$ext',
+      bytes: bytes,
+    );
+    if (path == null) return null;
+
+    await client.from('profiles').update({
+      'id_document_path': path,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', userId);
+    await fetchUserProfileModel();
+    return path;
+  }
+
   Future<AuthResponse> signIn({
     required String email,
     required String password,
@@ -448,6 +471,18 @@ class SupabaseService {
 
   Future<ClaimOrderResult> claimOrder(String orderId) async {
     final runnerId = currentUser?.id;
+    if (runnerId == null || orderId.startsWith('ORD-')) {
+      if (claimMockOrder(orderId, runnerId: runnerId)) {
+        return const ClaimOrderResult(
+          ClaimOrderStatus.claimed,
+          'Delivery request claimed (offline mode).',
+        );
+      }
+      return const ClaimOrderResult(
+        ClaimOrderStatus.alreadyClaimed,
+        'This request has already been claimed or expired.',
+      );
+    }
 
     try {
       final rpcRes = await client.rpc(
@@ -469,50 +504,25 @@ class SupabaseService {
       if (msg.contains('daily delivery limit reached')) {
         return ClaimOrderResult(ClaimOrderStatus.dailyLimitReached, e.message);
       }
-      if (msg.contains('only verified student runners')) {
+      if (msg.contains('only verified student runners') ||
+          msg.contains('academic duty lock') ||
+          msg.contains('authentication required')) {
         return ClaimOrderResult(ClaimOrderStatus.ineligible, e.message);
       }
-    } catch (_) {}
-
-    try {
-      final updated = await client
-          .from('delivery_requests')
-          .update({
-            'status': 'claimed',
-            'runner_id': ?runnerId,
-            'claimed_at': DateTime.now().toUtc().toIso8601String(),
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .eq('id', orderId)
-          .eq('status', 'pending')
-          .select()
-          .maybeSingle();
-
-      if (updated != null) {
-        return const ClaimOrderResult(
-          ClaimOrderStatus.claimed,
-          'Delivery request claimed! Head to pickup.',
-        );
-      }
-      return const ClaimOrderResult(
-        ClaimOrderStatus.alreadyClaimed,
-        'Too late — another runner already claimed this request.',
-      );
+      return ClaimOrderResult(ClaimOrderStatus.failed, e.message);
     } catch (_) {
-      if (claimMockOrder(orderId, runnerId: runnerId)) {
-        return const ClaimOrderResult(
-          ClaimOrderStatus.claimed,
-          'Delivery request claimed (offline mode).',
-        );
-      }
       return const ClaimOrderResult(
         ClaimOrderStatus.failed,
-        'Could not claim this request. Please try again.',
+        'Could not claim this request. Please check your connection and try again.',
       );
     }
   }
 
   Future<bool> cancelOrder(String orderId) async {
+    if (!isAuthenticated || orderId.startsWith('ORD-')) {
+      return cancelMockOrder(orderId);
+    }
+
     try {
       final rpcRes = await client.rpc(
         'cancel_delivery_request',
@@ -522,28 +532,9 @@ class SupabaseService {
         cancelMockOrder(orderId);
         return true;
       }
-    } catch (_) {}
-
-    try {
-      final updated = await client
-          .from('delivery_requests')
-          .update({
-            'status': 'cancelled',
-            'cancelled_at': DateTime.now().toUtc().toIso8601String(),
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .eq('id', orderId)
-          .eq('status', 'pending')
-          .select()
-          .maybeSingle();
-
-      if (updated != null) {
-        cancelMockOrder(orderId);
-        return true;
-      }
       return false;
     } catch (_) {
-      return cancelMockOrder(orderId);
+      return false;
     }
   }
 
@@ -557,29 +548,15 @@ class SupabaseService {
   Future<bool> verifyAndCompleteOrder(String orderId, String inputOtp) async {
     final trimmed = inputOtp.trim();
     if (trimmed.length != 4) return false;
-
-    final data = await client
-        .from('delivery_requests')
-        .select('verification_code, status')
-        .eq('id', orderId)
-        .maybeSingle();
-
-    if (data != null &&
-        data['status'] == 'arrived' &&
-        data['verification_code']?.toString() == trimmed) {
-      final now = DateTime.now().toUtc().toIso8601String();
-      await client
-          .from('delivery_requests')
-          .update({
-            'status': 'completed',
-            'completed_at': now,
-            'updated_at': now,
-          })
-          .eq('id', orderId)
-          .eq('status', 'arrived');
-      return true;
+    if (!isAuthenticated || orderId.startsWith('ORD-')) {
+      throw StateError('Offline mode verification');
     }
-    return false;
+
+    final rpcRes = await client.rpc(
+      'verify_and_complete_delivery',
+      params: {'p_order_id': orderId, 'p_code': trimmed},
+    );
+    return rpcRes is List && rpcRes.isNotEmpty;
   }
 
   Future<List<Map<String, dynamic>>> fetchStatusLogs(String requestId) async {

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'cor_upload_screen.dart';
 import 'login.dart';
 import 'models/user_profile.dart';
 import 'services/app_router.dart';
@@ -20,13 +22,63 @@ class PendingVerificationScreen extends StatefulWidget {
 }
 
 class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
+  final _picker = ImagePicker();
   late UserProfile _profile;
   bool _isChecking = false;
+  bool _isUploadingId = false;
 
   @override
   void initState() {
     super.initState();
     _profile = widget.initialProfile;
+  }
+
+  Future<void> _uploadMissingId() async {
+    try {
+      final file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+      if (file == null) return;
+
+      setState(() => _isUploadingId = true);
+      final bytes = await file.readAsBytes();
+      final ext = file.name.contains('.')
+          ? file.name.split('.').last.toLowerCase()
+          : 'jpg';
+      final uploadedPath = await SupabaseService().uploadMyIdDocument(bytes, ext: ext);
+      final updated = await SupabaseService().fetchUserProfileModel();
+      if (!mounted) return;
+      setState(() {
+        if (updated != null) _profile = updated;
+        _isUploadingId = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            uploadedPath != null
+                ? 'ID photo uploaded for administrator review.'
+                : 'Could not upload ID photo. Please try again.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isUploadingId = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Upload failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _openCorUpload() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CorUploadScreen()),
+    );
+    await _refreshStatus();
   }
 
   Future<void> _refreshStatus() async {
@@ -165,6 +217,47 @@ class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
                             Text(
                               'COR Status: ${_profile.corVerified ? 'AI Schedule Extracted' : 'Pending'}',
                             ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'COR Upload: ${_profile.corDocumentPath != null ? 'Submitted' : 'Missing'}',
+                            ),
+                          ],
+                          if (!isRejected &&
+                              (_profile.idDocumentPath == null ||
+                                  (_profile.isStudent &&
+                                      (!_profile.corVerified ||
+                                          _profile.corDocumentPath == null)))) ...[
+                            const SizedBox(height: 10),
+                            if (_profile.idDocumentPath == null)
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: _isUploadingId ? null : _uploadMissingId,
+                                  icon: _isUploadingId
+                                      ? const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        )
+                                      : const Icon(Icons.badge_outlined, size: 18),
+                                  label: Text(
+                                    _isUploadingId ? 'Uploading ID...' : 'Upload ID Photo',
+                                  ),
+                                ),
+                              ),
+                            if (_profile.isStudent &&
+                                (!_profile.corVerified ||
+                                    _profile.corDocumentPath == null)) ...[
+                              const SizedBox(height: 6),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: _openCorUpload,
+                                  icon: const Icon(Icons.document_scanner_outlined, size: 18),
+                                  label: const Text('Upload / Verify COR Schedule'),
+                                ),
+                              ),
+                            ],
                           ],
                         ],
                       ),

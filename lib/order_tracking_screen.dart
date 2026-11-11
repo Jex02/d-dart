@@ -59,6 +59,20 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     super.dispose();
   }
 
+  void _syncMockStatus(String status) {
+    _fallbackOrder['status'] = status;
+    final idx = mockDeliveryRequests.indexWhere(
+      (r) => r['id'].toString() == widget.orderId,
+    );
+    if (idx != -1) {
+      mockDeliveryRequests[idx]['status'] = status;
+      if (status == 'completed') {
+        mockDeliveryRequests[idx]['completed_at'] =
+            DateTime.now().toUtc().toIso8601String();
+      }
+    }
+  }
+
   Future<void> _advanceStatus(String currentStatus) async {
     String nextStatus = 'claimed';
     if (currentStatus == 'claimed') {
@@ -72,10 +86,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     setState(() => _isBusy = true);
     try {
       await SupabaseService().updateOrderStatus(widget.orderId, nextStatus);
-      setState(() => _fallbackOrder['status'] = nextStatus);
+      setState(() => _syncMockStatus(nextStatus));
     } catch (e) {
-      if (widget.orderId.startsWith('ORD-')) {
-        setState(() => _fallbackOrder['status'] = nextStatus);
+      if (widget.orderId.startsWith('ORD-') || !SupabaseService().isAuthenticated) {
+        setState(() => _syncMockStatus(nextStatus));
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -114,7 +128,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
 
     if (verified) {
-      setState(() => _fallbackOrder['status'] = 'completed');
+      setState(() => _syncMockStatus('completed'));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
