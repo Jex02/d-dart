@@ -1,14 +1,16 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/gemini_constants.dart';
+import '../constants/supabase_constants.dart';
 import '../models/class_schedule.dart';
 
 class GeminiService {
   /// Active Gemini API Key (defaults to GeminiConstants.apiKey)
   static String apiKey = GeminiConstants.apiKey;
 
-  /// Check whether a real API key is configured
+  /// Check whether a real local API key is configured via --dart-define
   static bool get hasRealApiKey =>
       apiKey.isNotEmpty &&
       !apiKey.contains('ReplaceWithYours') &&
@@ -16,6 +18,9 @@ class GeminiService {
 
   /// Inspects uploaded document, verifies if it is a valid CIT-U COR / Study Load,
   /// and extracts enrolled class schedules.
+  /// Uses local GEMINI_API_KEY if supplied via --dart-define; otherwise routes
+  /// through the Supabase `verify-cor` Edge Function, falling back to Demo Mode
+  /// if the Edge Function or secret is not yet configured.
   static Future<CorVerificationResult> verifyAndExtractCOR(
     Uint8List imageBytes, {
     String? expectedStudentId,
@@ -35,7 +40,17 @@ class GeminiService {
       );
     }
 
-    debugPrint('[GeminiService] Running in Development Demo Mode (no live API key set).');
+    final edgeResult = await _callSupabaseVerifyCor(
+      imageBytes,
+      expectedStudentId: expectedStudentId,
+    );
+    if (edgeResult != null) {
+      return edgeResult;
+    }
+
+    debugPrint(
+      '[GeminiService] Running in Development Demo Mode (no local GEMINI_API_KEY and verify-cor secret/function unavailable).',
+    );
     return _generateDemoVerificationResult(
       imageBytes,
       expectedStudentId: expectedStudentId,
@@ -131,6 +146,74 @@ class GeminiService {
       return CorVerificationResult.invalid(
         'Could not parse extracted schedule data: ${e.toString()}',
       );
+    }
+  }
+
+  static Future<CorVerificationResult?> _callSupabaseVerifyCor(
+    Uint8List imageBytes, {
+    String? expectedStudentId,
+  }) async {
+    try {
+      String? accessToken;
+      try {
+        accessToken = Supabase.instance.client.auth.currentSession?.accessToken;
+      } catch (_) {}
+
+      final uri = Uri.parse('${SupabaseConstants.url}/functions/v1/verify-cor');
+      final response = await http
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': SupabaseConstants.anonKey,
+              if (accessToken != null && accessToken.isNotEmpty)
+                'Authorization': 'Bearer $accessToken',
+            },
+            body: jsonEncode({
+              'imageBase64': base64Encode(imageBytes),
+              'mimeType': 'image/jpeg',
+              'model': GeminiConstants.model,
+            }),
+          )
+          .timeout(const Duration(seconds: 45));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final rawText = decoded is Map ? decoded['raw_text']?.toString() : null;
+        if (rawText != null && rawText.trim().isNotEmpty) {
+          return parseGeminiResponseJson(
+            rawText,
+            expectedStudentId: expectedStudentId,
+          );
+        }
+        return CorVerificationResult.invalid(
+          'Unexpected empty response from COR verification service.',
+        );
+      }
+
+      if (response.statusCode == 404) {
+        debugPrint('[GeminiService] verify-cor Edge Function not deployed yet.');
+        return null;
+      }
+
+      try {
+        final errBody = jsonDecode(response.body);
+        if (errBody is Map && errBody['error'] == 'missing_secret') {
+          debugPrint('[GeminiService] GEMINI_API_KEY secret missing in Supabase.');
+          return null;
+        }
+        final msg = errBody is Map ? errBody['message']?.toString() : null;
+        return CorVerificationResult.invalid(
+          msg ?? 'COR verification service returned status ${response.statusCode}.',
+        );
+      } catch (_) {
+        return CorVerificationResult.invalid(
+          'COR verification service returned status ${response.statusCode}.',
+        );
+      }
+    } catch (e) {
+      debugPrint('[GeminiService] Edge Function call unavailable: $e');
+      return null;
     }
   }
 
