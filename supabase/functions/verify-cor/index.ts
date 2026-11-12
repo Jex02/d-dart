@@ -7,11 +7,21 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const DEFAULT_MODEL = "gemini-3.8-flash";
-const ALLOWED_MODELS = new Set([
+const DEFAULT_MODEL = "gemini-3.5-flash-lite";
+const MODEL_FALLBACK_ORDER = [
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-flash-lite",
+  "gemini-flash-lite-latest",
+  "gemini-3-flash-preview",
+  "gemini-flash-latest",
   "gemini-3.8-flash",
-  "gemini-3.8-flash-lite",
+  "gemini-3.6-flash",
+  "gemini-3.5-flash",
   "gemini-3.7-flash",
+];
+const ALLOWED_MODELS = new Set([
+  ...MODEL_FALLBACK_ORDER,
+  "gemini-3.8-flash-lite",
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
   "gemini-2.0-flash",
@@ -84,10 +94,12 @@ async function callGemini(
 ): Promise<Response> {
   const geminiUrl =
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  const startedAt = Date.now();
+  console.log(`[verify-cor] calling model=${model} mime=${mimeType} b64Len=${imageBase64.length}`);
 
-  return await fetch(geminiUrl, {
+  const res = await fetch(geminiUrl, {
     method: "POST",
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(16000),
     headers: {
       "Content-Type": "application/json",
       "x-goog-api-key": geminiApiKey,
@@ -112,6 +124,8 @@ async function callGemini(
       },
     }),
   });
+  console.log(`[verify-cor] fetch headers status=${res.status} in ${Date.now() - startedAt}ms`);
+  return res;
 }
 
 Deno.serve(async (req: Request) => {
@@ -146,7 +160,7 @@ Deno.serve(async (req: Request) => {
         ? body.mimeType
         : "image/jpeg";
     const requestedModel = typeof body?.model === "string" ? body.model.trim() : "";
-    let activeModel = ALLOWED_MODELS.has(requestedModel)
+    const primaryModel = ALLOWED_MODELS.has(requestedModel)
       ? requestedModel
       : DEFAULT_MODEL;
 
@@ -157,36 +171,65 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    let geminiRes = await callGemini(activeModel, geminiApiKey, imageBase64, mimeType);
+    const candidates = [
+      primaryModel,
+      ...MODEL_FALLBACK_ORDER.filter((m) => m !== primaryModel),
+    ];
 
-    if (geminiRes.status === 404 && activeModel !== DEFAULT_MODEL) {
-      activeModel = DEFAULT_MODEL;
-      geminiRes = await callGemini(activeModel, geminiApiKey, imageBase64, mimeType);
+    let activeModel = primaryModel;
+    let geminiRes: Response | null = null;
+    let lastErrorBody = "";
+    let lastError: unknown = null;
+
+    for (const candidate of candidates) {
+      activeModel = candidate;
+      try {
+        geminiRes = await callGemini(activeModel, geminiApiKey, imageBase64, mimeType);
+        lastError = null;
+        if (geminiRes.ok) break;
+        lastErrorBody = await geminiRes.text().catch(() => "");
+        if (geminiRes.status !== 404 && geminiRes.status !== 429 && geminiRes.status !== 503) {
+          break;
+        }
+      } catch (err) {
+        geminiRes = null;
+        lastError = err;
+        const isTimeout =
+          err instanceof DOMException &&
+          (err.name === "TimeoutError" || err.name === "AbortError");
+        if (!isTimeout) throw err;
+        console.warn(`[verify-cor] timeout on ${activeModel}, trying next fallback`);
+      }
     }
 
-    // Retry once on transient upstream 503 capacity spike
-    if (geminiRes.status === 503) {
-      await new Promise((r) => setTimeout(r, 900));
-      geminiRes = await callGemini(activeModel, geminiApiKey, imageBase64, mimeType);
+    if (!geminiRes && lastError) {
+      throw lastError;
     }
 
-    if (!geminiRes.ok) {
-      const errorBody = await geminiRes.text();
-      const httpStatus = geminiRes.status === 429 || geminiRes.status === 503 ? 503 : 502;
+    if (!geminiRes || !geminiRes.ok) {
+      const status = geminiRes?.status ?? 503;
+      console.error(`[verify-cor] upstream error ${status} (${activeModel}): ${lastErrorBody}`);
+      const httpStatus = status === 429 || status === 503 ? 503 : 502;
       return jsonResponse(
         {
           error: "gemini_upstream_error",
-          status: geminiRes.status,
+          status,
           model: activeModel,
-          message: `Gemini AI service returned status ${geminiRes.status}.`,
-          details: errorBody.slice(0, 300),
+          message: `Gemini AI service returned status ${status}.`,
+          details: lastErrorBody.slice(0, 500),
         },
         httpStatus,
       );
     }
 
     const payload = await geminiRes.json();
-    const rawText = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const parts = Array.isArray(payload?.candidates?.[0]?.content?.parts)
+      ? payload.candidates[0].content.parts
+      : [];
+    const rawText = parts
+      .filter((p: { thought?: boolean; text?: unknown }) => !p?.thought && typeof p?.text === "string")
+      .map((p: { text: string }) => p.text)
+      .join("\n");
     if (typeof rawText !== "string" || !rawText.trim()) {
       return jsonResponse(
         { error: "empty_response", message: "Empty response from Gemini AI." },
@@ -196,6 +239,7 @@ Deno.serve(async (req: Request) => {
 
     return jsonResponse({ raw_text: rawText, model: activeModel }, 200);
   } catch (err) {
+    console.error(`[verify-cor] error: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
     const isTimeout =
       err instanceof DOMException &&
       (err.name === "TimeoutError" || err.name === "AbortError");

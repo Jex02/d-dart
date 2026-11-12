@@ -10,6 +10,6 @@ class GeminiConstants {
   /// Preferred Gemini Vision model (overrideable via --dart-define=GEMINI_MODEL=...)
   static const String model = String.fromEnvironment(
     'GEMINI_MODEL',
-    defaultValue: 'gemini-3.8-flash',
+    defaultValue: 'gemini-3.5-flash-lite',
   );
 }
