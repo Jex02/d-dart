@@ -1,6 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sd2/mock_data.dart';
+import 'package:sd2/models/campus_location.dart';
 import 'package:sd2/models/delivery_order.dart';
+import 'package:sd2/models/problem_report.dart';
+import 'package:sd2/models/user_profile.dart';
 
 void main() {
   setUp(() {
@@ -70,5 +73,39 @@ void main() {
     final future = DateTime.now().toUtc().add(const Duration(minutes: 10));
     expect(expireStaleMockOrders(now: future), 1);
     expect(claimMockOrder('ORD-999', runnerId: 'runner-1', now: future), isFalse);
+  });
+
+  test('UserProfile, CampusLocation, and ProblemReport models parse roles and labels', () {
+    final admin = UserProfile.fromJson({
+      'id': 'a1',
+      'full_name': 'Admin User',
+      'email': 'admin@cit.edu',
+      'role': 'admin',
+      'account_type': 'admin',
+      'verification_status': 'verified',
+    });
+    expect(admin.isAdmin, isTrue);
+    expect(admin.isStudent, isFalse);
+    expect(admin.isVerified, isTrue);
+
+    final faculty = UserProfile.fromJson({
+      'id': 'f1',
+      'full_name': 'Prof. Reyes',
+      'account_type': 'faculty_staff',
+      'verification_status': 'verified',
+    });
+    expect(faculty.isFacultyOrStaff, isTrue);
+    expect(faculty.accountTypeLabel, 'Faculty / Staff');
+
+    final report = ProblemReport.fromJson({
+      'id': 'r1',
+      'category': 'wrong_item',
+      'description': 'Missing extra chili oil',
+      'status': 'open',
+    });
+    expect(report.categoryLabel, 'Wrong / Missing Item');
+
+    expect(CampusLocation.defaultPickups.length, greaterThanOrEqualTo(4));
+    expect(CampusLocation.defaultDropoffs.length, greaterThanOrEqualTo(5));
   });
 }

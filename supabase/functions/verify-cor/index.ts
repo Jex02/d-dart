@@ -7,7 +7,11 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const DEFAULT_MODEL = "gemini-3.8-flash";
 const ALLOWED_MODELS = new Set([
+  "gemini-3.8-flash",
+  "gemini-3.8-flash-lite",
+  "gemini-3.7-flash",
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
   "gemini-2.0-flash",
@@ -72,6 +76,44 @@ function isAuthorizedClientKey(apikeyHeader: string | null): boolean {
   return false;
 }
 
+async function callGemini(
+  model: string,
+  geminiApiKey: string,
+  imageBase64: string,
+  mimeType: string,
+): Promise<Response> {
+  const geminiUrl =
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+  return await fetch(geminiUrl, {
+    method: "POST",
+    signal: AbortSignal.timeout(15000),
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": geminiApiKey,
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [
+            { text: SYSTEM_PROMPT },
+            {
+              inline_data: {
+                mime_type: mimeType,
+                data: imageBase64,
+              },
+            },
+          ],
+        },
+      ],
+      generationConfig: {
+        response_mime_type: "application/json",
+        temperature: 0.1,
+      },
+    }),
+  });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -104,9 +146,9 @@ Deno.serve(async (req: Request) => {
         ? body.mimeType
         : "image/jpeg";
     const requestedModel = typeof body?.model === "string" ? body.model.trim() : "";
-    const model = ALLOWED_MODELS.has(requestedModel)
+    let activeModel = ALLOWED_MODELS.has(requestedModel)
       ? requestedModel
-      : "gemini-2.5-flash";
+      : DEFAULT_MODEL;
 
     if (!imageBase64 || imageBase64.length > 15_000_000) {
       return jsonResponse(
@@ -115,46 +157,31 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const geminiUrl =
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+    let geminiRes = await callGemini(activeModel, geminiApiKey, imageBase64, mimeType);
 
-    const geminiRes = await fetch(geminiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": geminiApiKey,
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: SYSTEM_PROMPT },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: imageBase64,
-                },
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          response_mime_type: "application/json",
-          temperature: 0.1,
-        },
-      }),
-    });
+    if (geminiRes.status === 404 && activeModel !== DEFAULT_MODEL) {
+      activeModel = DEFAULT_MODEL;
+      geminiRes = await callGemini(activeModel, geminiApiKey, imageBase64, mimeType);
+    }
+
+    // Retry once on transient upstream 503 capacity spike
+    if (geminiRes.status === 503) {
+      await new Promise((r) => setTimeout(r, 900));
+      geminiRes = await callGemini(activeModel, geminiApiKey, imageBase64, mimeType);
+    }
 
     if (!geminiRes.ok) {
       const errorBody = await geminiRes.text();
+      const httpStatus = geminiRes.status === 429 || geminiRes.status === 503 ? 503 : 502;
       return jsonResponse(
         {
           error: "gemini_upstream_error",
           status: geminiRes.status,
+          model: activeModel,
           message: `Gemini AI service returned status ${geminiRes.status}.`,
           details: errorBody.slice(0, 300),
         },
-        502,
+        httpStatus,
       );
     }
 
@@ -167,14 +194,17 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    return jsonResponse({ raw_text: rawText }, 200);
+    return jsonResponse({ raw_text: rawText, model: activeModel }, 200);
   } catch (err) {
+    const isTimeout =
+      err instanceof DOMException &&
+      (err.name === "TimeoutError" || err.name === "AbortError");
     return jsonResponse(
       {
-        error: "bad_request",
+        error: isTimeout ? "gemini_timeout" : "bad_request",
         message: err instanceof Error ? err.message : "Unexpected error",
       },
-      400,
+      isTimeout ? 503 : 400,
     );
   }
 });

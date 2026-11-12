@@ -31,26 +31,30 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   final _otpInputController = TextEditingController();
   Map<String, dynamic> _fallbackOrder = {};
+  bool _hasFallbackInMemory = false;
   bool _isBusy = false;
 
   @override
   void initState() {
     super.initState();
-    try {
-      _fallbackOrder = mockDeliveryRequests.firstWhere(
-        (req) => req['id'].toString() == widget.orderId,
-        orElse: () => {
-          'id': widget.orderId,
-          'status': 'pending',
-          'description': 'Pabili delivery item',
-          'pickup_location': 'Campus Canteen',
-          'dropoff_location': 'Campus Drop-off',
-          'estimated_price': 0.0,
-          'delivery_fee': 20.0,
-          'verification_code': '0000',
-        },
-      );
-    } catch (_) {}
+    final idx = mockDeliveryRequests.indexWhere(
+      (req) => req['id'].toString() == widget.orderId,
+    );
+    if (idx != -1) {
+      _fallbackOrder = Map<String, dynamic>.from(mockDeliveryRequests[idx]);
+      _hasFallbackInMemory = true;
+    } else {
+      _fallbackOrder = {
+        'id': widget.orderId,
+        'status': 'pending',
+        'description': 'Pabili delivery item',
+        'pickup_location': 'Campus Canteen',
+        'dropoff_location': 'Campus Drop-off',
+        'estimated_price': 0.0,
+        'delivery_fee': 20.0,
+        'verification_code': '0000',
+      };
+    }
   }
 
   @override
@@ -287,9 +291,29 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isMockOrder = widget.orderId.startsWith('ORD-');
+    final isSignedInOnline = !isMockOrder && SupabaseService().isAuthenticated;
+
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: SupabaseService().streamOrder(widget.orderId),
+      stream: isMockOrder
+          ? Stream.value([_fallbackOrder])
+          : SupabaseService().streamOrder(widget.orderId),
       builder: (context, snapshot) {
+        if (isSignedInOnline &&
+            !_hasFallbackInMemory &&
+            !snapshot.hasData &&
+            snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            backgroundColor: Colors.white,
+            appBar: AppBar(
+              title: const Text('Loading Order...', style: TextStyle(color: Colors.white, fontSize: 18)),
+              backgroundColor: primaryMaroon,
+              iconTheme: const IconThemeData(color: Colors.white),
+            ),
+            body: const Center(child: CircularProgressIndicator(color: primaryMaroon)),
+          );
+        }
+
         Map<String, dynamic> raw = _fallbackOrder;
         if (snapshot.hasData && snapshot.data!.isNotEmpty) {
           raw = snapshot.data!.first;

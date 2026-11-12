@@ -20,6 +20,7 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
   final ImagePicker _picker = ImagePicker();
 
   Uint8List? _selectedImageBytes;
+  String _selectedImageExt = 'jpg';
   bool _isProcessing = false;
   bool _isSaving = false;
   bool _isDemoFallback = false;
@@ -36,8 +37,12 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
     if (file == null) return;
 
     final bytes = await file.readAsBytes();
+    final ext = file.name.contains('.')
+        ? file.name.split('.').last.toLowerCase()
+        : 'jpg';
     setState(() {
       _selectedImageBytes = bytes;
+      _selectedImageExt = ext;
       _isProcessing = true;
     });
 
@@ -99,6 +104,7 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
       await SupabaseService().saveClassSchedule(
         _extractedSessions,
         corImageBytes: _selectedImageBytes,
+        corDocumentExt: _selectedImageExt,
       );
 
       if (mounted) {

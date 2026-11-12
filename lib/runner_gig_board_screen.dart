@@ -439,10 +439,24 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 subtitle: Text(
-                  '${order.pickupLocation} → ${order.dropoffLocation}\nStatus: ${order.status.toUpperCase()}',
+                  '${order.pickupLocation} → ${order.dropoffLocation}\nStatus: ${order.effectiveStatus().toUpperCase()}',
                 ),
                 isThreeLine: true,
-                trailing: const Icon(Icons.chevron_right, color: primaryMaroon),
+                trailing: Chip(
+                  label: Text(
+                    order.effectiveStatus() == 'completed' ? 'DONE' : 'ACTIVE',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: order.effectiveStatus() == 'completed'
+                          ? Colors.green.shade800
+                          : primaryMaroon,
+                    ),
+                  ),
+                  backgroundColor: order.effectiveStatus() == 'completed'
+                      ? Colors.green.shade50
+                      : primaryMaroon.withValues(alpha: 0.1),
+                ),
                 onTap: () {
                   Navigator.push(
                     context,

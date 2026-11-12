@@ -16,6 +16,67 @@ class GeminiService {
       !apiKey.contains('ReplaceWithYours') &&
       !apiKey.startsWith('AIzaSyDemo');
 
+  /// Inspects file magic bytes to send an accurate MIME type to Gemini Vision.
+  @visibleForTesting
+  static String detectImageMimeType(Uint8List bytes) {
+    if (bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47) {
+      return 'image/png';
+    }
+    if (bytes.length >= 12 &&
+        bytes[0] == 0x52 && // R
+        bytes[1] == 0x49 && // I
+        bytes[2] == 0x46 && // F
+        bytes[3] == 0x46 && // F
+        bytes[8] == 0x57 && // W
+        bytes[9] == 0x45 && // E
+        bytes[10] == 0x42 && // B
+        bytes[11] == 0x50) {
+      return 'image/webp';
+    }
+    return 'image/jpeg';
+  }
+
+  /// Normalizes common weekday abbreviations/casings into canonical names.
+  @visibleForTesting
+  static String normalizeWeekday(String rawDay) {
+    final cleaned = rawDay.trim().toLowerCase();
+    switch (cleaned) {
+      case 'mon':
+      case 'monday':
+      case 'm':
+        return 'Monday';
+      case 'tue':
+      case 'tues':
+      case 'tuesday':
+      case 't':
+        return 'Tuesday';
+      case 'wed':
+      case 'wednesday':
+      case 'w':
+        return 'Wednesday';
+      case 'thu':
+      case 'thur':
+      case 'thurs':
+      case 'thursday':
+      case 'th':
+        return 'Thursday';
+      case 'fri':
+      case 'friday':
+      case 'f':
+        return 'Friday';
+      case 'sat':
+      case 'saturday':
+      case 's':
+        return 'Saturday';
+      default:
+        return rawDay.trim();
+    }
+  }
+
   /// Inspects uploaded document, verifies if it is a valid CIT-U COR / Study Load,
   /// and extracts enrolled class schedules.
   /// Uses local GEMINI_API_KEY if supplied via --dart-define; otherwise routes
@@ -109,7 +170,11 @@ class GeminiService {
       final sessions = <ClassSession>[];
       for (final item in sessionList) {
         if (item is Map) {
-          final session = ClassSession.fromJson(Map<String, dynamic>.from(item));
+          final parsed = ClassSession.fromJson(Map<String, dynamic>.from(item));
+          final normalizedDay = normalizeWeekday(parsed.day);
+          final session = parsed.day == normalizedDay
+              ? parsed
+              : parsed.copyWith(day: normalizedDay);
           if (ClassSession.validDays.contains(session.day) && session.hasValidTimeRange) {
             sessions.add(session);
           }
@@ -159,6 +224,7 @@ class GeminiService {
         accessToken = Supabase.instance.client.auth.currentSession?.accessToken;
       } catch (_) {}
 
+      final mimeType = detectImageMimeType(imageBytes);
       final uri = Uri.parse('${SupabaseConstants.url}/functions/v1/verify-cor');
       final response = await http
           .post(
@@ -171,7 +237,7 @@ class GeminiService {
             },
             body: jsonEncode({
               'imageBase64': base64Encode(imageBytes),
-              'mimeType': 'image/jpeg',
+              'mimeType': mimeType,
               'model': GeminiConstants.model,
             }),
           )
@@ -191,8 +257,8 @@ class GeminiService {
         );
       }
 
-      if (response.statusCode == 404) {
-        debugPrint('[GeminiService] verify-cor Edge Function not deployed yet.');
+      if (response.statusCode == 404 || response.statusCode == 503) {
+        debugPrint('[GeminiService] verify-cor temporarily unavailable (${response.statusCode}); falling back to Demo Mode.');
         return null;
       }
 
@@ -223,6 +289,7 @@ class GeminiService {
     String? expectedName,
   }) async {
     final base64Image = base64Encode(imageBytes);
+    final mimeType = detectImageMimeType(imageBytes);
     final url = Uri.parse(
       'https://generativelanguage.googleapis.com/v1beta/models/${GeminiConstants.model}:generateContent',
     );
@@ -263,32 +330,34 @@ Output strictly valid JSON with this exact schema:
 """;
 
     try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
-        body: jsonEncode({
-          "contents": [
-            {
-              "parts": [
-                {"text": systemPrompt},
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': apiKey,
+            },
+            body: jsonEncode({
+              "contents": [
                 {
-                  "inline_data": {
-                    "mime_type": "image/jpeg",
-                    "data": base64Image,
-                  }
+                  "parts": [
+                    {"text": systemPrompt},
+                    {
+                      "inline_data": {
+                        "mime_type": mimeType,
+                        "data": base64Image,
+                      }
+                    }
+                  ]
                 }
-              ]
-            }
-          ],
-          "generationConfig": {
-            "response_mime_type": "application/json",
-            "temperature": 0.1,
-          }
-        }),
-      );
+              ],
+              "generationConfig": {
+                "response_mime_type": "application/json",
+                "temperature": 0.1,
+              }
+            }),
+          )
+          .timeout(const Duration(seconds: 45));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

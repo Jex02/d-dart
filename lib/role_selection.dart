@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'customer_home_screen.dart';
 import 'runner_gig_board_screen.dart';
+import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
 
 class RoleSelectionPage extends StatefulWidget {
@@ -15,22 +16,42 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
 
   String? selectedRole;
 
-  void _proceed() {
+  Future<void> _proceed() async {
     if (selectedRole == null) return;
 
-    SupabaseService().updateUserRole(selectedRole!.toLowerCase());
-
     if (selectedRole == 'Customer') {
+      await SupabaseService().updateUserRole('customer');
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const CustomerHomeScreen()),
       );
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const RunnerGigBoardScreen()),
-      );
+      return;
     }
+
+    await DutyLockService.syncFromSupabase();
+    final profile = await SupabaseService().fetchUserProfileModel();
+    final dutyStatus = DutyLockService.checkDutyStatus(profile: profile);
+    if (!mounted) return;
+
+    if (dutyStatus['isLocked'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text(
+            dutyStatus['reason']?.toString() ?? 'Runner Mode is currently locked.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    await SupabaseService().updateUserRole('runner');
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const RunnerGigBoardScreen()),
+    );
   }
 
   @override
@@ -56,7 +77,6 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                     ),
                   ),
                   const SizedBox(height: 20),
-
                   const Text(
                     'D-DART',
                     style: TextStyle(
@@ -67,7 +87,6 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                     ),
                   ),
                   const SizedBox(height: 6),
-
                   const Text(
                     'Peer-to-Peer Campus Delivery Application',
                     textAlign: TextAlign.center,
@@ -79,7 +98,6 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                     ),
                   ),
                   const SizedBox(height: 28),
-
                   const Text(
                     'Choose Role',
                     style: TextStyle(
@@ -89,7 +107,6 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                     ),
                   ),
                   const SizedBox(height: 6),
-
                   const Text(
                     'Choose a role to get started',
                     style: TextStyle(
@@ -98,33 +115,26 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                     ),
                   ),
                   const SizedBox(height: 24),
-
-                  // CUSTOMER
                   _RoleCard(
                     title: 'Customer',
                     description: 'Order food and request items to be delivered on campus.',
-                    imageUrl:
-                        'https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/22e77230-b5a4-4f13-9fc8-a98eee5e2fe8',
+                    icon: Icons.shopping_bag_outlined,
                     selected: selectedRole == 'Customer',
                     onTap: () {
                       setState(() => selectedRole = 'Customer');
                     },
                   ),
                   const SizedBox(height: 16),
-
-                  // RUNNER
                   _RoleCard(
                     title: 'Runner',
                     description: 'Accept delivery requests and deliver items around campus.',
-                    imageUrl:
-                        'https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/2bbae86b-b7ef-4e3c-b824-e73d461e5159',
+                    icon: Icons.directions_run,
                     selected: selectedRole == 'Runner',
                     onTap: () {
                       setState(() => selectedRole = 'Runner');
                     },
                   ),
                   const SizedBox(height: 32),
-
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -132,7 +142,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                       onPressed: selectedRole == null ? null : _proceed,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: darkRed,
-                        disabledBackgroundColor: darkRed.withOpacity(0.35),
+                        disabledBackgroundColor: darkRed.withValues(alpha: 0.35),
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -163,14 +173,14 @@ class _RoleCard extends StatelessWidget {
   const _RoleCard({
     required this.title,
     required this.description,
-    required this.imageUrl,
+    required this.icon,
     required this.selected,
     required this.onTap,
   });
 
   final String title;
   final String description;
-  final String imageUrl;
+  final IconData icon;
   final bool selected;
   final VoidCallback onTap;
 
@@ -193,7 +203,7 @@ class _RoleCard extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: Colors.black.withValues(alpha: 0.06),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -201,25 +211,14 @@ class _RoleCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: SizedBox(
-                width: 80,
-                height: 70,
-                child: Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: Colors.grey.shade200,
-                      child: const Icon(
-                        Icons.image_not_supported_outlined,
-                        color: Colors.grey,
-                      ),
-                    );
-                  },
-                ),
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: darkRed.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
               ),
+              child: Icon(icon, color: darkRed, size: 30),
             ),
             const SizedBox(width: 14),
             Expanded(

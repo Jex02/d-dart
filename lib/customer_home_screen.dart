@@ -767,11 +767,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           ListTile(
             leading: const Icon(Icons.school_outlined, color: primaryMaroon),
             title: const Text('Manage COR / Study Load'),
-            onTap: () {
-              Navigator.push(
+            onTap: () async {
+              await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const CorUploadScreen()),
               );
+              await DutyLockService.syncFromSupabase();
+              await _loadProfileAndExpireStale();
             },
           ),
         ],

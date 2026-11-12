@@ -26,6 +26,22 @@ class ClaimOrderResult {
   bool get isSuccess => status == ClaimOrderStatus.claimed;
 }
 
+class _PendingSignupArtifacts {
+  final Uint8List? idDocumentBytes;
+  final String idDocumentExt;
+  final Uint8List? corDocumentBytes;
+  final String corDocumentExt;
+  final List<ClassSession> schedule;
+
+  const _PendingSignupArtifacts({
+    this.idDocumentBytes,
+    this.idDocumentExt = 'jpg',
+    this.corDocumentBytes,
+    this.corDocumentExt = 'jpg',
+    this.schedule = const [],
+  });
+}
+
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
   factory SupabaseService() => _instance;
@@ -35,6 +51,10 @@ class SupabaseService {
 
   SupabaseClient get client => Supabase.instance.client;
   UserProfile? cachedProfile;
+
+  /// Holds documents & schedule in memory when signup requires email confirmation
+  /// before an authenticated Storage/PostgREST session exists.
+  final Map<String, _PendingSignupArtifacts> _pendingSignupArtifacts = {};
 
   // ==========================================
   // AUTHENTICATION & PROFILES
@@ -67,9 +87,10 @@ class SupabaseService {
   }) async {
     final isStudent = accountType == 'student';
     const verificationStatus = 'pending';
+    final normalizedEmail = email.trim().toLowerCase();
 
     final response = await client.auth.signUp(
-      email: email,
+      email: email.trim(),
       password: password,
       data: {
         'full_name': fullName,
@@ -104,37 +125,86 @@ class SupabaseService {
             bytes: corDocumentBytes,
           );
         }
-      }
 
-      try {
-        await client.from('profiles').upsert({
-          'id': response.user!.id,
-          'full_name': fullName,
-          'email': email,
-          'phone_number': phoneNumber,
-          'student_id': studentId,
-          'role': 'customer',
-          'account_type': accountType,
-          'verification_status': verificationStatus,
-          'cor_verified': isStudent && corVerified,
-          'id_document_path': ?idDocPath,
-          'cor_document_path': ?corDocPath,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        });
-      } catch (e) {
-        debugPrint('Warning: Could not save to profiles table: $e');
-      }
-
-      if (initialSchedule != null && initialSchedule.isNotEmpty && response.session != null) {
         try {
-          await saveClassSchedule(initialSchedule);
+          await client.from('profiles').update({
+            'full_name': fullName,
+            'email': email.trim(),
+            'phone_number': phoneNumber,
+            'student_id': studentId,
+            'cor_verified': isStudent && corVerified,
+            'id_document_path': ?idDocPath,
+            'cor_document_path': ?corDocPath,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('id', uid);
         } catch (e) {
-          debugPrint('Warning: Could not save initial schedule: $e');
+          debugPrint('Warning: Could not update profile details: $e');
         }
+
+        if (initialSchedule != null && initialSchedule.isNotEmpty) {
+          try {
+            await saveClassSchedule(
+              initialSchedule,
+              corDocumentExt: corDocumentExt,
+            );
+          } catch (e) {
+            debugPrint('Warning: Could not save initial schedule: $e');
+          }
+        }
+      } else {
+        // Email confirmation enabled: defer Storage upload & schedule insert until first login
+        _pendingSignupArtifacts[normalizedEmail] = _PendingSignupArtifacts(
+          idDocumentBytes: idDocumentBytes,
+          idDocumentExt: idDocumentExt,
+          corDocumentBytes: corDocumentBytes,
+          corDocumentExt: corDocumentExt,
+          schedule: initialSchedule ?? const [],
+        );
       }
     }
 
     return response;
+  }
+
+  Future<void> _flushPendingSignupArtifacts() async {
+    final user = currentUser;
+    final email = user?.email?.trim().toLowerCase();
+    if (user == null || email == null) return;
+
+    final pending = _pendingSignupArtifacts.remove(email);
+    if (pending == null) return;
+
+    try {
+      if (pending.idDocumentBytes != null && pending.idDocumentBytes!.isNotEmpty) {
+        await uploadMyIdDocument(
+          pending.idDocumentBytes!,
+          ext: pending.idDocumentExt,
+        );
+      }
+
+      if (pending.schedule.isNotEmpty) {
+        await saveClassSchedule(
+          pending.schedule,
+          corImageBytes: pending.corDocumentBytes,
+          corDocumentExt: pending.corDocumentExt,
+        );
+      } else if (pending.corDocumentBytes != null &&
+          pending.corDocumentBytes!.isNotEmpty) {
+        final corPath = await uploadVerificationDocument(
+          userId: user.id,
+          fileName: 'cor_document.${pending.corDocumentExt}',
+          bytes: pending.corDocumentBytes!,
+        );
+        if (corPath != null) {
+          await client.from('profiles').update({
+            'cor_document_path': corPath,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('id', user.id);
+        }
+      }
+    } catch (e) {
+      debugPrint('Deferred signup artifact upload warning: $e');
+    }
   }
 
   Future<String?> uploadVerificationDocument({
@@ -196,9 +266,10 @@ class SupabaseService {
     required String password,
   }) async {
     final res = await client.auth.signInWithPassword(
-      email: email,
+      email: email.trim(),
       password: password,
     );
+    await _flushPendingSignupArtifacts();
     await fetchUserProfileModel();
     return res;
   }
@@ -642,6 +713,7 @@ class SupabaseService {
   Future<void> saveClassSchedule(
     List<ClassSession> sessions, {
     Uint8List? corImageBytes,
+    String corDocumentExt = 'jpg',
   }) async {
     final userId = currentUser?.id;
     if (userId == null) return;
@@ -667,7 +739,7 @@ class SupabaseService {
     if (corImageBytes != null && corImageBytes.isNotEmpty) {
       corDocPath = await uploadVerificationDocument(
         userId: userId,
-        fileName: 'cor_document.jpg',
+        fileName: 'cor_document.$corDocumentExt',
         bytes: corImageBytes,
       );
     }

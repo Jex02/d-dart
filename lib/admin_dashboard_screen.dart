@@ -69,8 +69,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           _loadingUsers = false;
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _loadingUsers = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingUsers = false);
+        _showAdminError('Failed to load profiles: $e');
+      }
     }
   }
 
@@ -84,8 +87,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           _loadingReports = false;
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _loadingReports = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingReports = false);
+        _showAdminError('Failed to load problem reports: $e');
+      }
     }
   }
 
@@ -104,9 +110,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           _loadingConfig = false;
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _loadingConfig = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingConfig = false);
+        _showAdminError('Failed to load system settings: $e');
+      }
     }
+  }
+
+  void _showAdminError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(backgroundColor: Colors.redAccent, content: Text(message)),
+    );
   }
 
   Future<void> _handleSignOut() async {

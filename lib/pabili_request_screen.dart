@@ -348,7 +348,7 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('Estimated Item Cost', style: TextStyle(fontSize: 13)),
+                              const Expanded(child: Text('Estimated Item Cost', style: TextStyle(fontSize: 13))),
                               Text(
                                 '₱${_parsedItemCost.toStringAsFixed(2)}',
                                 style: const TextStyle(fontWeight: FontWeight.w600),
@@ -359,8 +359,8 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('Standard Campus Delivery Fee',
-                                  style: TextStyle(fontSize: 13)),
+                              const Expanded(child: Text('Standard Campus Delivery Fee',
+                                  style: TextStyle(fontSize: 13))),
                               Text(
                                 '₱${_config.standardDeliveryFee.toStringAsFixed(2)}',
                                 style: const TextStyle(fontWeight: FontWeight.w600),
@@ -371,9 +371,11 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text(
-                                'Estimated Total',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              const Expanded(
+                                child: Text(
+                                  'Estimated Total',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                ),
                               ),
                               Text(
                                 '₱${totalEstimate.toStringAsFixed(2)}',
