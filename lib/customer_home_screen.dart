@@ -381,8 +381,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: _buildCategoryItem(
-                  iconWidget: const Icon(Icons.storefront_outlined, size: 32, color: Color(0xFF2C3E50)),
-                  label: 'Campus\nStores',
+                  iconWidget: const Icon(Icons.icecream_outlined, size: 32, color: Color(0xFFB56565)),
+                  label: 'Dessert\n',
                   onTap: () => _openPabili(pickup: 'Campus Kiosks'),
                 ),
               ),
