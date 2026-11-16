@@ -34,6 +34,12 @@ class UserProfile {
   bool get isPending => verificationStatus == 'pending';
   bool get isRejected => verificationStatus == 'rejected';
 
+  String get firstName {
+    final trimmed = fullName.trim();
+    if (trimmed.isEmpty) return 'Wildcat';
+    return trimmed.split(' ').first;
+  }
+
   /// Only verified student accounts with a verified COR schedule may operate in Runner Mode.
   bool get canUseRunnerMode => isStudent && isVerified && corVerified;
 

@@ -10,7 +10,7 @@ D-Dart is a Flutter peer-to-peer campus errand and delivery ("Pabili") platform 
 | --- | --- | --- |
 | **1** | **Foundation & Routing** | `lib/main.dart`, `lib/services/app_router.dart`, `lib/constants/supabase_constants.dart`, `supabase_schema.sql` |
 | **2** | **Auth, Verification & Document Upload** | `lib/signup.dart`, `lib/login.dart`, `lib/verification_pending_screen.dart`, `lib/services/supabase_service.dart` |
-| **3** | **Customer Mode & Pabili Requests** | `lib/customer_home_screen.dart`, `lib/pabili_request_screen.dart`, `lib/order_tracking_screen.dart`, `lib/utils/validators.dart` |
+| **3** | **Customer Mode, Canteen Catalog & Cart** | `lib/customer_home_screen.dart`, `lib/canteen_category_screen.dart`, `lib/canteen_menu_screen.dart`, `lib/cart_screen.dart`, `lib/services/cart_service.dart`, `lib/pabili_request_screen.dart`, `lib/order_tracking_screen.dart`, `lib/utils/validators.dart` |
 | **4** | **Runner Mode & Atomic Claiming** | `lib/runner_gig_board_screen.dart`, `lib/main_dashboard.dart`, `lib/role_selection.dart` |
 | **5** | **Delivery Execution & 4-Digit OTP Handover** | `lib/order_tracking_screen.dart`, `lib/models/delivery_order.dart`, `verify_and_complete_delivery` RPC |
 | **6** | **AI-Assisted COR Processing** | `lib/cor_upload_screen.dart`, `lib/services/gemini_service.dart`, `lib/models/class_schedule.dart`, `supabase/functions/verify-cor/index.ts` |
