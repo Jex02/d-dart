@@ -3,7 +3,6 @@ import 'models/delivery_order.dart';
 import 'models/user_profile.dart';
 import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
-import 'mock_data.dart';
 import 'order_tracking_screen.dart';
 
 class RunnerGigBoardScreen extends StatefulWidget {
@@ -292,15 +291,13 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: SupabaseService().streamAvailableOrders(),
       builder: (context, snapshot) {
-        List<Map<String, dynamic>> rawOrders;
-        if (snapshot.hasData) {
-          rawOrders = snapshot.data!;
-        } else {
-          expireStaleMockOrders();
-          rawOrders = mockDeliveryRequests
-              .where((req) => req['status'] == 'pending')
-              .toList();
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+          return const Center(
+            child: CircularProgressIndicator(color: primaryMaroon),
+          );
         }
+
+        final rawOrders = snapshot.data ?? [];
 
         final orders = rawOrders
             .map(DeliveryOrder.fromJson)

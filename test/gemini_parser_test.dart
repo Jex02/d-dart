@@ -97,5 +97,61 @@ void main() {
       expect(GeminiService.detectImageMimeType(webp), 'image/webp');
       expect(GeminiService.detectImageMimeType(jpg), 'image/jpeg');
     });
+
+    test('rejects COR when extracted student_id does not match expected student ID', () {
+      const raw = '''
+{
+  "is_valid": true,
+  "student_name": "Someone Else",
+  "student_id": "21-9999-888",
+  "sessions": [
+    {
+      "day": "Monday",
+      "start_time": "09:00",
+      "end_time": "12:00",
+      "subject": "CS 321"
+    }
+  ]
+}
+''';
+      final result = GeminiService.parseGeminiResponseJson(
+        raw,
+        expectedStudentId: '23-1626-937',
+      );
+      expect(result.isValid, isFalse);
+      expect(result.message, contains('Student ID Mismatch'));
+    });
+
+    test('validates ID card when student_id matches expected ID', () {
+      const raw = '''
+{
+  "is_valid": true,
+  "student_name": "Jerick Ivan L. Davidon",
+  "student_id": "23-1626-937"
+}
+''';
+      final result = GeminiService.parseGeminiIdCardResponseJson(
+        raw,
+        expectedStudentId: '23-1626-937',
+      );
+      expect(result.isValid, isTrue);
+      expect(result.studentId, '23-1626-937');
+    });
+
+    test('rejects ID card when student_id does not match expected ID', () {
+      const raw = '''
+{
+  "is_valid": true,
+  "student_name": "Another Student",
+  "student_id": "20-0001-111"
+}
+''';
+      final result = GeminiService.parseGeminiIdCardResponseJson(
+        raw,
+        expectedStudentId: '23-1626-937',
+      );
+      expect(result.isValid, isFalse);
+      expect(result.message, contains('Student ID Mismatch'));
+    });
   });
 }

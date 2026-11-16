@@ -131,6 +131,56 @@ class _SignupPageState extends State<SignupPage> {
       List<ClassSession> confirmedSessions = [];
 
       if (_accountType == 'student') {
+        setState(() {
+          _loadingMessage = 'Verifying Student ID with Gemini AI...';
+        });
+
+        final idVerification = await GeminiService.verifyStudentIdCard(
+          _idImageBytes!,
+          expectedStudentId: idNumber,
+          expectedName: name,
+        );
+
+        if (!idVerification.isValid) {
+          if (mounted) {
+            await showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Row(
+                  children: [
+                    Icon(Icons.badge_outlined, color: Colors.redAccent),
+                    SizedBox(width: 8),
+                    Text('Student ID Verification Failed'),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(idVerification.message),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'D-DART requires an authentic CIT-U Student ID card that matches your inputted Student ID number to activate student privileges.',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('Review ID Details'),
+                  ),
+                ],
+              ),
+            );
+          }
+          return;
+        }
+
+        setState(() {
+          _loadingMessage = 'Analyzing COR with Gemini AI...';
+        });
+
         final verification = await GeminiService.verifyAndExtractCOR(
           _corImageBytes!,
           expectedStudentId: idNumber,

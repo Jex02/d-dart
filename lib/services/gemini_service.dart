@@ -124,6 +124,203 @@ class GeminiService {
     return result.sessions;
   }
 
+  /// Inspects uploaded ID card document, verifies if it is a valid CIT-U Student / Institutional ID,
+  /// and ensures the ID number matches the user's inputted Student ID.
+  static Future<IdCardVerificationResult> verifyStudentIdCard(
+    Uint8List imageBytes, {
+    required String expectedStudentId,
+    String? expectedName,
+  }) async {
+    if (imageBytes.isEmpty) {
+      return IdCardVerificationResult.invalid(
+        'No ID document image provided. Please select an image.',
+      );
+    }
+
+    if (hasRealApiKey) {
+      return _callLiveGeminiVisionIdCard(
+        imageBytes,
+        expectedStudentId: expectedStudentId,
+        expectedName: expectedName,
+      );
+    }
+
+    return _generateDemoIdCardVerificationResult(
+      imageBytes,
+      expectedStudentId: expectedStudentId,
+      expectedName: expectedName,
+    );
+  }
+
+  static Future<IdCardVerificationResult> _callLiveGeminiVisionIdCard(
+    Uint8List imageBytes, {
+    required String expectedStudentId,
+    String? expectedName,
+  }) async {
+    final base64Image = base64Encode(imageBytes);
+    final mimeType = detectImageMimeType(imageBytes);
+    final url = Uri.parse(
+      'https://generativelanguage.googleapis.com/v1beta/models/${GeminiConstants.model}:generateContent',
+    );
+
+    final expectedPrompt = expectedStudentId.trim();
+    final systemPrompt = """
+You are an official document validator and OCR specialist for Cebu Institute of Technology - University (CIT-U).
+Your task is to analyze the provided image and determine whether it is an authentic CIT-U Student ID card or Institutional ID.
+
+CRITICAL VALIDATION RULES:
+1. Verify if the image is an authentic student ID or institutional identification card from CIT-U.
+2. If the image is unrelated (e.g. food, animals, random objects, selfies, memes, receipts, blank images), set "is_valid": false and provide an explanatory "rejection_reason".
+3. Extract "student_id" (e.g. "23-1626-937") and "student_name" (or null if unreadable).
+4. Verify whether the ID number printed on the card matches the expected Student ID: "$expectedPrompt". If the card clearly displays a different ID number, set "is_valid": false and provide a rejection reason explaining the mismatch.
+
+Output strictly valid JSON with this exact schema:
+{
+  "is_valid": true,
+  "rejection_reason": "",
+  "student_name": "Jerick Ivan L. Davidon",
+  "student_id": "23-1626-937"
+}
+""";
+
+    try {
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': apiKey,
+            },
+            body: jsonEncode({
+              "contents": [
+                {
+                  "parts": [
+                    {"text": systemPrompt},
+                    {
+                      "inline_data": {
+                        "mime_type": mimeType,
+                        "data": base64Image,
+                      }
+                    }
+                  ]
+                }
+              ],
+              "generationConfig": {
+                "response_mime_type": "application/json",
+                "temperature": 0.1,
+              }
+            }),
+          )
+          .timeout(const Duration(seconds: 45));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final rawText = data['candidates'][0]['content']['parts'][0]['text'] as String;
+        return parseGeminiIdCardResponseJson(
+          rawText,
+          expectedStudentId: expectedStudentId,
+        );
+      } else {
+        return _generateDemoIdCardVerificationResult(
+          imageBytes,
+          expectedStudentId: expectedStudentId,
+          expectedName: expectedName,
+        );
+      }
+    } catch (e) {
+      debugPrint('[GeminiService] Network/parsing exception during ID verification: $e');
+      return _generateDemoIdCardVerificationResult(
+        imageBytes,
+        expectedStudentId: expectedStudentId,
+        expectedName: expectedName,
+      );
+    }
+  }
+
+  @visibleForTesting
+  static IdCardVerificationResult parseGeminiIdCardResponseJson(
+    String rawText, {
+    required String expectedStudentId,
+  }) {
+    try {
+      String cleaned = rawText.trim();
+      if (cleaned.startsWith('```')) {
+        cleaned = cleaned
+            .replaceFirst(RegExp(r'^```(?:json)?\s*'), '')
+            .replaceFirst(RegExp(r'\s*```$'), '')
+            .trim();
+      }
+
+      final dynamic decoded = jsonDecode(cleaned);
+      if (decoded is! Map<String, dynamic>) {
+        return IdCardVerificationResult.invalid(
+          'Unexpected response format from AI ID card verifier.',
+        );
+      }
+
+      final bool isValid = decoded['is_valid'] == true;
+      final String rejectionReason = decoded['rejection_reason']?.toString() ?? '';
+      final String? detectedStudentName = decoded['student_name']?.toString();
+      final String? detectedStudentId = decoded['student_id']?.toString();
+
+      if (!isValid) {
+        return IdCardVerificationResult.invalid(
+          rejectionReason.isNotEmpty
+              ? rejectionReason
+              : 'The uploaded image was not recognized as a valid CIT-U Student ID card.',
+        );
+      }
+
+      if (detectedStudentId != null && detectedStudentId.trim().isNotEmpty) {
+        final expectedDigits = expectedStudentId.replaceAll(RegExp(r'[^0-9]'), '');
+        final detectedDigits = detectedStudentId.replaceAll(RegExp(r'[^0-9]'), '');
+        if (expectedDigits.isNotEmpty &&
+            detectedDigits.isNotEmpty &&
+            expectedDigits != detectedDigits) {
+          return IdCardVerificationResult.invalid(
+            'Student ID Mismatch: The ID on your Student ID card ($detectedStudentId) does not match the Student ID you entered ($expectedStudentId). Please ensure your ID number is entered correctly.',
+          );
+        }
+      }
+
+      return IdCardVerificationResult.valid(
+        message: 'CIT-U Student ID verified successfully!',
+        studentName: detectedStudentName,
+        studentId: detectedStudentId,
+      );
+    } catch (e) {
+      return IdCardVerificationResult.invalid(
+        'Could not parse ID verification result: $e',
+      );
+    }
+  }
+
+  static IdCardVerificationResult _generateDemoIdCardVerificationResult(
+    Uint8List imageBytes, {
+    required String expectedStudentId,
+    String? expectedName,
+  }) {
+    if (imageBytes.length < 1000) {
+      return IdCardVerificationResult.invalid(
+        'The uploaded ID image is too small or corrupt. Please upload a clear photo of your Student ID.',
+      );
+    }
+
+    final digits = expectedStudentId.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.length < 5) {
+      return IdCardVerificationResult.invalid(
+        'Student ID Mismatch: The entered Student ID "$expectedStudentId" does not follow official CIT-U format (e.g. 23-1626-937). Please verify your ID card number.',
+      );
+    }
+
+    return IdCardVerificationResult.valid(
+      message: 'Demo Mode: CIT-U Student ID format verified.',
+      studentName: expectedName ?? 'Jerick Ivan L. Davidon',
+      studentId: expectedStudentId,
+      isDemoFallback: true,
+    );
+  }
+
   /// Parses raw JSON text returned by Gemini into a structured [CorVerificationResult].
   @visibleForTesting
   static CorVerificationResult parseGeminiResponseJson(
@@ -188,6 +385,7 @@ class GeminiService {
       }
 
       if (expectedStudentId != null &&
+          expectedStudentId.trim().isNotEmpty &&
           detectedStudentId != null &&
           detectedStudentId.trim().isNotEmpty) {
         final expectedDigits = expectedStudentId.replaceAll(RegExp(r'[^0-9]'), '');
@@ -195,8 +393,8 @@ class GeminiService {
         if (expectedDigits.isNotEmpty &&
             detectedDigits.isNotEmpty &&
             expectedDigits != detectedDigits) {
-          debugPrint(
-            '[GeminiService] Note: Extracted ID ($detectedStudentId) differs from input ($expectedStudentId)',
+          return CorVerificationResult.invalid(
+            'Student ID Mismatch: The ID on your COR ($detectedStudentId) does not match the Student ID you entered ($expectedStudentId). Please ensure your ID number is entered correctly.',
           );
         }
       }
@@ -390,6 +588,15 @@ Output strictly valid JSON with this exact schema:
       return CorVerificationResult.invalid(
         'The uploaded image file is too small or corrupt. Please upload a clear photo of your COR.',
       );
+    }
+
+    if (expectedStudentId != null && expectedStudentId.trim().isNotEmpty) {
+      final digits = expectedStudentId.replaceAll(RegExp(r'[^0-9]'), '');
+      if (digits.length < 5) {
+        return CorVerificationResult.invalid(
+          'Student ID Mismatch: The entered Student ID "$expectedStudentId" does not follow official CIT-U format (e.g. 23-1626-937). Please verify the ID on your card and COR.',
+        );
+      }
     }
 
     final demoSessions = [

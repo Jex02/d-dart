@@ -110,3 +110,41 @@ class CorVerificationResult {
     );
   }
 }
+
+class IdCardVerificationResult {
+  final bool isValid;
+  final String message;
+  final String? studentName;
+  final String? studentId;
+  final bool isDemoFallback;
+
+  IdCardVerificationResult({
+    required this.isValid,
+    required this.message,
+    this.studentName,
+    this.studentId,
+    this.isDemoFallback = false,
+  });
+
+  factory IdCardVerificationResult.invalid(String message) {
+    return IdCardVerificationResult(
+      isValid: false,
+      message: message,
+    );
+  }
+
+  factory IdCardVerificationResult.valid({
+    required String message,
+    String? studentName,
+    String? studentId,
+    bool isDemoFallback = false,
+  }) {
+    return IdCardVerificationResult(
+      isValid: true,
+      message: message,
+      studentName: studentName,
+      studentId: studentId,
+      isDemoFallback: isDemoFallback,
+    );
+  }
+}

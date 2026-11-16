@@ -526,19 +526,26 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
                         '${session.startTime} - ${session.endTime}',
                         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                       ),
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: timetableGreen,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          session.subject.replaceAll('\n', ' • '),
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: timetableGreen,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              session.subject.replaceAll('\n', ' • '),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
+                            ),
                           ),
                         ),
                       ),

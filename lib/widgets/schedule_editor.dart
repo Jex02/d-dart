@@ -129,58 +129,33 @@ Future<ClassSession?> showClassSessionEditorDialog(
   );
 }
 
-/// Reusable list + controls for reviewing and editing extracted COR class sessions.
+/// Reusable list + controls for reviewing verified COR class sessions (Read-Only).
 class ScheduleReviewSection extends StatelessWidget {
   final List<ClassSession> sessions;
   final bool isDemoFallback;
-  final ValueChanged<List<ClassSession>> onChanged;
+  final ValueChanged<List<ClassSession>>? onChanged;
   final VoidCallback onConfirm;
   final String confirmLabel;
 
   const ScheduleReviewSection({
     super.key,
     required this.sessions,
-    required this.onChanged,
+    this.onChanged,
     required this.onConfirm,
     this.isDemoFallback = false,
     this.confirmLabel = 'Confirm Schedule & Activate Duty Lock',
   });
-
-  Future<void> _addSession(BuildContext context) async {
-    final created = await showClassSessionEditorDialog(context);
-    if (created != null) {
-      onChanged([...sessions, created]);
-    }
-  }
-
-  Future<void> _editSession(BuildContext context, int index) async {
-    final updated = await showClassSessionEditorDialog(
-      context,
-      initial: sessions[index],
-    );
-    if (updated != null) {
-      final copy = [...sessions];
-      copy[index] = updated;
-      onChanged(copy);
-    }
-  }
-
-  void _removeSession(int index) {
-    final copy = [...sessions];
-    copy.removeAt(index);
-    onChanged(copy);
-  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        const Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Text(
-                'Confirm AI-Extracted Schedule',
+                'Verified Official Schedule',
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.bold,
@@ -188,16 +163,12 @@ class ScheduleReviewSection extends StatelessWidget {
                 ),
               ),
             ),
-            TextButton.icon(
-              onPressed: () => _addSession(context),
-              icon: const Icon(Icons.add, size: 18, color: _primaryMaroon),
-              label: const Text('Add Class', style: TextStyle(color: _primaryMaroon)),
-            ),
+            Icon(Icons.verified, color: Colors.green, size: 22),
           ],
         ),
         const SizedBox(height: 4),
         const Text(
-          'Review your enrolled class times and edit or add sessions before confirming.',
+          'Official class schedule extracted from your CIT-U Certificate of Registration (COR). Sessions are tamper-locked to preserve academic integrity and Duty Lock compliance.',
           style: TextStyle(fontSize: 12, color: Colors.black54),
         ),
         if (isDemoFallback) ...[
@@ -211,7 +182,7 @@ class ScheduleReviewSection extends StatelessWidget {
               border: Border.all(color: Colors.amber.shade400),
             ),
             child: const Text(
-              'Demo OCR mode active (no live GEMINI_API_KEY). Edit these sample sessions if needed.',
+              'Demo OCR mode active (no live GEMINI_API_KEY). Official schedule extracted.',
               style: TextStyle(fontSize: 11, color: Colors.black87),
             ),
           ),
@@ -221,7 +192,7 @@ class ScheduleReviewSection extends StatelessWidget {
           child: sessions.isEmpty
               ? const Center(
                   child: Text(
-                    'No class sessions listed.\nTap "+ Add Class" to add one.',
+                    'No class sessions were extracted from the document.\nPlease re-upload a clear copy of your official COR.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.black54),
                   ),
@@ -257,20 +228,9 @@ class ScheduleReviewSection extends StatelessWidget {
                         subtitle: Text(
                           '${session.day}: ${session.startTime} - ${session.endTime}',
                         ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              tooltip: 'Edit session',
-                              icon: const Icon(Icons.edit_outlined, color: Colors.black54),
-                              onPressed: () => _editSession(context, index),
-                            ),
-                            IconButton(
-                              tooltip: 'Remove session',
-                              icon: const Icon(Icons.delete_outline, color: Colors.red),
-                              onPressed: () => _removeSession(index),
-                            ),
-                          ],
+                        trailing: const Tooltip(
+                          message: 'Locked from official CIT-U COR',
+                          child: Icon(Icons.lock_outline, color: Colors.green, size: 18),
                         ),
                       ),
                     );

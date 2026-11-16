@@ -202,15 +202,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     return ResponsiveMobileShell(
       mobileBackground: primaryMaroon,
       child: Scaffold(
-        floatingActionButton: _selectedIndex != 0
-            ? null
-            : FloatingActionButton.extended(
-                backgroundColor: DDartTheme.primaryMaroon,
-                foregroundColor: Colors.white,
-                icon: const Icon(Icons.add_shopping_cart),
-                label: const Text('Custom Pabili'),
-                onPressed: () => _openPabili(),
-              ),
         backgroundColor: primaryMaroon,
         body: SafeArea(
           bottom: false,
@@ -493,33 +484,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Flexible(
-                child: Text(
-                  'Choose Pickup Canteen',
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E1E1E),
-                  ),
-                ),
-              ),
-              InkWell(
-                onTap: () => _openPabili(),
-                child: const Row(
-                  children: [
-                    Text(
-                      'Custom Form',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: primaryMaroon,
-                      ),
-                    ),
-                    SizedBox(width: 4),
-                    Icon(Icons.arrow_forward, size: 14, color: primaryMaroon),
-                  ],
+            children: const [
+              Text(
+                'Choose Pickup Canteen',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E1E1E),
                 ),
               ),
             ],
@@ -592,8 +564,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     ),
                     const SizedBox(height: 10),
                     InkWell(
-                      onTap: () => _openPabili(),
-                      child: _buildQuickActionButton('Customize\nPabili Order'),
+                      onTap: () => _openCategoryBrowse('Food & Snacks'),
+                      child: _buildQuickActionButton('Browse Campus\nCanteen Menu'),
                     ),
                   ],
                 ),
@@ -629,7 +601,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         return InkWell(
           onTap: activeOrder != null
               ? () => _openOrderTracking(activeOrder.id)
-              : () => _openPabili(),
+              : () => setState(() => _selectedIndex = 2),
           borderRadius: BorderRadius.circular(14),
           child: Container(
             height: 126,
