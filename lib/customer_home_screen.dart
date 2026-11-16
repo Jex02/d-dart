@@ -332,7 +332,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
             return BottomNavigationBar(
               currentIndex: _selectedIndex,
-              onTap: (index) => setState(() => _selectedIndex = index),
+              onTap: (index) {
+                ScaffoldMessenger.of(context).clearSnackBars();
+                setState(() => _selectedIndex = index);
+              },
               type: BottomNavigationBarType.fixed,
               backgroundColor: Colors.white,
               selectedItemColor: primaryMaroon,

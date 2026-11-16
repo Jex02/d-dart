@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'cart_screen.dart';
 import 'data/campus_menu_catalog.dart';
@@ -211,8 +212,9 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
                       onPressed: () {
                         CartService.instance.addItem(item, quantity: quantity);
                         Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).clearSnackBars();
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        final messenger = ScaffoldMessenger.of(context);
+                        messenger.clearSnackBars();
+                        messenger.showSnackBar(
                           SnackBar(
                             behavior: SnackBarBehavior.floating,
                             margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
@@ -220,6 +222,9 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             backgroundColor: primaryMaroon,
+                            elevation: 6,
+                            duration: const Duration(milliseconds: 1800),
+                            dismissDirection: DismissDirection.horizontal,
                             content: Row(
                               children: [
                                 const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
@@ -232,20 +237,15 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
                                 ),
                               ],
                             ),
-                            duration: const Duration(seconds: 2),
-                            action: SnackBarAction(
-                              label: 'View Cart',
-                              textColor: Colors.amberAccent,
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).clearSnackBars();
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const CartScreen()),
-                                );
-                              },
-                            ),
                           ),
                         );
+
+                        // Hard timer guarantee that forcibly clears the banner after 2s on all platforms/browsers
+                        Timer(const Duration(milliseconds: 2000), () {
+                          try {
+                            messenger.clearSnackBars();
+                          } catch (_) {}
+                        });
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryMaroon,
