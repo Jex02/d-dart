@@ -547,12 +547,15 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () => _addToCart(item),
                     icon: const Icon(Icons.add_shopping_cart, size: 16, color: Colors.white),
-                    label: Text(
-                      'Add to Cart • ₱${(item.price * qty).toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Add to Cart • ₱${(item.price * qty).toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                     style: ElevatedButton.styleFrom(

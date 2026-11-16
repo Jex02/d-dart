@@ -198,92 +198,97 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     final firstName = _profile?.firstName ?? 'Wildcat';
     final canSwitchToRunner = _profile == null || _profile!.isStudent;
 
-    return Scaffold(
-      floatingActionButton: _selectedIndex != 0
-          ? null
-          : FloatingActionButton.extended(
-              backgroundColor: DDartTheme.primaryMaroon,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add_shopping_cart),
-              label: const Text('Custom Pabili'),
-              onPressed: () => _openPabili(),
-            ),
-      backgroundColor: primaryMaroon,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
-              child: Row(
-                children: [
-                  if (canSwitchToRunner)
-                    IconButton(
-                      tooltip: 'Switch Mode',
-                      icon: const Icon(Icons.swap_horiz, color: Colors.white),
-                      onPressed: _switchMode,
-                    )
-                  else
-                    const SizedBox(width: 8),
-                  RichText(
-                    text: const TextSpan(
-                      style: TextStyle(
-                        fontFamily: 'serif',
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.5,
-                      ),
-                      children: [
-                        TextSpan(text: 'D', style: TextStyle(color: accentGold)),
-                        TextSpan(text: '-DART', style: TextStyle(color: Colors.white)),
-                      ],
-                    ),
-                  ),
-                  if (_profile != null && _profile!.isFacultyOrStaff) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: accentGold.withValues(alpha: 0.22),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Text(
-                        'FACULTY',
+    return ResponsiveMobileShell(
+      mobileBackground: primaryMaroon,
+      child: Scaffold(
+        floatingActionButton: _selectedIndex != 0
+            ? null
+            : FloatingActionButton.extended(
+                backgroundColor: DDartTheme.primaryMaroon,
+                foregroundColor: Colors.white,
+                icon: const Icon(Icons.add_shopping_cart),
+                label: const Text('Custom Pabili'),
+                onPressed: () => _openPabili(),
+              ),
+        backgroundColor: primaryMaroon,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+                child: Row(
+                  children: [
+                    if (canSwitchToRunner)
+                      IconButton(
+                        tooltip: 'Switch Mode',
+                        icon: const Icon(Icons.swap_horiz, color: Colors.white),
+                        onPressed: _switchMode,
+                      )
+                    else
+                      const SizedBox(width: 8),
+                    RichText(
+                      text: const TextSpan(
                         style: TextStyle(
-                          fontSize: 9.5,
+                          fontFamily: 'serif',
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          letterSpacing: 1.5,
+                        ),
+                        children: [
+                          TextSpan(text: 'D', style: TextStyle(color: accentGold)),
+                          TextSpan(text: '-DART', style: TextStyle(color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                    if (_profile != null && _profile!.isFacultyOrStaff) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: accentGold.withValues(alpha: 0.22),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text(
+                          'FACULTY',
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                    const Spacer(),
+                    IconButton(
+                      tooltip: 'Active Orders',
+                      icon: const Icon(Icons.notifications_none, color: Colors.white, size: 24),
+                      onPressed: () => setState(() => _selectedIndex = 2),
+                    ),
+                    GestureDetector(
+                      onTap: () => setState(() => _selectedIndex = 3),
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                        child: ClipOval(
+                          child: _idPhotoUrl != null
+                              ? Image.network(
+                                  _idPhotoUrl!,
+                                  fit: BoxFit.cover,
+                                  alignment: const Alignment(-0.55, -0.35),
+                                  errorBuilder: (_, _, _) => _buildSmallAvatarFallback(firstName),
+                                )
+                              : _buildSmallAvatarFallback(firstName),
                         ),
                       ),
                     ),
                   ],
-                  const Spacer(),
-                  IconButton(
-                    tooltip: 'Active Orders',
-                    icon: const Icon(Icons.notifications_none, color: Colors.white, size: 24),
-                    onPressed: () => setState(() => _selectedIndex = 2),
-                  ),
-                  GestureDetector(
-                    onTap: () => setState(() => _selectedIndex = 3),
-                    child: CircleAvatar(
-                      radius: 17,
-                      backgroundColor: Colors.white,
-                      child: CircleAvatar(
-                        radius: 15,
-                        backgroundColor: accentGold.withValues(alpha: 0.25),
-                        child: Text(
-                          firstName.substring(0, 1).toUpperCase(),
-                          style: const TextStyle(
-                            color: primaryMaroon,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
 
             Expanded(
               child: Container(
@@ -368,6 +373,22 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               ],
             );
           },
+        ),
+      ),
+    ),
+  );
+  }
+
+  Widget _buildSmallAvatarFallback(String firstName) {
+    return CircleAvatar(
+      radius: 15,
+      backgroundColor: accentGold.withValues(alpha: 0.25),
+      child: Text(
+        firstName.isNotEmpty ? firstName.substring(0, 1).toUpperCase() : 'W',
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
         ),
       ),
     );

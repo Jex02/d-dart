@@ -304,11 +304,11 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
               Expanded(
                 child: GridView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 80),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: MediaQuery.of(context).size.width < 360 ? 2 : 3,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 16,
-                    childAspectRatio: 0.72,
+                    childAspectRatio: MediaQuery.of(context).size.width < 360 ? 0.82 : 0.72,
                   ),
                   itemCount: _items.length,
                   itemBuilder: (context, index) {
