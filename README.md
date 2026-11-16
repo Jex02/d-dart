@@ -50,9 +50,10 @@ flutter run
 ### 2. Supabase Database & Edge Function Setup
 
 1. Execute [`supabase_schema.sql`](supabase_schema.sql) in the **Supabase SQL Editor** (safe & idempotent; seeds `locations` and `system_configurations`, creates private RLS helpers, triggers, and RPCs).
-2. Ensure Edge Function **`verify-cor`** is deployed and set its secret in **Supabase Dashboard -> Edge Functions -> Secrets**:
+2. Execute [`supabase_seed_menu.sql`](supabase_seed_menu.sql) in the **Supabase SQL Editor** to create the `canteen_menu_items` table and populate 44+ campus menu items (Food, Beverages, Desserts) across CIT-U Main, College, and Elementary Canteens.
+3. Ensure Edge Function **`verify-cor`** is deployed and set its secret in **Supabase Dashboard -> Edge Functions -> Secrets**:
    - `GEMINI_API_KEY`: Google AI Studio key with access to `gemini-3.8-flash`.
-3. **Promoting an Administrator Account**:
+4. **Promoting an Administrator Account**:
    Because `public.protect_profile_privileged_fields()` blocks self-escalation via client APIs, promote your admin test account in the Supabase SQL Editor after signup:
    ```sql
    update public.profiles
@@ -61,7 +62,7 @@ flutter run
        verification_status = 'verified'
    where email = 'your-admin@cit.edu';
    ```
-4. **Optional Supabase Dashboard Hardening**:
+5. **Optional Supabase Dashboard Hardening**:
    - Enable **Leaked Password Protection** in **Authentication -> Providers / Security**.
    - Re-running [`supabase_schema.sql`](supabase_schema.sql) in the SQL Editor removes older overlapping `FOR ALL` RLS policies (`Allow admins manage locations`, `Allow users manage their schedules`, `Allow admins update configs`) in favor of the granular per-action policies already defined in the script.
 

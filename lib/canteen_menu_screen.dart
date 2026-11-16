@@ -3,6 +3,7 @@ import 'cart_screen.dart';
 import 'data/campus_menu_catalog.dart';
 import 'models/cart_item.dart';
 import 'services/cart_service.dart';
+import 'services/supabase_service.dart';
 import 'widgets/responsive_shell.dart';
 
 class CanteenMenuScreen extends StatefulWidget {
@@ -39,6 +40,35 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
           .where((i) => i.category.toLowerCase() == widget.categoryName.toLowerCase())
           .toList();
     }
+    _loadFromDatabase();
+  }
+
+  Future<void> _loadFromDatabase() async {
+    try {
+      final dbItems = await SupabaseService().fetchCanteenMenuItems();
+      if (!mounted || dbItems.isEmpty) return;
+
+      final matched = dbItems.where((i) {
+        final matchesCat =
+            i.category.toLowerCase() == widget.categoryName.toLowerCase();
+        final matchesCanteen = i.canteensList.any(
+          (c) => c.toLowerCase() == widget.canteenName.toLowerCase(),
+        );
+        return matchesCat && matchesCanteen;
+      }).toList();
+
+      if (matched.isNotEmpty) {
+        setState(() {
+          _items = matched;
+        });
+      }
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    ScaffoldMessenger.of(context).clearSnackBars();
+    super.dispose();
   }
 
   void _showAddToCartSheet(CanteenMenuItem item) {
@@ -181,14 +211,33 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
                       onPressed: () {
                         CartService.instance.addItem(item, quantity: quantity);
                         Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).clearSnackBars();
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('Added $quantity x ${item.name} to cart!'),
+                            behavior: SnackBarBehavior.floating,
+                            margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            backgroundColor: primaryMaroon,
+                            content: Row(
+                              children: [
+                                const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'Added $quantity x ${item.name} to cart!',
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ],
+                            ),
                             duration: const Duration(seconds: 2),
                             action: SnackBarAction(
                               label: 'View Cart',
-                              textColor: Colors.amber,
+                              textColor: Colors.amberAccent,
                               onPressed: () {
+                                ScaffoldMessenger.of(context).clearSnackBars();
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(builder: (_) => const CartScreen()),

@@ -7,6 +7,8 @@ import '../models/problem_report.dart';
 import '../models/system_config.dart';
 import '../models/user_profile.dart';
 import '../mock_data.dart';
+import '../data/campus_menu_catalog.dart';
+import '../models/cart_item.dart';
 
 enum ClaimOrderStatus {
   claimed,
@@ -775,5 +777,45 @@ class SupabaseService {
     } catch (_) {
       return [];
     }
+  }
+
+  // ==========================================
+  // CANTEEN MENU ITEMS (CATALOG & DATABASE)
+  // ==========================================
+
+  /// Fetches campus canteen menu items from `public.canteen_menu_items`.
+  /// Falls back to [CampusMenuCatalog.allItems] if the table does not yet exist or is offline.
+  Future<List<CanteenMenuItem>> fetchCanteenMenuItems() async {
+    try {
+      final data = await client
+          .from('canteen_menu_items')
+          .select()
+          .eq('is_available', true);
+
+      if (data is List && data.isNotEmpty) {
+        return data.map<CanteenMenuItem>((row) {
+          final rawCanteens = row['available_canteens'];
+          final List<String> availableCanteens = (rawCanteens is List)
+              ? rawCanteens.map((e) => e.toString()).toList()
+              : const [];
+
+          return CanteenMenuItem(
+            id: row['id']?.toString() ?? '',
+            name: row['name']?.toString() ?? '',
+            canteen: row['canteen']?.toString() ?? 'Main Canteen',
+            category: row['category']?.toString() ?? 'Food and snacks',
+            price: (row['price'] is num)
+                ? (row['price'] as num).toDouble()
+                : (double.tryParse(row['price']?.toString() ?? '0') ?? 0.0),
+            unitDescription: row['unit_description']?.toString() ?? '',
+            imageUrl: row['image_url']?.toString(),
+            availableCanteens: availableCanteens,
+          );
+        }).toList();
+      }
+    } catch (e) {
+      debugPrint('fetchCanteenMenuItems: falling back to built-in campus catalog ($e)');
+    }
+    return CampusMenuCatalog.allItems;
   }
 }

@@ -18,8 +18,8 @@ class CanteenMenuItem {
     required this.unitDescription,
     this.imageUrl,
     this.isAvailable = true,
-    this.availableCanteens = const [],
-  });
+    List<String>? availableCanteens,
+  }) : availableCanteens = availableCanteens ?? const [];
 
   List<String> get canteensList {
     if (availableCanteens.isNotEmpty) return availableCanteens;

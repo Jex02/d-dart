@@ -3,6 +3,7 @@ import 'cart_screen.dart';
 import 'data/campus_menu_catalog.dart';
 import 'models/cart_item.dart';
 import 'services/cart_service.dart';
+import 'services/supabase_service.dart';
 import 'widgets/responsive_shell.dart';
 
 class CategoryBrowseScreen extends StatefulWidget {
@@ -60,10 +61,41 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
     if (widget.initialQuery != null && widget.initialQuery!.isNotEmpty) {
       _applyFilters();
     }
+
+    _loadFromDatabase();
+  }
+
+  Future<void> _loadFromDatabase() async {
+    try {
+      final dbItems = await SupabaseService().fetchCanteenMenuItems();
+      if (!mounted || dbItems.isEmpty) return;
+
+      final isGeneralSearch = widget.categoryTitle.toLowerCase().contains('search') ||
+          widget.categoryTitle.toLowerCase().contains('all');
+
+      setState(() {
+        if (isGeneralSearch) {
+          _allItems = dbItems;
+        } else {
+          _allItems = dbItems
+              .where((i) => i.category.toLowerCase() == widget.categoryTitle.toLowerCase())
+              .toList();
+        }
+        for (final item in _allItems) {
+          _itemSelectedCanteen.putIfAbsent(
+            item.id,
+            () => item.canteensList.isNotEmpty ? item.canteensList.first : item.canteen,
+          );
+          _itemQuantities.putIfAbsent(item.id, () => 1);
+        }
+        _applyFilters();
+      });
+    } catch (_) {}
   }
 
   @override
   void dispose() {
+    ScaffoldMessenger.of(context).clearSnackBars();
     _searchController.dispose();
     super.dispose();
   }
@@ -93,16 +125,33 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
     final customizedItem = baseItem.copyWith(canteen: chosenCanteen);
     CartService.instance.addItem(customizedItem, quantity: qty);
 
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
         backgroundColor: primaryMaroon,
-        content: Text('Added $qty x ${baseItem.name} ($chosenCanteen) to cart!'),
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Added $qty x ${baseItem.name} ($chosenCanteen) to cart!',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
         duration: const Duration(seconds: 2),
         action: SnackBarAction(
           label: 'View Cart',
-          textColor: Colors.amber,
+          textColor: Colors.amberAccent,
           onPressed: () {
+            ScaffoldMessenger.of(context).clearSnackBars();
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const CartScreen()),

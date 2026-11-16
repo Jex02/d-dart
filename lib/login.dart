@@ -24,6 +24,16 @@ class _LoginPageState extends State<LoginPage> {
   bool _isLoading = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
@@ -312,12 +322,20 @@ class _LoginPanel extends StatelessWidget {
             controller: emailController,
             hintText: 'Email',
             keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) {
+              if (passwordController.text.isNotEmpty) {
+                onLogin();
+              }
+            },
           ),
           const SizedBox(height: 14),
           _LoginTextField(
             controller: passwordController,
             hintText: 'Password',
             obscureText: obscurePassword,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => onLogin(),
             suffix: IconButton(
               onPressed: onPasswordVisibilityChanged,
               icon: Icon(
@@ -432,6 +450,8 @@ class _LoginTextField extends StatelessWidget {
     this.keyboardType,
     this.obscureText = false,
     this.suffix,
+    this.onSubmitted,
+    this.textInputAction,
   });
 
   final TextEditingController? controller;
@@ -439,6 +459,8 @@ class _LoginTextField extends StatelessWidget {
   final TextInputType? keyboardType;
   final bool obscureText;
   final Widget? suffix;
+  final ValueChanged<String>? onSubmitted;
+  final TextInputAction? textInputAction;
 
   @override
   Widget build(BuildContext context) {
@@ -448,6 +470,8 @@ class _LoginTextField extends StatelessWidget {
         controller: controller,
         keyboardType: keyboardType,
         obscureText: obscureText,
+        textInputAction: textInputAction,
+        onSubmitted: onSubmitted,
         style: const TextStyle(fontSize: 13),
         decoration: InputDecoration(
           hintText: hintText,

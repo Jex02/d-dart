@@ -1,11 +1,11 @@
 {
-    "name": "sd2",
-    "short_name": "sd2",
+    "name": "D-Dart",
+    "short_name": "D-Dart",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#7F0000",
+    "theme_color": "#7F0000",
+    "description": "CIT-U Peer-to-Peer Campus Errand & Delivery Service",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
