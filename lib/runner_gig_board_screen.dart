@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'models/campus_location.dart';
 import 'models/delivery_order.dart';
 import 'models/user_profile.dart';
 import 'services/duty_lock_service.dart';
@@ -125,6 +126,32 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
             const SizedBox(height: 4),
             Text('Drop-off: ${order.dropoffLocation}',
                 style: const TextStyle(fontWeight: FontWeight.w600)),
+            Builder(
+              builder: (context) {
+                final dist = CampusLocation.getDistanceMeters(
+                  order.pickupLocation,
+                  order.dropoffLocation,
+                );
+                if (dist == null) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.straighten, size: 14, color: primaryMaroon),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Distance: ${CampusLocation.formatDistance(dist)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
             const SizedBox(height: 8),
             Text('Items: ${order.description}'),
             const SizedBox(height: 6),
@@ -358,6 +385,26 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
                       Text(
                         'Drop-off: ${order.dropoffLocation}',
                         style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      Builder(
+                        builder: (context) {
+                          final dist = CampusLocation.getDistanceMeters(
+                            order.pickupLocation,
+                            order.dropoffLocation,
+                          );
+                          if (dist == null) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              'Distance: ${CampusLocation.formatDistance(dist)}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                       const SizedBox(height: 6),
                       Text('Items: ${order.description}'),

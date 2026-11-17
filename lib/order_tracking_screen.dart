@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'models/campus_location.dart';
 import 'models/delivery_order.dart';
 import 'models/problem_report.dart';
 import 'services/supabase_service.dart';
@@ -442,6 +443,22 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                             _detailRow('Pickup', order.pickupLocation),
                             const SizedBox(height: 6),
                             _detailRow('Drop-off', order.dropoffLocation),
+                            if (CampusLocation.getDistanceMeters(
+                                  order.pickupLocation,
+                                  order.dropoffLocation,
+                                ) !=
+                                null) ...[
+                              const SizedBox(height: 6),
+                              _detailRow(
+                                'Distance',
+                                CampusLocation.formatDistance(
+                                  CampusLocation.getDistanceMeters(
+                                    order.pickupLocation,
+                                    order.dropoffLocation,
+                                  ),
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 6),
                             _detailRow('Items', order.description),
                             if (order.specialInstructions.isNotEmpty) ...[

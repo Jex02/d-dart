@@ -105,8 +105,8 @@ void main() {
     });
     expect(report.categoryLabel, 'Wrong / Missing Item');
 
-    expect(CampusLocation.defaultPickups.length, greaterThanOrEqualTo(4));
-    expect(CampusLocation.defaultDropoffs.length, greaterThanOrEqualTo(5));
+    expect(CampusLocation.defaultPickups.length, 3);
+    expect(CampusLocation.defaultDropoffs.length, 11);
   });
 
   test('UserProfile correctly transitions when promoted to Co-Admin and demoted', () {

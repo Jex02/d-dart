@@ -29,7 +29,7 @@ class _CartScreenState extends State<CartScreen> {
 
   List<String> _dropoffLocations =
       CampusLocation.defaultDropoffs.map((l) => l.name).toList();
-  String _selectedDropoff = 'ALLIED Building';
+  String _selectedDropoff = 'Allied';
   bool _isSubmitting = false;
 
   @override
@@ -131,105 +131,226 @@ class _CartScreenState extends State<CartScreen> {
                       }
                     },
                   ),
-                  const SizedBox(height: 14),
+                  StatefulBuilder(
+                    builder: (context, setSheetState) {
+                      final activeCanteens = CartService.instance.activeCanteens;
+                      final fees = CartService.instance.getDeliveryFeesForDestination(_selectedDropoff);
+                      final totalFee = CartService.instance.calculateDeliveryFeeTo(_selectedDropoff);
+                      final hasMissingDistance = totalFee == null;
+                      final grandTotal = (totalFee != null)
+                          ? (CartService.instance.subtotal + totalFee)
+                          : null;
 
-                  // Delivery Notes Field
-                  const Text(
-                    'Special Instructions (Optional)',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: notesController,
-                    decoration: InputDecoration(
-                      hintText: 'e.g. 3rd floor CS Lab, call when near',
-                      filled: true,
-                      fillColor: Colors.grey.shade50,
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Order Summary Card
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFBF4F4),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: primaryMaroon.withValues(alpha: 0.2),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Total Amount to Pay:',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              '₱${CartService.instance.orderTotal.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: primaryMaroon,
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (hasMissingDistance)
+                            Container(
+                              margin: const EdgeInsets.only(top: 8, bottom: 8),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.red.shade200),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.error_outline, color: Colors.red, size: 18),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Delivery route unavailable for the selected destination. Please choose another delivery building.',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.red.shade800,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Payment Mode: Direct Cash or personal GCash to runner on handover.',
-                          style: TextStyle(fontSize: 11, color: Colors.black54),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
 
-                  // Confirm and Place Order Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: _isSubmitting
-                          ? null
-                          : () async {
-                              Navigator.pop(ctx);
-                              await _placeOrder(notesController.text.trim());
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryMaroon,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: _isSubmitting
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text(
-                              'Confirm and Place Pabili Order',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
+                          // Distance & Canteen Breakdown
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6, bottom: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ...activeCanteens.map((canteen) {
+                                  final dist = CartService.instance.getDistanceForCanteen(
+                                    canteen,
+                                    _selectedDropoff,
+                                  );
+                                  final fee = fees[canteen];
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 2),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.straighten,
+                                          size: 13,
+                                          color: DDartTheme.primaryMaroon,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            dist != null
+                                                ? '$canteen → $_selectedDropoff (${CampusLocation.formatDistance(dist)} • ₱${fee?.toStringAsFixed(2) ?? 'N/A'})'
+                                                : '$canteen → $_selectedDropoff (Route unavailable)',
+                                            style: TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: dist != null
+                                                  ? Colors.grey.shade700
+                                                  : Colors.red.shade700,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+
+                          // Delivery Notes Field
+                          const Text(
+                            'Special Instructions (Optional)',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 6),
+                          TextField(
+                            controller: notesController,
+                            decoration: InputDecoration(
+                              hintText: 'e.g. 3rd floor CS Lab, call when near',
+                              filled: true,
+                              fillColor: Colors.grey.shade50,
+                              contentPadding:
+                                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(color: Colors.grey.shade300),
                               ),
                             ),
-                    ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Order Summary Card
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFBF4F4),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: primaryMaroon.withValues(alpha: 0.2),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text('Food Subtotal:', style: TextStyle(fontSize: 12.5)),
+                                    Text(
+                                      '₱${CartService.instance.subtotal.toStringAsFixed(2)}',
+                                      style: const TextStyle(fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      activeCanteens.length > 1
+                                          ? 'Campus Delivery Fee (${activeCanteens.length} canteens):'
+                                          : 'Campus Delivery Fee:',
+                                      style: const TextStyle(fontSize: 12.5),
+                                    ),
+                                    Text(
+                                      totalFee != null
+                                          ? '₱${totalFee.toStringAsFixed(2)}'
+                                          : 'Unavailable',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: totalFee != null ? Colors.black87 : Colors.red,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const Divider(height: 14),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text(
+                                      'Total Amount to Pay:',
+                                      style: TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                    Text(
+                                      grandTotal != null
+                                          ? '₱${grandTotal.toStringAsFixed(2)}'
+                                          : 'Unavailable',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                        color: grandTotal != null ? primaryMaroon : Colors.red,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                const Text(
+                                  'Payment Mode: Direct Cash or personal GCash to runner on handover.',
+                                  style: TextStyle(fontSize: 11, color: Colors.black54),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Confirm and Place Order Button
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: (_isSubmitting || hasMissingDistance)
+                                  ? null
+                                  : () async {
+                                      Navigator.pop(ctx);
+                                      await _placeOrder(notesController.text.trim());
+                                    },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryMaroon,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: _isSubmitting
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Confirm and Place Pabili Order',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -248,7 +369,9 @@ class _CartScreenState extends State<CartScreen> {
     final description = CartService.instance.generateOrderDescription();
     final pickup = CartService.instance.primaryCanteen;
     final estimatedPrice = CartService.instance.subtotal;
-    final deliveryFee = CartService.instance.totalProcessingFee;
+    final deliveryFee =
+        CartService.instance.calculateDeliveryFeeTo(_selectedDropoff) ??
+            CartService.instance.totalProcessingFee;
     final config = DutyLockService.activeConfig;
 
     String createdId;
@@ -634,8 +757,10 @@ class _CartScreenState extends State<CartScreen> {
 
   Widget _buildPriceDetailsSection() {
     final subtotal = CartService.instance.subtotal;
-    final fees = CartService.instance.canteenProcessingFees;
-    final orderTotal = CartService.instance.orderTotal;
+    final activeCanteens = CartService.instance.activeCanteens;
+    final fees = CartService.instance.getDeliveryFeesForDestination(_selectedDropoff);
+    final totalFee = CartService.instance.calculateDeliveryFeeTo(_selectedDropoff);
+    final orderTotal = totalFee != null ? (subtotal + totalFee) : CartService.instance.orderTotal;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -674,31 +799,30 @@ class _CartScreenState extends State<CartScreen> {
         const SizedBox(height: 10),
 
         // Processing Fee Breakdown per Canteen
-        const Text(
-          'Processing fee',
-          style: TextStyle(
+        Text(
+          activeCanteens.length > 1
+              ? 'Campus Delivery Fee (${activeCanteens.length} canteens to $_selectedDropoff)'
+              : 'Campus Delivery Fee (to $_selectedDropoff)',
+          style: const TextStyle(
             fontSize: 13,
             color: Color(0xFF333333),
           ),
         ),
         const SizedBox(height: 6),
 
-        ...fees.entries.map((entry) {
-          return Padding(
+        if (activeCanteens.isEmpty)
+          Padding(
             padding: const EdgeInsets.only(left: 4, bottom: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${entry.key}:',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey.shade700,
-                  ),
+                  'Standard Base Fee:',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                 ),
-                Text(
-                  entry.value.toStringAsFixed(0),
-                  style: const TextStyle(
+                const Text(
+                  '0',
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF1E1E1E),
@@ -706,8 +830,36 @@ class _CartScreenState extends State<CartScreen> {
                 ),
               ],
             ),
-          );
-        }),
+          )
+        else
+          ...activeCanteens.map((canteen) {
+            final dist = CartService.instance.getDistanceForCanteen(canteen, _selectedDropoff);
+            final fee = fees[canteen];
+            final distStr = dist != null ? ' (${CampusLocation.formatDistance(dist)})' : '';
+            return Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '$canteen$distStr:',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  Text(
+                    fee != null ? fee.toStringAsFixed(0) : 'N/A',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E1E1E),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
         const SizedBox(height: 12),
 
         // Order Total

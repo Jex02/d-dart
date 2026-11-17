@@ -96,6 +96,23 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
 
     setState(() => _isSubmitting = true);
 
+    final computedDeliveryFee = CampusLocation.calculateDeliveryFee(
+      canteen: _selectedPickup,
+      destination: _selectedDropoff,
+      config: _config,
+    );
+    if (computedDeliveryFee == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(
+            'Cannot post request: delivery route unavailable for selected locations.',
+          ),
+        ),
+      );
+      return;
+    }
+
     String createdId;
     try {
       final inserted = await SupabaseService().createOrder(
@@ -103,7 +120,7 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
         dropoff: _selectedDropoff,
         description: description,
         price: estimatedPrice,
-        deliveryFee: _config.standardDeliveryFee,
+        deliveryFee: computedDeliveryFee,
         instructions: instructions,
         expiresIn: Duration(minutes: _config.requestExpirationMinutes),
       );
@@ -116,7 +133,7 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
         dropoff: _selectedDropoff,
         description: description,
         price: estimatedPrice,
-        deliveryFee: _config.standardDeliveryFee,
+        deliveryFee: computedDeliveryFee,
         instructions: instructions,
         expiresIn: Duration(minutes: _config.requestExpirationMinutes),
       );
@@ -135,7 +152,7 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
         dropoff: _selectedDropoff,
         description: description,
         price: estimatedPrice,
-        deliveryFee: _config.standardDeliveryFee,
+        deliveryFee: computedDeliveryFee,
         instructions: instructions,
         expiresIn: Duration(minutes: _config.requestExpirationMinutes),
       );
@@ -170,7 +187,15 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final totalEstimate = _parsedItemCost + _config.standardDeliveryFee;
+    final distance =
+        CampusLocation.getDistanceMeters(_selectedPickup, _selectedDropoff);
+    final deliveryFee = CampusLocation.calculateDeliveryFee(
+      canteen: _selectedPickup,
+      destination: _selectedDropoff,
+      config: _config,
+    );
+    final totalEstimate =
+        deliveryFee != null ? (_parsedItemCost + deliveryFee) : null;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -234,6 +259,68 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                         contentPadding:
                             const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       ),
+                    ),
+                    Builder(
+                      builder: (context) {
+                        if (distance == null) {
+                          return Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.error_outline, size: 14, color: Colors.red),
+                                SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    'Delivery route unavailable between selected locations',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.red,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        return Container(
+                          margin: const EdgeInsets.only(top: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFBF4E6),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: const Color(0xFFE5A824).withValues(alpha: 0.4),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.straighten, size: 14, color: Color(0xFF7F0000)),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'Distance: ${CampusLocation.formatDistance(distance)} ($_selectedPickup → $_selectedDropoff)',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF7F0000),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
 
@@ -359,11 +446,35 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Expanded(child: Text('Standard Campus Delivery Fee',
-                                  style: TextStyle(fontSize: 13))),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Standard Campus Delivery Fee',
+                                      style: TextStyle(fontSize: 13),
+                                    ),
+                                    if (distance != null)
+                                      Text(
+                                        'Distance: ${CampusLocation.formatDistance(distance)}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
                               Text(
-                                '₱${_config.standardDeliveryFee.toStringAsFixed(2)}',
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                deliveryFee != null
+                                    ? '₱${deliveryFee.toStringAsFixed(2)}'
+                                    : 'Unavailable',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: deliveryFee != null
+                                      ? Colors.black87
+                                      : Colors.red,
+                                ),
                               ),
                             ],
                           ),
@@ -378,10 +489,14 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                                 ),
                               ),
                               Text(
-                                '₱${totalEstimate.toStringAsFixed(2)}',
-                                style: const TextStyle(
+                                totalEstimate != null
+                                    ? '₱${totalEstimate.toStringAsFixed(2)}'
+                                    : 'Unavailable',
+                                style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: primaryMaroon,
+                                  color: totalEstimate != null
+                                      ? primaryMaroon
+                                      : Colors.red,
                                   fontSize: 17,
                                 ),
                               ),
@@ -412,7 +527,9 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                       width: double.infinity,
                       height: 48,
                       child: ElevatedButton(
-                        onPressed: _isSubmitting ? null : _submitOrder,
+                        onPressed: (_isSubmitting || deliveryFee == null)
+                            ? null
+                            : _submitOrder,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryMaroon,
                           shape: RoundedRectangleBorder(

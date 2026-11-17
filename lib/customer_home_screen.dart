@@ -503,6 +503,17 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             children: [
               Expanded(
                 child: _buildCanteenCard(
+                  label: 'Mini Canteen',
+                  onTap: () => _openCanteenCategory('Mini Canteen'),
+                  child: Container(
+                    color: Colors.grey.shade100,
+                    child: const Icon(Icons.storefront_outlined, color: primaryMaroon),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildCanteenCard(
                   label: 'Main Canteen',
                   onTap: () => _openCanteenCategory('Main Canteen'),
                   child: Image.asset(
@@ -518,19 +529,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: _buildCanteenCard(
-                  label: 'College Canteen',
-                  onTap: () => _openCanteenCategory('College Canteen'),
-                  child: Container(
-                    color: Colors.grey.shade100,
-                    child: const Icon(Icons.local_cafe_outlined, color: primaryMaroon),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildCanteenCard(
-                  label: 'Elementary\nCanteen',
-                  onTap: () => _openCanteenCategory('Elementary Canteen'),
+                  label: 'High School\nCanteen',
+                  onTap: () => _openCanteenCategory('High School Canteen'),
                   child: Container(
                     color: Colors.grey.shade100,
                     child: const Icon(Icons.fastfood_outlined, color: primaryMaroon),

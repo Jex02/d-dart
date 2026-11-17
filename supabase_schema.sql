@@ -74,17 +74,30 @@ create table if not exists public.locations (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
-insert into public.locations (name, category, building_code) values
-  ('Main Canteen', 'pickup', 'MC'),
-  ('College Canteen', 'pickup', 'CC'),
-  ('Elementary Canteen', 'pickup', 'EC'),
-  ('Campus Kiosks', 'pickup', 'CK'),
-  ('ALLIED Building', 'dropoff', 'ALLIED'),
-  ('GLE Building', 'dropoff', 'GLE'),
-  ('Main Building', 'dropoff', 'MAIN'),
-  ('University Library', 'dropoff', 'LRAC'),
-  ('Department Offices', 'dropoff', 'DEPT')
-on conflict (name) do nothing;
+insert into public.locations (name, category, building_code, is_active) values
+  ('Mini Canteen', 'pickup', 'MINI', true),
+  ('Main Canteen', 'pickup', 'MC', true),
+  ('High School Canteen', 'pickup', 'HSC', true),
+  ('Backgate Annex', 'dropoff', 'BGA', true),
+  ('GLE', 'dropoff', 'GLE', true),
+  ('G-LECROOM', 'dropoff', 'G-LECROOM', true),
+  ('NGE', 'dropoff', 'NGE', true),
+  ('Allied', 'dropoff', 'ALLIED', true),
+  ('SAL', 'dropoff', 'SAL', true),
+  ('ACAD', 'dropoff', 'ACAD', true),
+  ('RTL', 'dropoff', 'RTL', true),
+  ('Physics Lab', 'dropoff', 'G-PHYSLAB', true),
+  ('Gymnasium', 'dropoff', 'GYM', true),
+  ('Covered Courts', 'dropoff', 'COURTS', true)
+on conflict (name) do update set
+  category = excluded.category,
+  building_code = excluded.building_code,
+  is_active = excluded.is_active;
+
+-- Ensure non-permitted or legacy locations are inactive per official campus rules
+update public.locations
+set is_active = false
+where name in ('University Library', 'College Library', 'Engineering Building', 'College Canteen', 'Elementary Canteen', 'Campus Kiosks');
 
 -- 3. System Configuration Table (Admin-Managed Parameters)
 create table if not exists public.system_configurations (
@@ -100,7 +113,12 @@ insert into public.system_configurations (config_key, config_value, description)
   ('pre_class_buffer_minutes', '15', 'Minutes before a scheduled class when runner mode locks'),
   ('daily_delivery_limit', '5', 'Maximum completed deliveries allowed per runner per day'),
   ('request_expiration_minutes', '30', 'Minutes before an unclaimed pending request expires'),
-  ('standard_delivery_fee', '20.00', 'Standard campus delivery fee in PHP')
+  ('standard_delivery_fee', '20.00', 'Standard campus delivery fee in PHP'),
+  ('delivery_fee_short', '20.00', 'Delivery fee for distances up to 100 meters'),
+  ('delivery_fee_medium', '25.00', 'Delivery fee for distances over 100 up to 200 meters'),
+  ('delivery_fee_long', '30.00', 'Delivery fee for distances over 200 meters'),
+  ('delivery_distance_short_max', '100', 'Maximum distance in meters for the short delivery tier'),
+  ('delivery_distance_medium_max', '200', 'Maximum distance in meters for the medium delivery tier')
 on conflict (config_key) do nothing;
 
 -- 4. Delivery Requests / Pabili Table

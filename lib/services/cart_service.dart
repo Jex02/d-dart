@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
+import '../models/campus_location.dart';
 import '../models/cart_item.dart';
+import '../models/system_config.dart';
 import 'duty_lock_service.dart';
 
 class CartService extends ChangeNotifier {
@@ -39,7 +41,7 @@ class CartService extends ChangeNotifier {
   /// In CIT-U D-Dart, standard campus delivery fee defaults to activeConfig (₱20.00).
   /// If set to 0.0 for promotional zero-processing fee, it reflects ₱0.
   Map<String, double> get canteenProcessingFees {
-    const allCanteens = ['Main Canteen', 'Elementary Canteen', 'College Canteen'];
+    const allCanteens = CampusLocation.officialCanteens;
     final baseFee = DutyLockService.activeConfig.standardDeliveryFee;
     final map = <String, double>{};
 
@@ -51,6 +53,69 @@ class CartService extends ChangeNotifier {
       }
     }
     return map;
+  }
+
+  /// Distance in meters from the primary pickup canteen to the given delivery destination.
+  double? getDistanceTo(String destination) {
+    return CampusLocation.getDistanceMeters(primaryCanteen, destination);
+  }
+
+  /// Distance in meters from a specific pickup canteen to the given delivery destination.
+  double? getDistanceForCanteen(String canteen, String destination) {
+    return CampusLocation.getDistanceMeters(canteen, destination);
+  }
+
+  /// Map of each active canteen to its distance in meters to the given delivery destination.
+  Map<String, double?> getDistancesForDestination(String destination) {
+    final map = <String, double?>{};
+    for (final canteen in activeCanteens) {
+      map[canteen] = CampusLocation.getDistanceMeters(canteen, destination);
+    }
+    return map;
+  }
+
+  /// Calculates the delivery fee per active canteen for the chosen destination.
+  /// If a distance is missing for a canteen, its fee is null.
+  Map<String, double?> getDeliveryFeesForDestination(
+    String destination, {
+    SystemConfig? config,
+  }) {
+    final cfg = config ?? DutyLockService.activeConfig;
+    final map = <String, double?>{};
+    for (final canteen in activeCanteens) {
+      map[canteen] = CampusLocation.calculateDeliveryFee(
+        canteen: canteen,
+        destination: destination,
+        config: cfg,
+      );
+    }
+    return map;
+  }
+
+  /// Calculates total delivery fee across all distinct active canteens to the given destination.
+  /// If any active canteen cannot reach the destination (missing distance), returns null to prevent checkout.
+  double? calculateDeliveryFeeTo(
+    String destination, {
+    SystemConfig? config,
+  }) {
+    if (_items.isEmpty) return 0.0;
+    final fees = getDeliveryFeesForDestination(destination, config: config);
+    double total = 0.0;
+    for (final fee in fees.values) {
+      if (fee == null) return null;
+      total += fee;
+    }
+    return total;
+  }
+
+  /// Total order amount including distance-based delivery fees for the specified destination.
+  double? calculateOrderTotal(
+    String destination, {
+    SystemConfig? config,
+  }) {
+    final fee = calculateDeliveryFeeTo(destination, config: config);
+    if (fee == null) return null;
+    return subtotal + fee;
   }
 
   double get totalProcessingFee {

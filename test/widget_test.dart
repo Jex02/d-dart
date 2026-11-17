@@ -65,7 +65,8 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('₱105.00'), findsOneWidget);
+    // Option A: Mini Canteen -> Backgate Annex is 240.53 m (>200m tier = ₱30 fee), so 85 + 30 = ₱115.00
+    expect(find.text('₱115.00'), findsOneWidget);
   });
 
   testWidgets('OrderTrackingScreen reveals OTP only on arrival and enforces runner flow',
