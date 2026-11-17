@@ -3,6 +3,7 @@ import 'models/delivery_order.dart';
 import 'models/problem_report.dart';
 import 'services/supabase_service.dart';
 import 'mock_data.dart';
+import 'widgets/order_chat_sheet.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
   final String orderId;
@@ -336,6 +337,26 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             backgroundColor: primaryMaroon,
             iconTheme: const IconThemeData(color: Colors.white),
             actions: [
+              if (!isTerminated)
+                IconButton(
+                  tooltip: widget.isRunner ? 'Chat with Customer' : 'Chat with Runner',
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  onPressed: effectiveStatus == 'pending'
+                      ? () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Direct chat activates once a runner claims the request.',
+                              ),
+                            ),
+                          );
+                        }
+                      : () => OrderChatSheet.show(
+                            context,
+                            order: order,
+                            isRunner: widget.isRunner,
+                          ),
+                ),
               IconButton(
                 tooltip: 'Report a problem',
                 icon: const Icon(Icons.report_problem_outlined),
@@ -452,6 +473,98 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         ),
                       ),
                       const SizedBox(height: 18),
+
+                      // Direct In-App Chat Card between Customer and Runner
+                      if (!isTerminated) ...[
+                        if (effectiveStatus == 'pending') ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.chat_bubble_outline, size: 20, color: Colors.grey.shade500),
+                                const SizedBox(width: 10),
+                                const Expanded(
+                                  child: Text(
+                                    'Direct runner chat activates as soon as a student runner claims your request.',
+                                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ] else ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: primaryMaroon.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: primaryMaroon.withValues(alpha: 0.2)),
+                            ),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 20,
+                                  backgroundColor: primaryMaroon,
+                                  child: Icon(
+                                    widget.isRunner ? Icons.person : Icons.directions_run,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        widget.isRunner ? 'Chat with Customer' : 'Chat with Runner',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF1E1E1E),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        widget.isRunner
+                                            ? 'Coordinate item substitutions & arrival.'
+                                            : 'Send instructions or check in with runner.',
+                                        style: const TextStyle(fontSize: 11.5, color: Colors.black87),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                ElevatedButton.icon(
+                                  onPressed: () => OrderChatSheet.show(
+                                    context,
+                                    order: order,
+                                    isRunner: widget.isRunner,
+                                  ),
+                                  icon: const Icon(Icons.chat, size: 14),
+                                  label: const Text('Chat'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryMaroon,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      ],
 
                       // Customer 4-digit OTP box (SDD 6.3.6 / C.3: Revealed upon runner arrival)
                       if (!widget.isRunner && !isCompleted && !isTerminated) ...[

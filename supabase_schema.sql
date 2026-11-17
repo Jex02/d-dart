@@ -900,3 +900,77 @@ on conflict (id) do update set
   image_url = excluded.image_url,
   available_canteens = excluded.available_canteens,
   is_available = excluded.is_available;
+
+-- ============================================================
+-- 24. Order Direct Messaging Table & Realtime Setup
+-- Allows live chat between customer and assigned runner
+-- ============================================================
+create table if not exists public.order_messages (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.delivery_requests(id) on delete cascade,
+  sender_id uuid references auth.users(id) on delete set null,
+  sender_role text not null check (sender_role in ('customer', 'runner', 'system')),
+  sender_name text not null default '',
+  message text not null check (length(trim(message)) > 0),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create index if not exists idx_order_messages_order_created
+  on public.order_messages (order_id, created_at asc);
+
+create index if not exists idx_order_messages_sender_id
+  on public.order_messages (sender_id);
+
+alter table public.order_messages enable row level security;
+
+-- SELECT policy: participants (customer or assigned runner) of the order or admin can read messages
+drop policy if exists "Allow participants read order messages" on public.order_messages;
+create policy "Allow participants read order messages"
+  on public.order_messages for select
+  using (
+    exists (
+      select 1
+      from public.delivery_requests dr
+      where dr.id = order_messages.order_id
+        and (
+          dr.customer_id = (select auth.uid())
+          or dr.runner_id = (select auth.uid())
+        )
+    )
+    or private.is_admin()
+  );
+
+-- INSERT policy: authenticated user can send message if they are customer or assigned runner
+drop policy if exists "Allow participants insert order messages" on public.order_messages;
+create policy "Allow participants insert order messages"
+  on public.order_messages for insert
+  with check (
+    sender_id = (select auth.uid())
+    and exists (
+      select 1
+      from public.delivery_requests dr
+      where dr.id = order_messages.order_id
+        and (
+          (dr.customer_id = (select auth.uid()) and sender_role = 'customer')
+          or (dr.runner_id = (select auth.uid()) and sender_role = 'runner')
+        )
+        and dr.status in ('claimed', 'purchasing', 'en_route', 'arrived', 'completed')
+    )
+  );
+
+grant select, insert on public.order_messages to authenticated;
+
+-- Enable Supabase Realtime for order_messages safely
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'order_messages'
+  ) then
+    alter publication supabase_realtime add table public.order_messages;
+  end if;
+end $$;
+

@@ -65,7 +65,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       final list = await _service.fetchAllProfiles();
       if (mounted) {
         setState(() {
-          _profiles = list.where((p) => !p.isAdmin).toList();
+          _profiles = list;
           _loadingUsers = false;
         });
       }
@@ -209,7 +209,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Widget _buildAccountsTab() {
     final filtered = _profiles.where((p) {
       if (_userFilter == 'all') return true;
-      return p.verificationStatus == _userFilter;
+      if (_userFilter == 'admin') return p.isAdmin;
+      if (_userFilter == 'verified') return p.isVerified && !p.isAdmin;
+      return p.verificationStatus == _userFilter && !p.isAdmin;
     }).toList();
 
     return Column(
@@ -219,12 +221,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           child: Wrap(
             spacing: 8,
             runSpacing: 6,
-            children: ['pending', 'verified', 'rejected', 'all'].map((filter) {
+            children: ['pending', 'verified', 'rejected', 'admin', 'all'].map((filter) {
               final count = filter == 'all'
                   ? _profiles.length
-                  : _profiles.where((p) => p.verificationStatus == filter).length;
+                  : filter == 'admin'
+                      ? _profiles.where((p) => p.isAdmin).length
+                      : filter == 'verified'
+                          ? _profiles.where((p) => p.isVerified && !p.isAdmin).length
+                          : _profiles.where((p) => p.verificationStatus == filter && !p.isAdmin).length;
+              final label = filter == 'admin' ? 'CO-ADMINS' : filter.toUpperCase();
               return ChoiceChip(
-                label: Text('${filter.toUpperCase()} ($count)'),
+                label: Text('$label ($count)'),
                 selected: _userFilter == filter,
                 selectedColor: DDartTheme.primaryMaroon.withValues(alpha: 0.16),
                 onSelected: (_) => setState(() => _userFilter = filter),
@@ -238,7 +245,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               : filtered.isEmpty
                   ? Center(
                       child: Text(
-                        'No $_userFilter accounts found.',
+                        _userFilter == 'admin'
+                            ? 'No co-administrators found.'
+                            : 'No $_userFilter accounts found.',
                         style: const TextStyle(color: Colors.black54),
                       ),
                     )
@@ -257,11 +266,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildProfileReviewCard(UserProfile user) {
-    final statusColor = user.isVerified
-        ? Colors.green
-        : user.isRejected
-            ? Colors.red
-            : Colors.orange.shade800;
+    final statusColor = user.isAdmin
+        ? const Color(0xFFD4AF37)
+        : user.isVerified
+            ? Colors.green
+            : user.isRejected
+                ? Colors.red
+                : Colors.orange.shade800;
+
+    final isCurrentAdminUser = user.id == _service.currentUser?.id;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -286,7 +299,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    user.verificationLabel.toUpperCase(),
+                    user.isAdmin
+                        ? (isCurrentAdminUser ? 'ADMIN (YOU)' : 'ADMINISTRATOR')
+                        : user.verificationLabel.toUpperCase(),
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
@@ -320,7 +335,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   icon: const Icon(Icons.folder_shared_outlined, size: 16),
                   label: const Text('Inspect Docs & Schedule'),
                 ),
-                if (!user.isVerified)
+                if (!user.isAdmin && !user.isVerified)
                   ElevatedButton.icon(
                     onPressed: () => _approveUser(user),
                     style: ElevatedButton.styleFrom(
@@ -330,7 +345,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     icon: const Icon(Icons.check, size: 16),
                     label: const Text('Verify'),
                   ),
-                if (!user.isRejected)
+                if (!user.isAdmin && !user.isRejected)
                   OutlinedButton.icon(
                     onPressed: () => _rejectUser(user),
                     style: OutlinedButton.styleFrom(
@@ -340,12 +355,129 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     icon: const Icon(Icons.close, size: 16),
                     label: const Text('Reject'),
                   ),
+                if (!user.isAdmin && user.isVerified)
+                  ElevatedButton.icon(
+                    onPressed: () => _confirmPromoteToAdmin(user),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: DDartTheme.primaryMaroon,
+                      foregroundColor: Colors.white,
+                    ),
+                    icon: const Icon(Icons.admin_panel_settings, size: 16),
+                    label: const Text('Make Co-Admin'),
+                  ),
+                if (user.isAdmin && !isCurrentAdminUser)
+                  OutlinedButton.icon(
+                    onPressed: () => _confirmDemoteAdmin(user),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.deepOrange,
+                      side: const BorderSide(color: Colors.deepOrange),
+                    ),
+                    icon: const Icon(Icons.remove_moderator, size: 16),
+                    label: const Text('Remove Co-Admin'),
+                  ),
               ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _confirmPromoteToAdmin(UserProfile user) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.admin_panel_settings, color: DDartTheme.primaryMaroon),
+            SizedBox(width: 8),
+            Text('Make Co-Admin?'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to promote ${user.fullName.isEmpty ? user.email : user.fullName} to Co-Administrator?\n\n'
+          'They will receive full administrative access to:\n'
+          '• Verify or reject student and faculty IDs\n'
+          '• Add or modify campus canteen locations\n'
+          '• Adjust Duty Lock buffers and system settings\n'
+          '• Review dispute problem reports',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: DDartTheme.primaryMaroon,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm & Promote'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await _service.promoteUserToAdmin(user.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.green,
+            content: Text('${user.fullName.isEmpty ? user.email : user.fullName} is now a Co-Administrator.'),
+          ),
+        );
+        _loadProfiles();
+      }
+    } catch (e) {
+      if (mounted) _showAdminError('Failed to promote user to Co-Admin: $e');
+    }
+  }
+
+  Future<void> _confirmDemoteAdmin(UserProfile user) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Revoke Co-Admin Access?'),
+        content: Text(
+          'Are you sure you want to remove administrative access for ${user.fullName.isEmpty ? user.email : user.fullName}? '
+          'Their account will be returned to a standard Student/Customer account.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Revoke Admin'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await _service.demoteAdminToUser(user.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Removed admin privileges for ${user.fullName.isEmpty ? user.email : user.fullName}.'),
+          ),
+        );
+        _loadProfiles();
+      }
+    } catch (e) {
+      if (mounted) _showAdminError('Failed to revoke admin privileges: $e');
+    }
   }
 
   Future<void> _inspectUserDocsAndSchedule(UserProfile user) async {

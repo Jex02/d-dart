@@ -5,11 +5,13 @@ import 'package:sd2/main.dart';
 import 'package:sd2/main_dashboard.dart';
 import 'package:sd2/mock_data.dart';
 import 'package:sd2/models/user_profile.dart';
+import 'package:sd2/models/delivery_order.dart';
 import 'package:sd2/order_tracking_screen.dart';
 import 'package:sd2/pabili_request_screen.dart';
 import 'package:sd2/pending_verification_screen.dart';
 import 'package:sd2/services/duty_lock_service.dart';
 import 'package:sd2/signup.dart';
+import 'package:sd2/widgets/order_chat_sheet.dart';
 
 void main() {
   setUp(() {
@@ -169,5 +171,36 @@ void main() {
     tester.view.physicalSize = const Size(1200, 850);
     await tester.pumpWidget(const MaterialApp(home: SignupPage()));
     expect(find.text('Create an Account'), findsOneWidget);
+  });
+
+  testWidgets('OrderChatSheet renders recipient, preset chips, and input field',
+      (WidgetTester tester) async {
+    final order = DeliveryOrder(
+      id: 'ORD-303',
+      pickupLocation: 'Main Canteen',
+      dropoffLocation: 'Library 2nd Floor',
+      description: 'Pork Siomai',
+      estimatedPrice: 30.0,
+      status: 'claimed',
+      verificationCode: '1234',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: OrderChatSheet(
+            order: order,
+            isRunner: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Chat with Runner'), findsOneWidget);
+    expect(find.text('Main Canteen'), findsOneWidget);
+    expect(find.text('Library 2nd Floor'), findsOneWidget);
+    expect(find.text('Type a message...'), findsOneWidget);
+    expect(find.text('🙏 Please ask for utensils & sauce.'), findsOneWidget);
   });
 }

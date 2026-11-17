@@ -12,10 +12,10 @@ D-Dart is a Flutter peer-to-peer campus errand and delivery ("Pabili") platform 
 | **2** | **Auth, Verification & Document Upload** | `lib/signup.dart`, `lib/login.dart`, `lib/verification_pending_screen.dart`, `lib/services/supabase_service.dart` |
 | **3** | **Customer Mode, Canteen Catalog & Cart** | `lib/customer_home_screen.dart`, `lib/canteen_category_screen.dart`, `lib/canteen_menu_screen.dart`, `lib/cart_screen.dart`, `lib/services/cart_service.dart`, `lib/pabili_request_screen.dart`, `lib/order_tracking_screen.dart`, `lib/utils/validators.dart` |
 | **4** | **Runner Mode & Atomic Claiming** | `lib/runner_gig_board_screen.dart`, `lib/main_dashboard.dart`, `lib/role_selection.dart` |
-| **5** | **Delivery Execution & 4-Digit OTP Handover** | `lib/order_tracking_screen.dart`, `lib/models/delivery_order.dart`, `verify_and_complete_delivery` RPC |
+| **5** | **Delivery Execution, OTP Handover & Real-Time Chat** | `lib/order_tracking_screen.dart`, `lib/widgets/order_chat_sheet.dart`, `lib/models/order_message.dart`, `lib/models/delivery_order.dart`, `verify_and_complete_delivery` RPC |
 | **6** | **AI-Assisted COR Processing** | `lib/cor_upload_screen.dart`, `lib/services/gemini_service.dart`, `lib/models/class_schedule.dart`, `supabase/functions/verify-cor/index.ts` |
 | **7** | **Academic Protection ("Duty Lock") & Admin** | `lib/services/duty_lock_service.dart`, `lib/admin_dashboard_screen.dart`, `lib/models/campus_location.dart`, `lib/models/system_config.dart`, `lib/models/problem_report.dart` |
-| **8** | **Automated Tests** | `test/duty_lock_test.dart`, `test/gemini_parser_test.dart`, `test/order_lifecycle_test.dart`, `test/validators_test.dart`, `test/widget_test.dart` |
+| **8** | **Automated Tests** | `test/duty_lock_test.dart`, `test/gemini_parser_test.dart`, `test/order_chat_test.dart`, `test/order_lifecycle_test.dart`, `test/validators_test.dart`, `test/widget_test.dart` |
 
 ---
 
@@ -26,6 +26,10 @@ D-Dart is a Flutter peer-to-peer campus errand and delivery ("Pabili") platform 
   - Claiming a request runs through PostgreSQL RPC `claim_delivery_request(uuid)` with `FOR UPDATE` row locking to prevent duplicate claims.
   - Cancelling unclaimed orders runs through `cancel_delivery_request(uuid)`.
   - Handover completion requires matching the customer's 4-digit OTP via `verify_and_complete_delivery(uuid, text)` and records a finalized row in `delivery_records`.
+- **In-App Real-Time Messaging (Customer & Runner)**:
+  - Direct chat activates once an order is claimed, available on both the customer's order status page and runner's delivery screen.
+  - Powered by `public.order_messages` with granular RLS (only order customer and assigned runner can read/send) and published to Supabase Realtime with reactive offline mock fallback.
+  - Features quick-action presets for both roles (e.g. substitutions, ETA updates, and payment preferences).
 - **Academic Protection (Duty Lock)**:
   - Only **verified Student** accounts with a confirmed COR schedule can enter Runner Mode.
   - Runner actions are automatically blocked during active classes, within the admin-configured pre-class buffer (`pre_class_buffer_minutes`, default `15`), or after reaching `daily_delivery_limit` (default `5`).

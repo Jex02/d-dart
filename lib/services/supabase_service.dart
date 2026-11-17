@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/campus_location.dart';
 import '../models/class_schedule.dart';
+import '../models/order_message.dart';
 import '../models/problem_report.dart';
 import '../models/system_config.dart';
 import '../models/user_profile.dart';
@@ -57,6 +59,9 @@ class SupabaseService {
   /// Holds documents & schedule in memory when signup requires email confirmation
   /// before an authenticated Storage/PostgREST session exists.
   final Map<String, _PendingSignupArtifacts> _pendingSignupArtifacts = {};
+
+  /// In-memory stream controllers for mock/offline direct messaging
+  final Map<String, StreamController<List<OrderMessage>>> _mockMessageStreamControllers = {};
 
   // ==========================================
   // AUTHENTICATION & PROFILES
@@ -708,6 +713,30 @@ class SupabaseService {
     }).eq('id', userId);
   }
 
+  /// Promotes a verified user to Co-Administrator (SRS 3.1.5 / Role Management).
+  /// Requires caller to be an authenticated administrator.
+  Future<void> promoteUserToAdmin(String userId) async {
+    await client.from('profiles').update({
+      'account_type': 'admin',
+      'role': 'admin',
+      'verification_status': 'verified',
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', userId);
+  }
+
+  /// Revokes administrative privileges from a co-admin and sets them back to customer.
+  Future<void> demoteAdminToUser(
+    String userId, {
+    String newAccountType = 'student',
+    String newRole = 'customer',
+  }) async {
+    await client.from('profiles').update({
+      'account_type': newAccountType,
+      'role': newRole,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', userId);
+  }
+
   // ==========================================
   // RUNNER SCHEDULES (COR SYNC)
   // ==========================================
@@ -817,5 +846,106 @@ class SupabaseService {
       debugPrint('fetchCanteenMenuItems: falling back to built-in campus catalog ($e)');
     }
     return CampusMenuCatalog.allItems;
+  }
+
+  // ==========================================
+  // IN-APP DIRECT MESSAGING (CUSTOMER & RUNNER)
+  // ==========================================
+
+  /// Streams real-time direct chat messages for a specific delivery request.
+  /// Seamlessly falls back to reactive local in-memory streams for offline/demo orders.
+  Stream<List<OrderMessage>> streamOrderMessages(String orderId) {
+    if (orderId.startsWith('ORD-') || !isAuthenticated) {
+      final controller = _mockMessageStreamControllers.putIfAbsent(
+        orderId,
+        () => StreamController<List<OrderMessage>>.broadcast(),
+      );
+
+      return () async* {
+        yield getMockMessagesForOrder(orderId)
+            .map((m) => OrderMessage.fromJson(m))
+            .toList();
+        yield* controller.stream;
+      }();
+    }
+
+    try {
+      return client
+          .from('order_messages')
+          .stream(primaryKey: ['id'])
+          .eq('order_id', orderId)
+          .order('created_at', ascending: true)
+          .map((rows) => rows.map((r) => OrderMessage.fromJson(r)).toList());
+    } catch (e) {
+      debugPrint('streamOrderMessages exception: $e, falling back to mock stream');
+      final controller = _mockMessageStreamControllers.putIfAbsent(
+        orderId,
+        () => StreamController<List<OrderMessage>>.broadcast(),
+      );
+      return () async* {
+        yield getMockMessagesForOrder(orderId)
+            .map((m) => OrderMessage.fromJson(m))
+            .toList();
+        yield* controller.stream;
+      }();
+    }
+  }
+
+  /// Sends a direct chat message between the customer and runner for an order.
+  Future<bool> sendOrderMessage({
+    required String orderId,
+    required String message,
+    required String senderRole,
+    String? senderName,
+  }) async {
+    final trimmed = message.trim();
+    if (trimmed.isEmpty) return false;
+
+    final senderId = currentUser?.id;
+    final effectiveSenderName = (senderName != null && senderName.trim().isNotEmpty)
+        ? senderName.trim()
+        : (cachedProfile?.fullName.isNotEmpty == true
+            ? cachedProfile!.fullName
+            : (senderRole == 'runner' ? 'Runner' : 'Customer'));
+
+    if (orderId.startsWith('ORD-') || !isAuthenticated) {
+      addMockOrderMessage(
+        orderId: orderId,
+        message: trimmed,
+        senderRole: senderRole,
+        senderName: effectiveSenderName,
+        senderId: senderId ?? 'mock-user',
+      );
+      final updated = getMockMessagesForOrder(orderId)
+          .map((m) => OrderMessage.fromJson(m))
+          .toList();
+      _mockMessageStreamControllers[orderId]?.add(updated);
+      return true;
+    }
+
+    try {
+      await client.from('order_messages').insert({
+        'order_id': orderId,
+        'sender_id': senderId,
+        'sender_role': senderRole,
+        'sender_name': effectiveSenderName,
+        'message': trimmed,
+      });
+      return true;
+    } catch (e) {
+      debugPrint('sendOrderMessage Supabase insert error: $e. Storing in local fallback stream.');
+      addMockOrderMessage(
+        orderId: orderId,
+        message: trimmed,
+        senderRole: senderRole,
+        senderName: effectiveSenderName,
+        senderId: senderId ?? 'mock-user',
+      );
+      final updated = getMockMessagesForOrder(orderId)
+          .map((m) => OrderMessage.fromJson(m))
+          .toList();
+      _mockMessageStreamControllers[orderId]?.add(updated);
+      return true;
+    }
   }
 }

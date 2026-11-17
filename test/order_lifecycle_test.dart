@@ -108,4 +108,44 @@ void main() {
     expect(CampusLocation.defaultPickups.length, greaterThanOrEqualTo(4));
     expect(CampusLocation.defaultDropoffs.length, greaterThanOrEqualTo(5));
   });
+
+  test('UserProfile correctly transitions when promoted to Co-Admin and demoted', () {
+    final student = UserProfile.fromJson({
+      'id': 'u-student-1',
+      'full_name': 'Jerick Davidon',
+      'email': 'jerick@cit.edu',
+      'student_id': '23-1626-937',
+      'account_type': 'student',
+      'role': 'customer',
+      'verification_status': 'verified',
+    });
+    expect(student.isStudent, isTrue);
+    expect(student.isAdmin, isFalse);
+
+    // Simulated payload returned after promoteUserToAdmin
+    final promoted = UserProfile.fromJson({
+      'id': student.id,
+      'full_name': student.fullName,
+      'email': student.email,
+      'student_id': student.studentId,
+      'account_type': 'admin',
+      'role': 'admin',
+      'verification_status': 'verified',
+    });
+    expect(promoted.isAdmin, isTrue);
+    expect(promoted.accountTypeLabel, 'Administrator');
+
+    // Simulated payload returned after demoteAdminToUser
+    final demoted = UserProfile.fromJson({
+      'id': student.id,
+      'full_name': student.fullName,
+      'email': student.email,
+      'student_id': student.studentId,
+      'account_type': 'student',
+      'role': 'customer',
+      'verification_status': 'verified',
+    });
+    expect(demoted.isAdmin, isFalse);
+    expect(demoted.isStudent, isTrue);
+  });
 }
