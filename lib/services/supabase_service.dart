@@ -30,6 +30,29 @@ class ClaimOrderResult {
   bool get isSuccess => status == ClaimOrderStatus.claimed;
 }
 
+class OrderCounterpartInfo {
+  final String userId;
+  final String fullName;
+  final String studentId;
+  final String accountType;
+  final String? idDocumentPath;
+  final String? idPhotoUrl;
+  final String counterpartRole; // 'runner' or 'customer'
+
+  const OrderCounterpartInfo({
+    required this.userId,
+    required this.fullName,
+    this.studentId = '',
+    this.accountType = 'student',
+    this.idDocumentPath,
+    this.idPhotoUrl,
+    required this.counterpartRole,
+  });
+
+  String get displayName =>
+      fullName.trim().isNotEmpty ? fullName.trim() : (counterpartRole == 'runner' ? 'Runner' : 'Customer');
+}
+
 class _PendingSignupArtifacts {
   final Uint8List? idDocumentBytes;
   final String idDocumentExt;
@@ -919,6 +942,44 @@ class SupabaseService {
   // ==========================================
   // IN-APP DIRECT MESSAGING (CUSTOMER & RUNNER)
   // ==========================================
+
+  /// Fetches the counterpart's safe display name and signed ID photo URL
+  /// for an active/completed order via the `get_order_counterpart_profile` RPC.
+  Future<OrderCounterpartInfo?> fetchOrderCounterpart(String orderId) async {
+    if (orderId.startsWith('ORD-') || !isAuthenticated) return null;
+    try {
+      final res = await client.rpc(
+        'get_order_counterpart_profile',
+        params: {'p_order_id': orderId},
+      );
+      Map<String, dynamic>? row;
+      if (res is List && res.isNotEmpty) {
+        row = Map<String, dynamic>.from(res.first as Map);
+      } else if (res is Map) {
+        row = Map<String, dynamic>.from(res);
+      }
+      if (row == null) return null;
+
+      final idPath = row['id_document_path']?.toString();
+      String? signedUrl;
+      if (idPath != null && idPath.isNotEmpty) {
+        signedUrl = await getSignedDocumentUrl(idPath);
+      }
+
+      return OrderCounterpartInfo(
+        userId: row['user_id']?.toString() ?? '',
+        fullName: row['full_name']?.toString() ?? '',
+        studentId: row['student_id']?.toString() ?? '',
+        accountType: row['account_type']?.toString() ?? 'student',
+        idDocumentPath: idPath,
+        idPhotoUrl: signedUrl,
+        counterpartRole: row['counterpart_role']?.toString() ?? 'runner',
+      );
+    } catch (e) {
+      debugPrint('fetchOrderCounterpart error: $e');
+      return null;
+    }
+  }
 
   /// Streams real-time direct chat messages for a specific delivery request.
   /// Seamlessly falls back to reactive local in-memory streams for offline/demo orders.

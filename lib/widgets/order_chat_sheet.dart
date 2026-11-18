@@ -7,17 +7,20 @@ import '../services/supabase_service.dart';
 class OrderChatSheet extends StatefulWidget {
   final DeliveryOrder order;
   final bool isRunner;
+  final OrderCounterpartInfo? counterpart;
 
   const OrderChatSheet({
     super.key,
     required this.order,
     required this.isRunner,
+    this.counterpart,
   });
 
   static Future<void> show(
     BuildContext context, {
     required DeliveryOrder order,
     required bool isRunner,
+    OrderCounterpartInfo? counterpart,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -26,6 +29,7 @@ class OrderChatSheet extends StatefulWidget {
       builder: (ctx) => OrderChatSheet(
         order: order,
         isRunner: isRunner,
+        counterpart: counterpart,
       ),
     );
   }
@@ -41,18 +45,101 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   late Stream<List<OrderMessage>> _messagesStream;
+  OrderCounterpartInfo? _counterpart;
   bool _isSending = false;
 
   @override
   void initState() {
     super.initState();
+    _counterpart = widget.counterpart;
     _messagesStream = SupabaseService().streamOrderMessages(widget.order.id);
+    if (_counterpart == null) {
+      _loadCounterpart();
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ChatReadTracker.instance.markRead(
         widget.order.id,
         isRunner: widget.isRunner,
       );
     });
+  }
+
+  Future<void> _loadCounterpart() async {
+    final info = await SupabaseService().fetchOrderCounterpart(widget.order.id);
+    if (info != null && mounted) {
+      setState(() => _counterpart = info);
+    }
+  }
+
+  void _showIdPreviewDialog() {
+    final info = _counterpart;
+    if (info == null) return;
+    final roleLabel = widget.isRunner ? 'Customer' : 'Runner';
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.verified_user, color: primaryMaroon, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                info.displayName,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              info.studentId.isNotEmpty
+                  ? '$roleLabel  •  ID: ${info.studentId}'
+                  : roleLabel,
+              style: const TextStyle(fontSize: 12.5, color: Colors.black54),
+            ),
+            const SizedBox(height: 12),
+            if (info.idPhotoUrl != null && info.idPhotoUrl!.isNotEmpty)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  info.idPhotoUrl!,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                  ),
+                ),
+              )
+            else
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Column(
+                  children: [
+                    Icon(Icons.badge_outlined, size: 48, color: Colors.grey),
+                    SizedBox(height: 6),
+                    Text('No ID photo available.', style: TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _retryStream() {
@@ -209,13 +296,38 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
             ),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: primaryMaroon,
-                  child: Icon(
-                    widget.isRunner ? Icons.person : Icons.directions_run,
-                    color: Colors.white,
-                    size: 22,
+                GestureDetector(
+                  onTap: _counterpart != null ? _showIdPreviewDialog : null,
+                  child: Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: primaryMaroon,
+                      border: Border.all(
+                        color: primaryMaroon.withValues(alpha: 0.35),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: ClipOval(
+                      child: _counterpart?.idPhotoUrl != null &&
+                              _counterpart!.idPhotoUrl!.isNotEmpty
+                          ? Image.network(
+                              _counterpart!.idPhotoUrl!,
+                              fit: BoxFit.cover,
+                              alignment: const Alignment(-0.55, -0.35),
+                              errorBuilder: (_, _, _) => Icon(
+                                widget.isRunner ? Icons.person : Icons.directions_run,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                            )
+                          : Icon(
+                              widget.isRunner ? Icons.person : Icons.directions_run,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -227,7 +339,7 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
                         children: [
                           Flexible(
                             child: Text(
-                              'Chat with $otherRoleLabel',
+                              _counterpart?.displayName ?? 'Chat with $otherRoleLabel',
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontSize: 16,
@@ -270,7 +382,7 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            widget.order.status.toUpperCase(),
+                            '${otherRoleLabel.toUpperCase()}  •  ${widget.order.status.toUpperCase()}',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,

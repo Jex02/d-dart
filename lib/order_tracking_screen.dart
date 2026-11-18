@@ -39,6 +39,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   Map<String, dynamic> _fallbackOrder = {};
   bool _hasFallbackInMemory = false;
   bool _isBusy = false;
+  OrderCounterpartInfo? _counterpart;
+  String? _loadedCounterpartKey;
 
   @override
   void initState() {
@@ -69,6 +71,93 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     _messagesStream = SupabaseService().streamOrderMessages(widget.orderId);
   }
 
+  void _ensureCounterpartLoaded(DeliveryOrder order, String effectiveStatus) {
+    if (effectiveStatus == 'pending' ||
+        effectiveStatus == 'cancelled' ||
+        effectiveStatus == 'expired') {
+      return;
+    }
+    final key = '${order.id}|${order.customerId ?? ''}|${order.runnerId ?? ''}';
+    if (_loadedCounterpartKey == key) return;
+    _loadedCounterpartKey = key;
+    SupabaseService().fetchOrderCounterpart(order.id).then((info) {
+      if (mounted && info != null) {
+        setState(() => _counterpart = info);
+      }
+    });
+  }
+
+  void _showCounterpartIdDialog() {
+    final info = _counterpart;
+    if (info == null) return;
+    final roleLabel = widget.isRunner ? 'Customer' : 'Runner';
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.verified_user, color: primaryMaroon, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                info.displayName,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              info.studentId.isNotEmpty
+                  ? '$roleLabel  •  ID: ${info.studentId}'
+                  : roleLabel,
+              style: const TextStyle(fontSize: 12.5, color: Colors.black54),
+            ),
+            const SizedBox(height: 12),
+            if (info.idPhotoUrl != null && info.idPhotoUrl!.isNotEmpty)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  info.idPhotoUrl!,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                  ),
+                ),
+              )
+            else
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Column(
+                  children: [
+                    Icon(Icons.badge_outlined, size: 48, color: Colors.grey),
+                    SizedBox(height: 6),
+                    Text('No ID photo available.', style: TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _openChat(DeliveryOrder order, List<OrderMessage> messages) async {
     ChatReadTracker.instance.markRead(
       order.id,
@@ -79,6 +168,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       context,
       order: order,
       isRunner: widget.isRunner,
+      counterpart: _counterpart,
     );
   }
 
@@ -343,6 +433,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         }
         final order = DeliveryOrder.fromJson(raw);
         final effectiveStatus = order.effectiveStatus();
+        _ensureCounterpartLoaded(order, effectiveStatus);
         final isCompleted = effectiveStatus == 'completed';
         final isTerminated =
             effectiveStatus == 'cancelled' || effectiveStatus == 'expired';
@@ -582,13 +673,44 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                   isLabelVisible: unreadCount > 0,
                                   backgroundColor: Colors.red,
                                   smallSize: 10,
-                                  child: CircleAvatar(
-                                    radius: 20,
-                                    backgroundColor: primaryMaroon,
-                                    child: Icon(
-                                      widget.isRunner ? Icons.person : Icons.directions_run,
-                                      color: Colors.white,
-                                      size: 20,
+                                  child: GestureDetector(
+                                    onTap: _counterpart != null
+                                        ? _showCounterpartIdDialog
+                                        : null,
+                                    child: Container(
+                                      width: 44,
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: primaryMaroon,
+                                        border: Border.all(
+                                          color: primaryMaroon.withValues(alpha: 0.35),
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: ClipOval(
+                                        child: _counterpart?.idPhotoUrl != null &&
+                                                _counterpart!.idPhotoUrl!.isNotEmpty
+                                            ? Image.network(
+                                                _counterpart!.idPhotoUrl!,
+                                                fit: BoxFit.cover,
+                                                alignment: const Alignment(-0.55, -0.35),
+                                                errorBuilder: (_, _, _) => Icon(
+                                                  widget.isRunner
+                                                      ? Icons.person
+                                                      : Icons.directions_run,
+                                                  color: Colors.white,
+                                                  size: 20,
+                                                ),
+                                              )
+                                            : Icon(
+                                                widget.isRunner
+                                                    ? Icons.person
+                                                    : Icons.directions_run,
+                                                color: Colors.white,
+                                                size: 20,
+                                              ),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -597,21 +719,56 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        widget.isRunner ? 'Chat with Customer' : 'Chat with Runner',
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFF1E1E1E),
-                                        ),
+                                      Row(
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              _counterpart?.displayName ??
+                                                  (widget.isRunner
+                                                      ? 'Chat with Customer'
+                                                      : 'Chat with Runner'),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF1E1E1E),
+                                              ),
+                                            ),
+                                          ),
+                                          if (_counterpart != null) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 6,
+                                                vertical: 1.5,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: primaryMaroon.withValues(alpha: 0.12),
+                                                borderRadius: BorderRadius.circular(5),
+                                              ),
+                                              child: Text(
+                                                widget.isRunner ? 'CUSTOMER' : 'RUNNER',
+                                                style: const TextStyle(
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: primaryMaroon,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
                                         latestIncoming != null
                                             ? 'New: ${latestIncoming.message}'
-                                            : (widget.isRunner
-                                                ? 'Coordinate item substitutions & arrival.'
-                                                : 'Send instructions or check in with runner.'),
+                                            : (_counterpart?.idPhotoUrl != null &&
+                                                    _counterpart!.idPhotoUrl!.isNotEmpty
+                                                ? 'Tap photo to view ID • Tap Chat to message'
+                                                : (widget.isRunner
+                                                    ? 'Coordinate item substitutions & arrival.'
+                                                    : 'Send instructions or check in with runner.')),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(

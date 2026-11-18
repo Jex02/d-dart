@@ -842,6 +842,70 @@ create policy "Users update own verification docs"
     and (storage.foldername(name))[1] = (select auth.uid())::text
   );
 
+drop policy if exists "Order participants read counterpart ID photo" on storage.objects;
+create policy "Order participants read counterpart ID photo"
+  on storage.objects for select
+  to authenticated
+  using (
+    bucket_id = 'verification-documents'
+    and lower(storage.filename(name)) like 'id_document.%'
+    and exists (
+      select 1
+      from public.delivery_requests dr
+      where dr.status in ('claimed', 'purchasing', 'en_route', 'arrived', 'completed')
+        and (
+          (dr.customer_id = (select auth.uid()) and dr.runner_id::text = (storage.foldername(name))[1])
+          or (dr.runner_id = (select auth.uid()) and dr.customer_id::text = (storage.foldername(name))[1])
+        )
+    )
+  );
+
+create or replace function public.get_order_counterpart_profile(p_order_id uuid)
+returns table (
+  user_id uuid,
+  full_name text,
+  student_id text,
+  account_type text,
+  id_document_path text,
+  counterpart_role text
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with req as (
+    select dr.customer_id, dr.runner_id, dr.status
+    from public.delivery_requests dr
+    where dr.id = p_order_id
+      and dr.status in ('claimed', 'purchasing', 'en_route', 'arrived', 'completed')
+      and (
+        dr.customer_id = (select auth.uid())
+        or dr.runner_id = (select auth.uid())
+      )
+    limit 1
+  )
+  select
+    p.id as user_id,
+    p.full_name,
+    p.student_id,
+    p.account_type,
+    p.id_document_path,
+    case
+      when req.customer_id = (select auth.uid()) and req.runner_id is not null then 'runner'
+      else 'customer'
+    end as counterpart_role
+  from req
+  join public.profiles p
+    on p.id = case
+      when req.customer_id = (select auth.uid()) and req.runner_id is not null then req.runner_id
+      else req.customer_id
+    end;
+$$;
+
+revoke all on function public.get_order_counterpart_profile(uuid) from public, anon;
+grant execute on function public.get_order_counterpart_profile(uuid) to authenticated;
+
 -- 22. Enable Realtime on delivery_requests table safely
 do $$
 begin
