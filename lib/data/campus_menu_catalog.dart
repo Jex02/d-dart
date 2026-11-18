@@ -49,7 +49,7 @@ class CampusMenuCatalog {
       price: 25.00,
       unitDescription: 'Sunny side up with garlic fried rice',
       imageUrl: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['Main Canteen', 'High School Canteen'],
+      availableCanteens: ['Main Canteen', 'Highschool Canteen'],
     ),
     const CanteenMenuItem(
       id: 'food-pancit',
@@ -59,7 +59,7 @@ class CampusMenuCatalog {
       price: 25.00,
       unitDescription: 'With boiled egg & calamansi',
       imageUrl: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['Main Canteen', 'Mini Canteen', 'High School Canteen'],
+      availableCanteens: ['Main Canteen', 'Mini Canteen', 'Highschool Canteen'],
     ),
     const CanteenMenuItem(
       id: 'food-tocilog',
@@ -109,7 +109,7 @@ class CampusMenuCatalog {
       price: 20.00,
       unitDescription: 'Classic grilled red hotdog with dressing',
       imageUrl: 'https://images.unsplash.com/photo-1619740455993-9e612b1af08a?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['Main Canteen', 'Mini Canteen', 'High School Canteen'],
+      availableCanteens: ['Main Canteen', 'Mini Canteen', 'Highschool Canteen'],
     ),
     const CanteenMenuItem(
       id: 'food-footlong',
@@ -134,12 +134,12 @@ class CampusMenuCatalog {
     const CanteenMenuItem(
       id: 'food-nuggets',
       name: 'Chicken Nuggets w/ Rice',
-      canteen: 'High School Canteen',
+      canteen: 'Highschool Canteen',
       category: 'Food and snacks',
       price: 45.00,
       unitDescription: '4 pcs crispy nuggets with BBQ sauce & rice',
       imageUrl: 'https://images.unsplash.com/photo-1562967914-608f82629710?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['High School Canteen', 'Main Canteen'],
+      availableCanteens: ['Highschool Canteen', 'Main Canteen'],
     ),
     const CanteenMenuItem(
       id: 'food-fries',
@@ -149,7 +149,7 @@ class CampusMenuCatalog {
       price: 30.00,
       unitDescription: 'Crispy crinkle-cut fries coated in cheese powder',
       imageUrl: 'https://images.unsplash.com/photo-1576107232684-1279f3908594?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['Mini Canteen', 'High School Canteen'],
+      availableCanteens: ['Mini Canteen', 'Highschool Canteen'],
     ),
     const CanteenMenuItem(
       id: 'food-lumpia',
@@ -203,7 +203,7 @@ class CampusMenuCatalog {
       price: 25.00,
       unitDescription: '25 Pesos/bottle 500ml',
       imageUrl: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['Main Canteen', 'Mini Canteen', 'High School Canteen'],
+      availableCanteens: ['Main Canteen', 'Mini Canteen', 'Highschool Canteen'],
     ),
     const CanteenMenuItem(
       id: 'bev-coke',
@@ -213,7 +213,7 @@ class CampusMenuCatalog {
       price: 20.00,
       unitDescription: '300ml chilled bottle',
       imageUrl: 'https://images.unsplash.com/photo-1554866585-cd94860890b7?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['Main Canteen', 'Mini Canteen', 'High School Canteen'],
+      availableCanteens: ['Main Canteen', 'Mini Canteen', 'Highschool Canteen'],
     ),
     const CanteenMenuItem(
       id: 'bev-sprite',
@@ -228,12 +228,12 @@ class CampusMenuCatalog {
     const CanteenMenuItem(
       id: 'bev-royal',
       name: 'Royal Tru-Orange Mismo',
-      canteen: 'High School Canteen',
+      canteen: 'Highschool Canteen',
       category: 'Beverages',
       price: 20.00,
       unitDescription: '300ml chilled orange soda',
       imageUrl: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['High School Canteen', 'Main Canteen'],
+      availableCanteens: ['Highschool Canteen', 'Main Canteen'],
     ),
     const CanteenMenuItem(
       id: 'bev-c2',
@@ -243,7 +243,7 @@ class CampusMenuCatalog {
       price: 20.00,
       unitDescription: '500ml chilled bottle',
       imageUrl: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['Main Canteen', 'Mini Canteen', 'High School Canteen'],
+      availableCanteens: ['Main Canteen', 'Mini Canteen', 'Highschool Canteen'],
     ),
     const CanteenMenuItem(
       id: 'bev-c2-lemon',
@@ -263,7 +263,7 @@ class CampusMenuCatalog {
       price: 15.00,
       unitDescription: '500ml purified cold bottle',
       imageUrl: 'https://images.unsplash.com/photo-1559839914-1b39868735df?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['Main Canteen', 'Mini Canteen', 'High School Canteen'],
+      availableCanteens: ['Main Canteen', 'Mini Canteen', 'Highschool Canteen'],
     ),
     const CanteenMenuItem(
       id: 'bev-water-1l',
@@ -293,7 +293,7 @@ class CampusMenuCatalog {
       price: 15.00,
       unitDescription: '16oz sweet refreshing iced tea with ice',
       imageUrl: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['Main Canteen', 'Mini Canteen', 'High School Canteen'],
+      availableCanteens: ['Main Canteen', 'Mini Canteen', 'Highschool Canteen'],
     ),
     const CanteenMenuItem(
       id: 'bev-coffee',
@@ -313,7 +313,7 @@ class CampusMenuCatalog {
       price: 30.00,
       unitDescription: 'Cold chocolate milk with extra Milo powder',
       imageUrl: 'https://images.unsplash.com/photo-1541658016709-82535e94bc69?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['Mini Canteen', 'High School Canteen'],
+      availableCanteens: ['Mini Canteen', 'Highschool Canteen'],
     ),
     const CanteenMenuItem(
       id: 'bev-gulaman',
@@ -328,22 +328,22 @@ class CampusMenuCatalog {
     const CanteenMenuItem(
       id: 'bev-juice',
       name: 'Orange Juice Box',
-      canteen: 'High School Canteen',
+      canteen: 'Highschool Canteen',
       category: 'Beverages',
       price: 18.00,
       unitDescription: '250ml tetra pack with straw',
       imageUrl: 'https://images.unsplash.com/photo-1613478223719-2ab802602423?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['High School Canteen', 'Main Canteen'],
+      availableCanteens: ['Highschool Canteen', 'Main Canteen'],
     ),
     const CanteenMenuItem(
       id: 'bev-chuckie',
       name: 'Nestle Chuckie Box',
-      canteen: 'High School Canteen',
+      canteen: 'Highschool Canteen',
       category: 'Beverages',
       price: 25.00,
       unitDescription: '250ml chilled chocolate box',
       imageUrl: 'https://images.unsplash.com/photo-1541658016709-82535e94bc69?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['High School Canteen', 'Mini Canteen'],
+      availableCanteens: ['Highschool Canteen', 'Mini Canteen'],
     ),
 
     // -------------------------------------------------------------------------
@@ -357,7 +357,7 @@ class CampusMenuCatalog {
       price: 15.00,
       unitDescription: '15 pesos/fruit fresh sweet banana',
       imageUrl: 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['Main Canteen', 'Mini Canteen', 'High School Canteen'],
+      availableCanteens: ['Main Canteen', 'Mini Canteen', 'Highschool Canteen'],
     ),
     const CanteenMenuItem(
       id: 'des-turon',
@@ -402,12 +402,12 @@ class CampusMenuCatalog {
     const CanteenMenuItem(
       id: 'des-cookies',
       name: 'Chocolate Chip Cookies (3 pcs)',
-      canteen: 'High School Canteen',
+      canteen: 'Highschool Canteen',
       category: 'Desserts',
       price: 20.00,
       unitDescription: 'Freshly baked chocolate cookies',
       imageUrl: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['High School Canteen', 'Main Canteen'],
+      availableCanteens: ['Highschool Canteen', 'Main Canteen'],
     ),
     const CanteenMenuItem(
       id: 'des-mango-float',
@@ -437,7 +437,7 @@ class CampusMenuCatalog {
       price: 35.00,
       unitDescription: 'Drumstick cone with chocolate tip',
       imageUrl: 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['Main Canteen', 'Mini Canteen', 'High School Canteen'],
+      availableCanteens: ['Main Canteen', 'Mini Canteen', 'Highschool Canteen'],
     ),
     const CanteenMenuItem(
       id: 'des-donut',
@@ -447,7 +447,7 @@ class CampusMenuCatalog {
       price: 25.00,
       unitDescription: 'Soft ring donut with thick chocolate glaze',
       imageUrl: 'https://images.unsplash.com/photo-1527515862127-a4fc05baf7a5?auto=format&fit=crop&w=400&q=80',
-      availableCanteens: ['Mini Canteen', 'High School Canteen'],
+      availableCanteens: ['Mini Canteen', 'Highschool Canteen'],
     ),
     const CanteenMenuItem(
       id: 'des-pichi',
@@ -461,21 +461,31 @@ class CampusMenuCatalog {
     ),
   ];
 
+  static bool matchesCategory(String itemCategory, String filterCategory) {
+    final catLower = filterCategory.trim().toLowerCase();
+    final itemCat = itemCategory.trim().toLowerCase();
+    if (catLower.isEmpty ||
+        catLower == 'all' ||
+        catLower.contains('campus canteen menu') ||
+        catLower.contains('all menu')) {
+      return true;
+    }
+    if (catLower.contains('food') || catLower.contains('snack')) {
+      return itemCat.contains('food');
+    }
+    if (catLower.contains('drink') || catLower.contains('bev')) {
+      return itemCat.contains('beverage');
+    }
+    if (catLower.contains('dessert')) {
+      return itemCat.contains('dessert');
+    }
+    return itemCat == catLower;
+  }
+
   static List<CanteenMenuItem> getItemsByCategory(String categoryName) {
-    final catLower = categoryName.toLowerCase();
-    return allItems.where((item) {
-      final itemCat = item.category.toLowerCase();
-      if (catLower.contains('food') || catLower.contains('snack')) {
-        return itemCat.contains('food');
-      }
-      if (catLower.contains('drink') || catLower.contains('bev')) {
-        return itemCat.contains('beverage');
-      }
-      if (catLower.contains('dessert')) {
-        return itemCat.contains('dessert');
-      }
-      return itemCat == catLower;
-    }).toList();
+    return allItems
+        .where((item) => matchesCategory(item.category, categoryName))
+        .toList();
   }
 
   static List<CanteenMenuItem> getItemsByCanteen(String canteenName) {

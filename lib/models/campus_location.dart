@@ -28,23 +28,17 @@ class CampusLocation {
   // ==========================================
   // OFFICIAL CANTEEN PICKUP LOCATIONS (EXACTLY 3)
   // ==========================================
-  static const String canteenMini = 'Mini Canteen';
   static const String canteenMain = 'Main Canteen';
-  static const String canteenHighSchool = 'High School Canteen';
+  static const String canteenHighSchool = 'Highschool Canteen';
+  static const String canteenMini = 'Mini Canteen';
 
   static const List<String> officialCanteens = [
-    canteenMini,
     canteenMain,
     canteenHighSchool,
+    canteenMini,
   ];
 
   static const List<CampusLocation> defaultPickups = [
-    CampusLocation(
-      id: 'pk-mini',
-      name: canteenMini,
-      category: 'pickup',
-      buildingCode: 'MINI',
-    ),
     CampusLocation(
       id: 'pk-main',
       name: canteenMain,
@@ -56,6 +50,12 @@ class CampusLocation {
       name: canteenHighSchool,
       category: 'pickup',
       buildingCode: 'HSC',
+    ),
+    CampusLocation(
+      id: 'pk-mini',
+      name: canteenMini,
+      category: 'pickup',
+      buildingCode: 'MINI',
     ),
   ];
 
@@ -153,57 +153,57 @@ class CampusLocation {
     'Backgate Annex': {
       'Mini Canteen': 240.53,
       'Main Canteen': 141.30,
-      'High School Canteen': 61.66,
+      'Highschool Canteen': 61.66,
     },
     'GLE': {
       'Mini Canteen': 164.55,
       'Main Canteen': 104.26,
-      'High School Canteen': 187.23,
+      'Highschool Canteen': 187.23,
     },
     'G-LECROOM': {
       'Mini Canteen': 129.87,
       'Main Canteen': 94.43,
-      'High School Canteen': 109.98,
+      'Highschool Canteen': 109.98,
     },
     'NGE': {
       'Mini Canteen': 98.15,
       'Main Canteen': 206.28,
-      'High School Canteen': 267.64,
+      'Highschool Canteen': 267.64,
     },
     'Allied': {
       'Mini Canteen': 50.19,
       'Main Canteen': 183.27,
-      'High School Canteen': 198.63,
+      'Highschool Canteen': 198.63,
     },
     'SAL': {
       'Mini Canteen': 160.91,
       'Main Canteen': 96.03,
-      'High School Canteen': 79.73,
+      'Highschool Canteen': 79.73,
     },
     'ACAD': {
       'Mini Canteen': 194.27,
       'Main Canteen': 68.04,
-      'High School Canteen': 150.93,
+      'Highschool Canteen': 150.93,
     },
     'RTL': {
       'Mini Canteen': 69.61,
       'Main Canteen': 153.93,
-      'High School Canteen': 200.92,
+      'Highschool Canteen': 200.92,
     },
     'Physics Lab': {
       'Mini Canteen': 126.04,
       'Main Canteen': 88.39,
-      'High School Canteen': 125.51,
+      'Highschool Canteen': 125.51,
     },
     'Gymnasium': {
       'Mini Canteen': 239.23,
       'Main Canteen': 110.17,
-      'High School Canteen': 38.37,
+      'Highschool Canteen': 38.37,
     },
     'Covered Courts': {
       'Mini Canteen': 190.01,
       'Main Canteen': 38.26,
-      'High School Canteen': 46.48,
+      'Highschool Canteen': 46.48,
     },
   };
 

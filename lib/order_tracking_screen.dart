@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'models/campus_location.dart';
 import 'models/delivery_order.dart';
+import 'models/order_message.dart';
 import 'models/problem_report.dart';
+import 'services/chat_read_tracker.dart';
 import 'services/supabase_service.dart';
 import 'mock_data.dart';
 import 'widgets/order_chat_sheet.dart';
@@ -32,6 +34,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   ];
 
   final _otpInputController = TextEditingController();
+  late final Stream<List<Map<String, dynamic>>> _orderStream;
+  late final Stream<List<OrderMessage>> _messagesStream;
   Map<String, dynamic> _fallbackOrder = {};
   bool _hasFallbackInMemory = false;
   bool _isBusy = false;
@@ -57,6 +61,25 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         'verification_code': '0000',
       };
     }
+
+    final isMockOrder = widget.orderId.startsWith('ORD-');
+    _orderStream = isMockOrder
+        ? Stream.value([_fallbackOrder])
+        : SupabaseService().streamOrder(widget.orderId);
+    _messagesStream = SupabaseService().streamOrderMessages(widget.orderId);
+  }
+
+  Future<void> _openChat(DeliveryOrder order, List<OrderMessage> messages) async {
+    ChatReadTracker.instance.markRead(
+      order.id,
+      isRunner: widget.isRunner,
+      upTo: ChatReadTracker.instance.latestTimestamp(messages),
+    );
+    await OrderChatSheet.show(
+      context,
+      order: order,
+      isRunner: widget.isRunner,
+    );
   }
 
   @override
@@ -297,9 +320,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     final isSignedInOnline = !isMockOrder && SupabaseService().isAuthenticated;
 
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: isMockOrder
-          ? Stream.value([_fallbackOrder])
-          : SupabaseService().streamOrder(widget.orderId),
+      stream: _orderStream,
       builder: (context, snapshot) {
         if (isSignedInOnline &&
             !_hasFallbackInMemory &&
@@ -328,43 +349,66 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         final currentStepIndex = _flowSteps.indexOf(effectiveStatus);
         final isArrived = effectiveStatus == 'arrived';
 
-        return Scaffold(
-          backgroundColor: Colors.white,
-          appBar: AppBar(
-            title: Text(
-              'Order ${order.id.length > 8 ? order.id.substring(0, 8) : order.id}',
-              style: const TextStyle(color: Colors.white, fontSize: 18),
-            ),
-            backgroundColor: primaryMaroon,
-            iconTheme: const IconThemeData(color: Colors.white),
-            actions: [
-              if (!isTerminated)
-                IconButton(
-                  tooltip: widget.isRunner ? 'Chat with Customer' : 'Chat with Runner',
-                  icon: const Icon(Icons.chat_bubble_outline),
-                  onPressed: effectiveStatus == 'pending'
-                      ? () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Direct chat activates once a runner claims the request.',
-                              ),
-                            ),
-                          );
-                        }
-                      : () => OrderChatSheet.show(
-                            context,
-                            order: order,
-                            isRunner: widget.isRunner,
+        return StreamBuilder<List<OrderMessage>>(
+          stream: _messagesStream,
+          builder: (context, msgSnapshot) {
+            final messages = msgSnapshot.data ?? const <OrderMessage>[];
+            return ListenableBuilder(
+              listenable: ChatReadTracker.instance,
+              builder: (context, _) {
+                final unreadCount = (isTerminated || effectiveStatus == 'pending')
+                    ? 0
+                    : ChatReadTracker.instance.countUnread(
+                        order.id,
+                        messages,
+                        isRunner: widget.isRunner,
+                      );
+                final latestIncoming = unreadCount > 0
+                    ? ChatReadTracker.instance.latestIncomingMessage(
+                        messages,
+                        isRunner: widget.isRunner,
+                      )
+                    : null;
+
+                return Scaffold(
+                  backgroundColor: Colors.white,
+                  appBar: AppBar(
+                    title: Text(
+                      'Order ${order.id.length > 8 ? order.id.substring(0, 8) : order.id}',
+                      style: const TextStyle(color: Colors.white, fontSize: 18),
+                    ),
+                    backgroundColor: primaryMaroon,
+                    iconTheme: const IconThemeData(color: Colors.white),
+                    actions: [
+                      if (!isTerminated)
+                        IconButton(
+                          tooltip: widget.isRunner ? 'Chat with Customer' : 'Chat with Runner',
+                          icon: Badge(
+                            isLabelVisible: unreadCount > 0,
+                            backgroundColor: Colors.redAccent,
+                            textColor: Colors.white,
+                            label: Text(unreadCount > 9 ? '9+' : '$unreadCount'),
+                            child: const Icon(Icons.chat_bubble_outline),
                           ),
-                ),
-              IconButton(
-                tooltip: 'Report a problem',
-                icon: const Icon(Icons.report_problem_outlined),
-                onPressed: _openReportProblemDialog,
-              ),
-            ],
-          ),
+                          onPressed: effectiveStatus == 'pending'
+                              ? () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Direct chat activates once a runner claims the request.',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              : () => _openChat(order, messages),
+                        ),
+                      IconButton(
+                        tooltip: 'Report a problem',
+                        icon: const Icon(Icons.report_problem_outlined),
+                        onPressed: _openReportProblemDialog,
+                      ),
+                    ],
+                  ),
           body: SafeArea(
             child: Center(
               child: ConstrainedBox(
@@ -521,19 +565,31 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: primaryMaroon.withValues(alpha: 0.05),
+                              color: unreadCount > 0
+                                  ? Colors.red.withValues(alpha: 0.06)
+                                  : primaryMaroon.withValues(alpha: 0.05),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: primaryMaroon.withValues(alpha: 0.2)),
+                              border: Border.all(
+                                color: unreadCount > 0
+                                    ? Colors.redAccent.withValues(alpha: 0.55)
+                                    : primaryMaroon.withValues(alpha: 0.2),
+                                width: unreadCount > 0 ? 1.4 : 1.0,
+                              ),
                             ),
                             child: Row(
                               children: [
-                                CircleAvatar(
-                                  radius: 20,
-                                  backgroundColor: primaryMaroon,
-                                  child: Icon(
-                                    widget.isRunner ? Icons.person : Icons.directions_run,
-                                    color: Colors.white,
-                                    size: 20,
+                                Badge(
+                                  isLabelVisible: unreadCount > 0,
+                                  backgroundColor: Colors.red,
+                                  smallSize: 10,
+                                  child: CircleAvatar(
+                                    radius: 20,
+                                    backgroundColor: primaryMaroon,
+                                    child: Icon(
+                                      widget.isRunner ? Icons.person : Icons.directions_run,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -551,29 +607,44 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        widget.isRunner
-                                            ? 'Coordinate item substitutions & arrival.'
-                                            : 'Send instructions or check in with runner.',
-                                        style: const TextStyle(fontSize: 11.5, color: Colors.black87),
+                                        latestIncoming != null
+                                            ? 'New: ${latestIncoming.message}'
+                                            : (widget.isRunner
+                                                ? 'Coordinate item substitutions & arrival.'
+                                                : 'Send instructions or check in with runner.'),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          fontWeight: latestIncoming != null
+                                              ? FontWeight.w600
+                                              : FontWeight.normal,
+                                          color: latestIncoming != null
+                                              ? primaryMaroon
+                                              : Colors.black87,
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                ElevatedButton.icon(
-                                  onPressed: () => OrderChatSheet.show(
-                                    context,
-                                    order: order,
-                                    isRunner: widget.isRunner,
-                                  ),
-                                  icon: const Icon(Icons.chat, size: 14),
-                                  label: const Text('Chat'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: primaryMaroon,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                Badge(
+                                  isLabelVisible: unreadCount > 0,
+                                  backgroundColor: Colors.red,
+                                  textColor: Colors.white,
+                                  label: Text(unreadCount > 9 ? '9+' : '$unreadCount'),
+                                  offset: const Offset(-2, -4),
+                                  child: ElevatedButton.icon(
+                                    onPressed: () => _openChat(order, messages),
+                                    icon: const Icon(Icons.chat, size: 14),
+                                    label: const Text('Chat'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: primaryMaroon,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -733,6 +804,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               ),
             ),
           ),
+        );
+              },
+            );
+          },
         );
       },
     );

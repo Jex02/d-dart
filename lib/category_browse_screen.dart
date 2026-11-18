@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'cart_screen.dart';
 import 'data/campus_menu_catalog.dart';
+import 'models/campus_location.dart';
 import 'models/cart_item.dart';
 import 'services/cart_service.dart';
 import 'services/supabase_service.dart';
@@ -27,6 +28,7 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
   late List<CanteenMenuItem> _allItems;
   List<CanteenMenuItem> _filteredItems = [];
   String _selectedCanteenFilter = 'All';
+  String _selectedCategoryFilter = 'All';
   final _searchController = TextEditingController();
 
   // Stores currently selected canteen for each item id
@@ -35,13 +37,17 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
   // Stores quantity for each item id
   final Map<String, int> _itemQuantities = {};
 
+  bool get _isFullMenuBrowse {
+    final lower = widget.categoryTitle.toLowerCase();
+    return lower.contains('search') ||
+        lower.contains('all') ||
+        lower.contains('campus canteen menu');
+  }
+
   @override
   void initState() {
     super.initState();
-    final isGeneralSearch = widget.categoryTitle.toLowerCase().contains('search') ||
-        widget.categoryTitle.toLowerCase().contains('all');
-
-    if (isGeneralSearch) {
+    if (_isFullMenuBrowse) {
       _allItems = CampusMenuCatalog.allItems;
     } else {
       _allItems = CampusMenuCatalog.getItemsByCategory(widget.categoryTitle);
@@ -71,15 +77,12 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
       final dbItems = await SupabaseService().fetchCanteenMenuItems();
       if (!mounted || dbItems.isEmpty) return;
 
-      final isGeneralSearch = widget.categoryTitle.toLowerCase().contains('search') ||
-          widget.categoryTitle.toLowerCase().contains('all');
-
       setState(() {
-        if (isGeneralSearch) {
+        if (_isFullMenuBrowse) {
           _allItems = dbItems;
         } else {
           _allItems = dbItems
-              .where((i) => i.category.toLowerCase() == widget.categoryTitle.toLowerCase())
+              .where((i) => CampusMenuCatalog.matchesCategory(i.category, widget.categoryTitle))
               .toList();
         }
         for (final item in _allItems) {
@@ -113,7 +116,11 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
             item.canteensList.any((c) =>
                 c.toLowerCase() == _selectedCanteenFilter.toLowerCase());
 
-        return matchesQuery && matchesCanteen;
+        final matchesCategory = !_isFullMenuBrowse ||
+            _selectedCategoryFilter == 'All' ||
+            CampusMenuCatalog.matchesCategory(item.category, _selectedCategoryFilter);
+
+        return matchesQuery && matchesCanteen && matchesCategory;
       }).toList();
     });
   }
@@ -245,9 +252,7 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
                       child: Row(
                         children: [
                           'All',
-                          'Main Canteen',
-                          'College Canteen',
-                          'Elementary Canteen'
+                          ...CampusLocation.officialCanteens,
                         ].map((canteen) {
                           final isSelected = _selectedCanteenFilter == canteen;
                           return Padding(
@@ -275,6 +280,42 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
                         }).toList(),
                       ),
                     ),
+                    if (_isFullMenuBrowse) ...[
+                      const SizedBox(height: 6),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            'All',
+                            ...CampusMenuCatalog.categories,
+                          ].map((cat) {
+                            final isSelected = _selectedCategoryFilter == cat;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                label: Text(
+                                  cat == 'All' ? 'All Categories' : cat,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    color: isSelected ? primaryMaroon : Colors.black87,
+                                  ),
+                                ),
+                                selected: isSelected,
+                                selectedColor: primaryMaroon.withValues(alpha: 0.14),
+                                backgroundColor: Colors.grey.shade100,
+                                onSelected: (selected) {
+                                  if (selected) {
+                                    setState(() => _selectedCategoryFilter = cat);
+                                    _applyFilters();
+                                  }
+                                },
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

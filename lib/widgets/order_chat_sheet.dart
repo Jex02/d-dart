@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/delivery_order.dart';
 import '../models/order_message.dart';
+import '../services/chat_read_tracker.dart';
 import '../services/supabase_service.dart';
 
 class OrderChatSheet extends StatefulWidget {
@@ -46,6 +47,12 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
   void initState() {
     super.initState();
     _messagesStream = SupabaseService().streamOrderMessages(widget.order.id);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ChatReadTracker.instance.markRead(
+        widget.order.id,
+        isRunner: widget.isRunner,
+      );
+    });
   }
 
   void _retryStream() {
@@ -100,12 +107,45 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
     setState(() => _isSending = true);
 
     try {
-      final role = widget.isRunner ? 'runner' : 'customer';
-      final senderName = widget.isRunner
-          ? (SupabaseService().cachedProfile?.fullName ?? 'Runner')
-          : (SupabaseService().cachedProfile?.fullName ?? 'Customer');
+      final service = SupabaseService();
+      final isOnlineOrder =
+          !widget.order.id.startsWith('ORD-') && service.isAuthenticated;
 
-      await SupabaseService().sendOrderMessage(
+      if (isOnlineOrder) {
+        final currentUid = service.currentUser?.id;
+        final isOrderCustomer =
+            currentUid != null && widget.order.customerId == currentUid;
+        final isOrderRunner =
+            currentUid != null && widget.order.runnerId == currentUid;
+
+        if (widget.isRunner && !isOrderRunner) {
+          throw Exception(
+            isOrderCustomer
+                ? 'Your browser session switched to the Customer account in another tab. Use a separate browser or Incognito window to chat as both Customer and Runner.'
+                : 'Your active login session does not match the assigned Runner for this order. Please refresh or sign back in.',
+          );
+        }
+        if (!widget.isRunner && !isOrderCustomer) {
+          throw Exception(
+            isOrderRunner
+                ? 'Your browser session switched to the Runner account in another tab. Use a separate browser or Incognito window to chat as both Customer and Runner.'
+                : 'Your active login session does not match the Customer for this order. Please refresh or sign back in.',
+          );
+        }
+      }
+
+      final role = widget.isRunner ? 'runner' : 'customer';
+      final currentUid = service.currentUser?.id;
+      final cachedMatches =
+          service.cachedProfile != null && service.cachedProfile!.id == currentUid;
+      final metaName = service.currentUser?.userMetadata?['full_name']?.toString().trim();
+      final senderName = cachedMatches && service.cachedProfile!.fullName.isNotEmpty
+          ? service.cachedProfile!.fullName
+          : (metaName != null && metaName.isNotEmpty
+              ? metaName
+              : (widget.isRunner ? 'Runner' : 'Customer'));
+
+      await service.sendOrderMessage(
         orderId: widget.order.id,
         message: text,
         senderRole: role,
@@ -120,10 +160,11 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
         );
       }
       if (mounted) {
+        final msg = e.toString().replaceFirst('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: Colors.redAccent,
-            content: Text('Could not send message: $e'),
+            content: Text('Could not send message: $msg'),
           ),
         );
       }
@@ -343,6 +384,16 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
                 }
 
                 final messages = snapshot.data ?? [];
+
+                if (messages.isNotEmpty) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    ChatReadTracker.instance.markRead(
+                      widget.order.id,
+                      isRunner: widget.isRunner,
+                      upTo: messages.last.createdAt,
+                    );
+                  });
+                }
 
                 if (messages.isEmpty) {
                   return Center(

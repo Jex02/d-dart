@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'reset_password_page.dart';
 import 'services/app_router.dart';
 import 'services/supabase_service.dart';
 import 'signup.dart';
@@ -9,7 +10,9 @@ const Color panelColor = Color(0xFF8F1F0D);
 const Color accentColor = Color(0xFFD4AF37);
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({super.key, this.initialEmail});
+
+  final String? initialEmail;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -26,6 +29,9 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialEmail != null && widget.initialEmail!.isNotEmpty) {
+      _emailController.text = widget.initialEmail!;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
@@ -94,57 +100,13 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _handleForgotPassword() async {
-    final resetEmailCtrl = TextEditingController(text: _emailController.text.trim());
-    final submitted = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Reset Password'),
-        content: TextField(
-          controller: resetEmailCtrl,
-          keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(
-            labelText: 'Account Email',
-            hintText: 'you@cit.edu',
-            border: OutlineInputBorder(),
-          ),
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ResetPasswordPage(
+          initialEmail: _emailController.text.trim(),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, resetEmailCtrl.text.trim()),
-            child: const Text('Send Reset Link'),
-          ),
-        ],
       ),
     );
-    resetEmailCtrl.dispose();
-
-    if (submitted == null || submitted.isEmpty) return;
-    final err = Validators.validateEmail(submitted);
-    if (err != null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
-      }
-      return;
-    }
-
-    try {
-      await SupabaseService().resetPassword(submitted);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Password reset link sent to $submitted')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Reset failed: $e'), backgroundColor: Colors.redAccent),
-        );
-      }
-    }
   }
 
   @override

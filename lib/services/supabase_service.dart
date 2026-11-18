@@ -294,8 +294,30 @@ class SupabaseService {
     return res;
   }
 
-  Future<void> resetPassword(String email) async {
-    await client.auth.resetPasswordForEmail(email.trim());
+  Future<void> resetPassword(String email, {String? redirectTo}) async {
+    final effectiveRedirect =
+        redirectTo ?? (kIsWeb ? Uri.base.origin : null);
+    await client.auth.resetPasswordForEmail(
+      email.trim(),
+      redirectTo: effectiveRedirect,
+    );
+  }
+
+  Future<AuthResponse> verifyRecoveryOtp({
+    required String email,
+    required String token,
+  }) async {
+    return await client.auth.verifyOTP(
+      email: email.trim(),
+      token: token.trim(),
+      type: OtpType.recovery,
+    );
+  }
+
+  Future<UserResponse> updatePassword(String newPassword) async {
+    return await client.auth.updateUser(
+      UserAttributes(password: newPassword),
+    );
   }
 
   Future<void> signOut() async {
@@ -329,7 +351,13 @@ class SupabaseService {
 
   Future<UserProfile?> fetchUserProfileModel() async {
     final user = currentUser;
-    if (user == null) return null;
+    if (user == null) {
+      cachedProfile = null;
+      return null;
+    }
+    if (cachedProfile != null && cachedProfile!.id != user.id) {
+      cachedProfile = null;
+    }
 
     final map = await fetchUserProfile();
     if (map != null) {
@@ -943,11 +971,14 @@ class SupabaseService {
 
     final senderId = currentUser?.id;
     final metaName = currentUser?.userMetadata?['full_name']?.toString().trim();
+    final validCachedName =
+        (cachedProfile != null && cachedProfile!.id == senderId && cachedProfile!.fullName.isNotEmpty)
+            ? cachedProfile!.fullName
+            : null;
     final effectiveSenderName = (senderName != null && senderName.trim().isNotEmpty)
         ? senderName.trim()
-        : (cachedProfile?.fullName.isNotEmpty == true
-            ? cachedProfile!.fullName
-            : (metaName != null && metaName.isNotEmpty
+        : (validCachedName ??
+            (metaName != null && metaName.isNotEmpty
                 ? metaName
                 : (senderRole == 'runner' ? 'Runner' : 'Customer')));
 

@@ -12,9 +12,9 @@ void main() {
       expect(
         CampusLocation.officialCanteens,
         containsAll([
-          'Mini Canteen',
           'Main Canteen',
-          'High School Canteen',
+          'Highschool Canteen',
+          'Mini Canteen',
         ]),
       );
       expect(CampusLocation.defaultPickups.length, 3);
