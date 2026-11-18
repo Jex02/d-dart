@@ -35,6 +35,7 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
   String? _idPhotoUrl;
   String _displayName = '';
   ScaffoldMessengerState? _messenger;
+  Timer? _snackTimer;
 
   @override
   void didChangeDependencies() {
@@ -126,16 +127,15 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
         return matchesCat && matchesCanteen;
       }).toList();
 
-      if (matched.isNotEmpty) {
-        setState(() {
-          _items = matched;
-        });
-      }
+      setState(() {
+        _items = matched;
+      });
     } catch (_) {}
   }
 
   @override
   void dispose() {
+    _snackTimer?.cancel();
     _messenger?.clearSnackBars();
     super.dispose();
   }
@@ -279,9 +279,11 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
                     height: 48,
                     child: ElevatedButton(
                       onPressed: () {
-                        CartService.instance.addItem(item, quantity: quantity);
+                        final scopedItem = item.copyWith(canteen: widget.canteenName);
+                        CartService.instance.addItem(scopedItem, quantity: quantity);
                         Navigator.pop(ctx);
                         final messenger = ScaffoldMessenger.of(context);
+                        _snackTimer?.cancel();
                         messenger.clearSnackBars();
                         messenger.showSnackBar(
                           SnackBar(
@@ -310,7 +312,7 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
                         );
 
                         // Hard timer guarantee that forcibly clears the banner after 2s on all platforms/browsers
-                        Timer(const Duration(milliseconds: 2000), () {
+                        _snackTimer = Timer(const Duration(milliseconds: 2000), () {
                           try {
                             messenger.clearSnackBars();
                           } catch (_) {}

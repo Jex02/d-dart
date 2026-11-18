@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'models/class_schedule.dart';
+import 'services/app_router.dart';
 import 'services/gemini_service.dart';
 import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
@@ -63,6 +64,7 @@ class _SignupPageState extends State<SignupPage> {
       if (file == null) return;
 
       final bytes = await file.readAsBytes();
+      if (!mounted) return;
       setState(() {
         if (isCor) {
           _corImageBytes = bytes;
@@ -140,6 +142,7 @@ class _SignupPageState extends State<SignupPage> {
       List<ClassSession> confirmedSessions = [];
 
       if (_accountType == 'student') {
+        if (!mounted) return;
         setState(() {
           _loadingMessage = 'Verifying Student ID with Gemini AI...';
         });
@@ -159,7 +162,7 @@ class _SignupPageState extends State<SignupPage> {
                   children: [
                     Icon(Icons.badge_outlined, color: Colors.redAccent),
                     SizedBox(width: 8),
-                    Text('Student ID Verification Failed'),
+                    Expanded(child: Text('Student ID Verification Failed')),
                   ],
                 ),
                 content: Column(
@@ -186,6 +189,7 @@ class _SignupPageState extends State<SignupPage> {
           return;
         }
 
+        if (!mounted) return;
         setState(() {
           _loadingMessage = 'Analyzing COR with Gemini AI...';
         });
@@ -205,7 +209,7 @@ class _SignupPageState extends State<SignupPage> {
                   children: [
                     Icon(Icons.gpp_bad, color: Colors.redAccent),
                     SizedBox(width: 8),
-                    Text('COR Verification Failed'),
+                    Expanded(child: Text('COR Verification Failed')),
                   ],
                 ),
                 content: Column(
@@ -322,11 +326,21 @@ class _SignupPageState extends State<SignupPage> {
             ),
             actions: [
               TextButton(
-                onPressed: () {
+                onPressed: () async {
                   Navigator.of(ctx).pop();
-                  _returnToLogin();
+                  if (!needsConfirmation) {
+                    final target = await AppRouter.resolveHomeForProfile();
+                    if (mounted) {
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => target),
+                        (_) => false,
+                      );
+                    }
+                  } else {
+                    _returnToLogin();
+                  }
                 },
-                child: const Text('Proceed to Login'),
+                child: Text(needsConfirmation ? 'Proceed to Login' : 'Continue'),
               ),
             ],
           ),
@@ -995,7 +1009,7 @@ class _SignupTexturePainter extends CustomPainter {
     final random = math.Random(41);
     final darkSpecks = <Offset>[];
     final lightSpecks = <Offset>[];
-    final speckCount = (size.width * size.height / 14).round();
+    final speckCount = (size.width * size.height / 180).round().clamp(400, 2200);
 
     for (var i = 0; i < speckCount; i++) {
       final point = Offset(

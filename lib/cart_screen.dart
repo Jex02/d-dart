@@ -24,7 +24,6 @@ class CartScreen extends StatefulWidget {
 
 class _CartScreenState extends State<CartScreen> {
   static const Color primaryMaroon = Color(0xFF6B1D16);
-  static const Color cardBgColor = Color(0xFFF6F6F6);
   static const Color buttonPeachBg = Color(0xFFEAD9D7);
 
   List<String> _dropoffLocations =
@@ -78,7 +77,8 @@ class _CartScreenState extends State<CartScreen> {
                 color: DDartTheme.card(ctx),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               ),
-              child: Column(
+              child: SingleChildScrollView(
+                child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -336,8 +336,9 @@ class _CartScreenState extends State<CartScreen> {
                               onPressed: (_isSubmitting || hasMissingDistance)
                                   ? null
                                   : () async {
+                                      final notes = notesController.text.trim();
                                       Navigator.pop(ctx);
-                                      await _placeOrder(notesController.text.trim());
+                                      await _placeOrder(notes);
                                     },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: primaryMaroon,
@@ -370,11 +371,12 @@ class _CartScreenState extends State<CartScreen> {
                   ),
                 ],
               ),
+              ),
             );
           },
         );
       },
-    );
+    ).whenComplete(notesController.dispose);
   }
 
   Future<void> _placeOrder(String instructions) async {
@@ -383,7 +385,13 @@ class _CartScreenState extends State<CartScreen> {
     setState(() => _isSubmitting = true);
 
     final description = CartService.instance.generateOrderDescription();
+    final activeCanteens = CartService.instance.activeCanteens.toList();
     final pickup = CartService.instance.primaryCanteen;
+    final effectiveInstructions = activeCanteens.length > 1
+        ? (instructions.isNotEmpty
+            ? 'Multi-canteen pickup (${activeCanteens.join(', ')}). $instructions'
+            : 'Multi-canteen pickup (${activeCanteens.join(', ')})')
+        : instructions;
     final estimatedPrice = CartService.instance.subtotal;
     final deliveryFee =
         CartService.instance.calculateDeliveryFeeTo(_selectedDropoff) ??
@@ -398,7 +406,7 @@ class _CartScreenState extends State<CartScreen> {
         description: description,
         price: estimatedPrice,
         deliveryFee: deliveryFee,
-        instructions: instructions,
+        instructions: effectiveInstructions,
         expiresIn: Duration(minutes: config.requestExpirationMinutes),
       );
       createdId = inserted['id'].toString();
@@ -412,7 +420,7 @@ class _CartScreenState extends State<CartScreen> {
         description: description,
         price: estimatedPrice,
         deliveryFee: deliveryFee,
-        instructions: instructions,
+        instructions: effectiveInstructions,
         expiresIn: Duration(minutes: config.requestExpirationMinutes),
       );
     } catch (_) {
@@ -422,7 +430,7 @@ class _CartScreenState extends State<CartScreen> {
         description: description,
         price: estimatedPrice,
         deliveryFee: deliveryFee,
-        instructions: instructions,
+        instructions: effectiveInstructions,
         expiresIn: Duration(minutes: config.requestExpirationMinutes),
       );
       createdId = fallback['id'].toString();
@@ -442,15 +450,17 @@ class _CartScreenState extends State<CartScreen> {
         ),
       );
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => OrderTrackingScreen(
-            orderId: createdId,
-            isRunner: false,
-          ),
+      final route = MaterialPageRoute(
+        builder: (_) => OrderTrackingScreen(
+          orderId: createdId,
+          isRunner: false,
         ),
       );
+      if (widget.isEmbeddedTab) {
+        Navigator.push(context, route);
+      } else {
+        Navigator.pushReplacement(context, route);
+      }
     }
   }
 

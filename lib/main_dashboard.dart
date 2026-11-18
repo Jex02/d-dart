@@ -33,6 +33,7 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 
   Future<void> _syncAccountState() async {
+    if (!mounted) return;
     setState(() => _isSyncing = true);
     await DutyLockService.syncFromSupabase();
     final profile = await SupabaseService().fetchUserProfileModel();

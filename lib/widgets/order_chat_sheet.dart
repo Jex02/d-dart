@@ -48,6 +48,7 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
   late Stream<List<OrderMessage>> _messagesStream;
   OrderCounterpartInfo? _counterpart;
   bool _isSending = false;
+  int _lastMessageCount = 0;
 
   @override
   void initState() {
@@ -100,7 +101,7 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
               info.studentId.isNotEmpty
                   ? '$roleLabel  •  ID: ${info.studentId}'
                   : roleLabel,
-              style: const TextStyle(fontSize: 12.5, color: Colors.black54),
+              style: TextStyle(fontSize: 12.5, color: DDartTheme.textSecondary(ctx)),
             ),
             const SizedBox(height: 12),
             if (info.idPhotoUrl != null && info.idPhotoUrl!.isNotEmpty)
@@ -120,7 +121,7 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: DDartTheme.cardSubtle(ctx),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Column(
@@ -342,10 +343,10 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
                             child: Text(
                               _counterpart?.displayName ?? 'Chat with $otherRoleLabel',
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF1E1E1E),
+                                color: DDartTheme.textPrimary(context),
                               ),
                             ),
                           ),
@@ -356,15 +357,15 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: primaryMaroon.withValues(alpha: 0.1),
+                              color: DDartTheme.maroonTint(context),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
                               '#$shortOrderId',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
-                                color: primaryMaroon,
+                                color: DDartTheme.accentText(context),
                               ),
                             ),
                           ),
@@ -387,7 +388,7 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: Colors.grey.shade700,
+                              color: DDartTheme.textSecondary(context),
                             ),
                           ),
                         ],
@@ -397,7 +398,7 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
                 ),
                 IconButton(
                   tooltip: 'Close chat',
-                  icon: const Icon(Icons.close, color: Colors.black54),
+                  icon: Icon(Icons.close, color: DDartTheme.textSecondary(context)),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
@@ -408,24 +409,25 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Colors.grey.shade50,
+            color: DDartTheme.cardSubtle(context),
             child: Row(
               children: [
-                const Icon(Icons.storefront, size: 15, color: primaryMaroon),
+                Icon(Icons.storefront, size: 15, color: DDartTheme.accentText(context)),
                 const SizedBox(width: 4),
                 Flexible(
                   child: Text(
                     widget.order.pickupLocation,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
+                      color: DDartTheme.textPrimary(context),
                     ),
                   ),
                 ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 6),
-                  child: Icon(Icons.arrow_forward, size: 13, color: Colors.black38),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Icon(Icons.arrow_forward, size: 13, color: DDartTheme.textMuted(context)),
                 ),
                 const Icon(Icons.location_on, size: 15, color: goldAccent),
                 const SizedBox(width: 4),
@@ -433,9 +435,10 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
                   child: Text(
                     widget.order.dropoffLocation,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
+                      color: DDartTheme.textPrimary(context),
                     ),
                   ),
                 ),
@@ -546,7 +549,10 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
                   );
                 }
 
-                _scrollToBottom();
+                if (messages.length > _lastMessageCount) {
+                  _lastMessageCount = messages.length;
+                  _scrollToBottom();
+                }
 
                 return ListView.builder(
                   controller: _scrollController,
@@ -575,7 +581,7 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _quickChips.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (context, i) {
                 final chip = _quickChips[i];
                 return ActionChip(

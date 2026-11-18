@@ -194,7 +194,7 @@ class _CanteenMenuManagerBodyState extends State<CanteenMenuManagerBody> {
                 maxHeight: 1024,
                 imageQuality: 80,
               );
-              if (picked == null) return;
+              if (picked == null || !ctx.mounted) return;
               setDialogState(() {
                 isUploadingPhoto = true;
                 formError = null;
@@ -205,11 +205,13 @@ class _CanteenMenuManagerBodyState extends State<CanteenMenuManagerBody> {
                 fileName: picked.name,
                 bytes: bytes,
               );
+              if (!ctx.mounted) return;
               setDialogState(() {
                 imageUrlCtrl.text = publicUrl;
                 isUploadingPhoto = false;
               });
             } catch (e) {
+              if (!ctx.mounted) return;
               setDialogState(() {
                 isUploadingPhoto = false;
                 formError = 'Photo upload failed: $e';
@@ -470,6 +472,7 @@ class _CanteenMenuManagerBodyState extends State<CanteenMenuManagerBody> {
                           final upserted = await _service.upsertMenuItem(candidate);
                           if (ctx.mounted) Navigator.pop(ctx, upserted);
                         } catch (e) {
+                          if (!ctx.mounted) return;
                           setDialogState(() {
                             isSaving = false;
                             formError = 'Could not save item: $e';
@@ -495,7 +498,7 @@ class _CanteenMenuManagerBodyState extends State<CanteenMenuManagerBody> {
     descCtrl.dispose();
     imageUrlCtrl.dispose();
 
-    if (saved != null) {
+    if (saved != null && mounted) {
       await _loadMenuItems();
       _showSnack(
         existing == null
@@ -529,9 +532,10 @@ class _CanteenMenuManagerBodyState extends State<CanteenMenuManagerBody> {
         ],
       ),
     );
-    if (confirm != true) return;
+    if (confirm != true || !mounted) return;
     try {
       await _service.deleteMenuItem(item.id);
+      if (!mounted) return;
       await _loadMenuItems();
       _showSnack('Deleted "${item.name}".');
     } catch (e) {
@@ -542,6 +546,7 @@ class _CanteenMenuManagerBodyState extends State<CanteenMenuManagerBody> {
   Future<void> _toggleAvailability(CanteenMenuItem item, bool newVal) async {
     try {
       await _service.toggleMenuItemAvailability(item.id, newVal);
+      if (!mounted) return;
       setState(() {
         final idx = _items.indexWhere((i) => i.id == item.id);
         if (idx != -1) {

@@ -261,9 +261,14 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
     final isDark = DDartTheme.isDark(context);
     final accent = DDartTheme.accentText(context);
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       color: DDartTheme.cardSubtle(context),
-      child: Row(
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 8,
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           // Segmented button for Timetable vs List
           SegmentedButton<bool>(
@@ -300,7 +305,6 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
               }),
             ),
           ),
-          const Spacer(),
           if (!hasVerified)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -694,11 +698,11 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
         children: [
           OutlinedButton.icon(
             onPressed: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const CorUploadScreen()),
-              ).then((_) => widget.onScheduleUpdated?.call());
+              final nav = Navigator.of(context);
+              nav.pop();
+              nav
+                  .push(MaterialPageRoute(builder: (_) => const CorUploadScreen()))
+                  .then((_) => widget.onScheduleUpdated?.call());
             },
             icon: const Icon(Icons.upload_file, size: 16),
             label: Text(hasVerified ? 'Re-upload / Update COR' : 'Upload Verified COR'),

@@ -133,7 +133,7 @@ void main() {
       'verification_status': 'verified',
     });
     expect(promoted.isAdmin, isTrue);
-    expect(promoted.accountTypeLabel, 'Administrator');
+    expect(promoted.accountTypeLabel, 'Super Admin');
 
     // Simulated payload returned after demoteAdminToUser
     final demoted = UserProfile.fromJson({

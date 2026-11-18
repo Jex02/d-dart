@@ -5,9 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'constants/supabase_constants.dart';
 import 'get_started.dart';
+import 'login.dart';
 import 'reset_password_page.dart';
 import 'services/app_router.dart';
+import 'services/cart_service.dart';
 import 'services/chat_read_tracker.dart';
+import 'services/duty_lock_service.dart';
 import 'services/remember_me_service.dart';
 import 'services/supabase_service.dart';
 import 'services/theme_service.dart';
@@ -118,6 +121,8 @@ class _DDartAppState extends State<DDartApp> {
           if (data.event == AuthChangeEvent.signedOut) {
             _isPasswordRecoveryActive = false;
             SupabaseService().cachedProfile = null;
+            CartService.instance.clearCart();
+            DutyLockService.reset();
             ChatReadTracker.instance.clear();
           } else if (data.event == AuthChangeEvent.passwordRecovery) {
             _isPasswordRecoveryActive = true;
@@ -214,7 +219,13 @@ class _SessionBootstrapScreenState extends State<_SessionBootstrapScreen> {
   }
 
   Future<void> _routeUser() async {
-    final next = await AppRouter.resolveHomeForProfile();
+    Widget next;
+    try {
+      next = await AppRouter.resolveHomeForProfile();
+    } catch (e) {
+      debugPrint('Session bootstrap error: $e');
+      next = const LoginPage();
+    }
     if (!mounted || _isPasswordRecoveryActive) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => next),

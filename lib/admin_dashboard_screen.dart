@@ -47,10 +47,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   String? _selectedAssignedCanteen; // null => Full Super Admin; otherwise specific canteen
   bool _creatingCoAdmin = false;
   bool _obscureCoAdminPassword = true;
+  late Stream<List<Map<String, dynamic>>> _allDeliveriesStream;
 
   @override
   void initState() {
     super.initState();
+    _allDeliveriesStream = _service.streamAllDeliveries();
     _loadAllAdminData();
   }
 
@@ -77,6 +79,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _loadProfiles() async {
+    if (!mounted) return;
     setState(() => _loadingUsers = true);
     try {
       final list = await _service.fetchAllProfiles();
@@ -95,6 +98,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _loadReports() async {
+    if (!mounted) return;
     setState(() => _loadingReports = true);
     try {
       final list = await _service.fetchProblemReports();
@@ -113,6 +117,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _loadConfigsAndLocations() async {
+    if (!mounted) return;
     setState(() => _loadingConfig = true);
     try {
       final config = await _service.fetchSystemConfig();
@@ -923,12 +928,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _approveUser(UserProfile user) async {
-    await _service.updateUserVerification(user.id, status: 'verified');
-    await _loadProfiles();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${user.fullName} verified.')),
-      );
+    try {
+      await _service.updateUserVerification(user.id, status: 'verified');
+      await _loadProfiles();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${user.fullName} verified.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) _showAdminError('Failed to approve user: $e');
     }
   }
 
@@ -964,12 +973,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     reasonCtrl.dispose();
     if (confirmed != true) return;
 
-    await _service.updateUserVerification(
-      user.id,
-      status: 'rejected',
-      rejectionReason: reason,
-    );
-    await _loadProfiles();
+    try {
+      await _service.updateUserVerification(
+        user.id,
+        status: 'rejected',
+        rejectionReason: reason,
+      );
+      await _loadProfiles();
+    } catch (e) {
+      if (mounted) _showAdminError('Failed to reject user: $e');
+    }
   }
 
   // ==========================================
@@ -978,7 +991,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _buildMonitorTab() {
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _service.streamAllDeliveries(),
+      stream: _allDeliveriesStream,
       builder: (context, snapshot) {
         final allOrders = (snapshot.data ?? []).map(DeliveryOrder.fromJson).toList();
         final activeCount = allOrders
@@ -1008,8 +1021,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 spacing: 8,
                 runSpacing: 6,
                 children: [
-                  _metricChip('Total', allOrders.length.toString(), Colors.black87),
-                  _metricChip('Active', activeCount.toString(), DDartTheme.primaryMaroon),
+                  _metricChip('Total', allOrders.length.toString(), DDartTheme.textPrimary(context)),
+                  _metricChip('Active', activeCount.toString(), DDartTheme.accentText(context)),
                   _metricChip('Completed', completedCount.toString(), Colors.green),
                 ],
               ),
@@ -1243,12 +1256,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     notesCtrl.dispose();
     if (save != true) return;
 
-    await _service.updateProblemReportStatus(
-      report.id,
-      status: selectedStatus,
-      adminNotes: notes,
-    );
-    await _loadReports();
+    try {
+      await _service.updateProblemReportStatus(
+        report.id,
+        status: selectedStatus,
+        adminNotes: notes,
+      );
+      await _loadReports();
+    } catch (e) {
+      if (mounted) _showAdminError('Failed to update report: $e');
+    }
   }
 
   // ==========================================
@@ -1333,10 +1350,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Campus Location Directory',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            const Expanded(
+              child: Text(
+                'Campus Location Directory',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              ),
             ),
+            const SizedBox(width: 8),
             ElevatedButton.icon(
               onPressed: _showAddLocationDialog,
               style: ElevatedButton.styleFrom(
@@ -1360,8 +1381,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               value: loc.isActive,
               activeThumbColor: DDartTheme.primaryMaroon,
               onChanged: (val) async {
-                await _service.toggleLocationActive(loc.id, val);
-                await _loadConfigsAndLocations();
+                try {
+                  await _service.toggleLocationActive(loc.id, val);
+                  await _loadConfigsAndLocations();
+                } catch (e) {
+                  if (mounted) _showAdminError('Failed to update location: $e');
+                }
               },
             ),
           ),
@@ -1393,19 +1418,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       return;
     }
 
-    await _service.updateSystemConfig('pre_class_buffer_minutes', buffer.toString());
-    await _service.updateSystemConfig('daily_delivery_limit', dailyLimit.toString());
-    await _service.updateSystemConfig('request_expiration_minutes', expiration.toString());
-    await _service.updateSystemConfig('standard_delivery_fee', fee.toStringAsFixed(2));
-    await DutyLockService.syncFromSupabase();
+    try {
+      await _service.updateSystemConfig('pre_class_buffer_minutes', buffer.toString());
+      await _service.updateSystemConfig('daily_delivery_limit', dailyLimit.toString());
+      await _service.updateSystemConfig('request_expiration_minutes', expiration.toString());
+      await _service.updateSystemConfig('standard_delivery_fee', fee.toStringAsFixed(2));
+      await _service.updateSystemConfig('delivery_fee_short', fee.toStringAsFixed(2));
+      await _service.updateSystemConfig('delivery_fee_medium', (fee + 5.0).toStringAsFixed(2));
+      await _service.updateSystemConfig('delivery_fee_long', (fee + 10.0).toStringAsFixed(2));
+      await DutyLockService.syncFromSupabase();
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.green,
-          content: Text('System parameters updated!'),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.green,
+            content: Text('System parameters updated!'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) _showAdminError('Failed to save system parameters: $e');
     }
   }
 
@@ -1469,12 +1501,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     codeCtrl.dispose();
 
     if (save == true && name.isNotEmpty) {
-      await _service.upsertLocation(
-        name: name,
-        category: category,
-        buildingCode: code,
-      );
-      await _loadConfigsAndLocations();
+      try {
+        await _service.upsertLocation(
+          name: name,
+          category: category,
+          buildingCode: code,
+        );
+        await _loadConfigsAndLocations();
+      } catch (e) {
+        if (mounted) _showAdminError('Failed to add location: $e');
+      }
     }
   }
 }

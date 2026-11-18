@@ -19,10 +19,14 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
   bool _isClaiming = false;
   bool _isOnline = true;
   UserProfile? _profile;
+  late Stream<List<Map<String, dynamic>>> _availableOrdersStream;
+  late Stream<List<Map<String, dynamic>>> _runnerAssignedOrdersStream;
 
   @override
   void initState() {
     super.initState();
+    _availableOrdersStream = SupabaseService().streamAvailableOrders();
+    _runnerAssignedOrdersStream = SupabaseService().streamRunnerAssignedOrders();
     _refreshEligibility();
   }
 
@@ -70,11 +74,12 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
             content: Text('This delivery request has expired.'),
           ),
         );
+        setState(() {});
       }
-      setState(() {});
       return;
     }
 
+    if (!mounted) return;
     setState(() => _isClaiming = true);
     final result = await SupabaseService().claimOrder(order.id);
     if (!mounted) return;
@@ -264,7 +269,7 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
                             ? Colors.red.shade700
                             : _isOnline
                                 ? Colors.green.shade700
-                                : Colors.black54,
+                                : DDartTheme.textSecondary(context),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -277,16 +282,20 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
                                   : _isOnline
                                       ? 'Online · Ready for Gigs'
                                       : 'Offline',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
+                                color: DDartTheme.textPrimary(context),
                               ),
                             ),
                             Text(
                               isLocked
                                   ? (dutyStatus['reason']?.toString() ?? '')
                                   : 'Completed today: $completed / $limit deliveries',
-                              style: const TextStyle(fontSize: 11, color: Colors.black87),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: DDartTheme.textSecondary(context),
+                              ),
                             ),
                           ],
                         ),
@@ -320,7 +329,7 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
 
   Widget _buildAvailableFeed(bool canClaimNow) {
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: SupabaseService().streamAvailableOrders(),
+      stream: _availableOrdersStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const Center(
@@ -415,9 +424,9 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
                       const SizedBox(height: 4),
                       Text(
                         'Est. Item Budget: ₱${order.estimatedPrice.toStringAsFixed(2)}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: primaryMaroon,
+                          color: DDartTheme.accentText(context),
                           fontSize: 12.5,
                         ),
                       ),
@@ -425,8 +434,8 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
                         const SizedBox(height: 4),
                         Text(
                           'Note: ${order.specialInstructions}',
-                          style: const TextStyle(
-                            color: Colors.black54,
+                          style: TextStyle(
+                            color: DDartTheme.textSecondary(context),
                             fontStyle: FontStyle.italic,
                             fontSize: 12,
                           ),
@@ -461,7 +470,7 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
 
   Widget _buildMyDeliveriesFeed() {
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: SupabaseService().streamRunnerAssignedOrders(),
+      stream: _runnerAssignedOrdersStream,
       builder: (context, snapshot) {
         final orders = (snapshot.data ?? []).map(DeliveryOrder.fromJson).toList();
         if (orders.isEmpty) {

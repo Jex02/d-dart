@@ -206,10 +206,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     setState(() => _isBusy = true);
     try {
       await SupabaseService().updateOrderStatus(widget.orderId, nextStatus);
-      setState(() => _syncMockStatus(nextStatus));
+      if (mounted) setState(() => _syncMockStatus(nextStatus));
     } catch (e) {
       if (widget.orderId.startsWith('ORD-') || !SupabaseService().isAuthenticated) {
-        setState(() => _syncMockStatus(nextStatus));
+        if (mounted) setState(() => _syncMockStatus(nextStatus));
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -248,8 +248,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
 
     if (verified) {
-      setState(() => _syncMockStatus('completed'));
       if (mounted) {
+        setState(() => _syncMockStatus('completed'));
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Colors.green,
@@ -292,7 +292,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         ],
       ),
     );
-    if (confirm != true) return;
+    if (confirm != true || !mounted) return;
 
     setState(() => _isBusy = true);
     final cancelled = await SupabaseService().cancelOrder(widget.orderId);
@@ -369,15 +369,26 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     descCtrl.dispose();
 
     if (submit == true && description.isNotEmpty) {
-      await SupabaseService().submitProblemReport(
-        requestId: widget.orderId.startsWith('ORD-') ? null : widget.orderId,
-        category: category,
-        description: description,
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Problem reported for Administrator review.')),
+      try {
+        await SupabaseService().submitProblemReport(
+          requestId: widget.orderId.startsWith('ORD-') ? null : widget.orderId,
+          category: category,
+          description: description,
         );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Problem reported for Administrator review.')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.redAccent,
+              content: Text('Could not submit report: $e'),
+            ),
+          );
+        }
       }
     }
   }
@@ -517,10 +528,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
                           color: isTerminated
-                              ? Colors.grey.shade200
+                              ? DDartTheme.cardSubtle(context)
                               : isCompleted
-                                  ? Colors.green.withValues(alpha: 0.12)
-                                  : primaryMaroon.withValues(alpha: 0.1),
+                                  ? Colors.green.withValues(
+                                      alpha: DDartTheme.isDark(context) ? 0.2 : 0.12,
+                                    )
+                                  : DDartTheme.maroonTint(context),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
@@ -532,10 +545,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                       ? Icons.cancel_outlined
                                       : Icons.local_shipping_outlined,
                               color: isCompleted
-                                  ? Colors.green
+                                  ? (DDartTheme.isDark(context)
+                                      ? Colors.green.shade300
+                                      : Colors.green)
                                   : isTerminated
-                                      ? Colors.black54
-                                      : primaryMaroon,
+                                      ? DDartTheme.textSecondary(context)
+                                      : DDartTheme.accentText(context),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
@@ -545,10 +560,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                   color: isCompleted
-                                      ? Colors.green.shade800
+                                      ? (DDartTheme.isDark(context)
+                                          ? Colors.green.shade300
+                                          : Colors.green.shade800)
                                       : isTerminated
-                                          ? Colors.black87
-                                          : primaryMaroon,
+                                          ? DDartTheme.textPrimary(context)
+                                          : DDartTheme.accentText(context),
                                 ),
                               ),
                             ),
@@ -570,9 +587,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
+                          color: DDartTheme.card(context),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade300),
+                          border: Border.all(color: DDartTheme.border(context)),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -619,9 +636,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                               bold: true,
                             ),
                             const SizedBox(height: 6),
-                            const Text(
+                            Text(
                               'Direct Payment: Cash or personal GCash to runner on handover.',
-                              style: TextStyle(fontSize: 11, color: Colors.black54),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: DDartTheme.textSecondary(context),
+                              ),
                             ),
                           ],
                         ),
@@ -635,18 +655,22 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                             width: double.infinity,
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             decoration: BoxDecoration(
-                              color: Colors.grey.shade50,
+                              color: DDartTheme.card(context),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey.shade300),
+                              border: Border.all(color: DDartTheme.border(context)),
                             ),
                             child: Row(
                               children: [
-                                Icon(Icons.chat_bubble_outline, size: 20, color: Colors.grey.shade500),
+                                Icon(Icons.chat_bubble_outline,
+                                    size: 20, color: DDartTheme.textMuted(context)),
                                 const SizedBox(width: 10),
-                                const Expanded(
+                                Expanded(
                                   child: Text(
                                     'Direct runner chat activates as soon as a student runner claims your request.',
-                                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: DDartTheme.textSecondary(context),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -731,10 +755,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                                       : 'Chat with Runner'),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.bold,
-                                                color: Color(0xFF1E1E1E),
+                                                color: DDartTheme.textPrimary(context),
                                               ),
                                             ),
                                           ),
@@ -746,15 +770,15 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                                 vertical: 1.5,
                                               ),
                                               decoration: BoxDecoration(
-                                                color: primaryMaroon.withValues(alpha: 0.12),
+                                                color: DDartTheme.maroonTint(context),
                                                 borderRadius: BorderRadius.circular(5),
                                               ),
                                               child: Text(
                                                 widget.isRunner ? 'CUSTOMER' : 'RUNNER',
-                                                style: const TextStyle(
+                                                style: TextStyle(
                                                   fontSize: 9,
                                                   fontWeight: FontWeight.bold,
-                                                  color: primaryMaroon,
+                                                  color: DDartTheme.accentText(context),
                                                 ),
                                               ),
                                             ),
@@ -779,8 +803,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                               ? FontWeight.w600
                                               : FontWeight.normal,
                                           color: latestIncoming != null
-                                              ? primaryMaroon
-                                              : Colors.black87,
+                                              ? DDartTheme.accentText(context)
+                                              : DDartTheme.textSecondary(context),
                                         ),
                                       ),
                                     ],
@@ -819,15 +843,18 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                           width: double.infinity,
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF5EBEB),
+                            color: DDartTheme.maroonTint(context),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: primaryMaroon),
+                            border: Border.all(color: DDartTheme.accentText(context)),
                           ),
                           child: Column(
                             children: [
-                              const Text(
+                              Text(
                                 'Handover Verification Code',
-                                style: TextStyle(fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: DDartTheme.textPrimary(context),
+                                ),
                               ),
                               const SizedBox(height: 6),
                               if (isArrived) ...[
@@ -835,26 +862,33 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                   order.verificationCode.isEmpty
                                       ? '----'
                                       : order.verificationCode,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 32,
                                     fontWeight: FontWeight.bold,
                                     letterSpacing: 8,
-                                    color: primaryMaroon,
+                                    color: DDartTheme.accentText(context),
                                   ),
                                 ),
                                 const SizedBox(height: 4),
-                                const Text(
+                                Text(
                                   'Your runner has arrived! Share this 4-digit code upon receiving your items.',
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 11),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: DDartTheme.textSecondary(context),
+                                  ),
                                 ),
                               ] else ...[
-                                const Icon(Icons.lock_outline, size: 28, color: primaryMaroon),
+                                Icon(Icons.lock_outline,
+                                    size: 28, color: DDartTheme.accentText(context)),
                                 const SizedBox(height: 6),
-                                const Text(
+                                Text(
                                   'Your 4-digit code will appear here once the runner arrives at drop-off.',
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 11.5, color: Colors.black87),
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    color: DDartTheme.textSecondary(context),
+                                  ),
                                 ),
                               ],
                             ],
@@ -950,10 +984,14 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       Center(
                         child: TextButton.icon(
                           onPressed: _openReportProblemDialog,
-                          icon: const Icon(Icons.flag_outlined, size: 16, color: Colors.black54),
-                          label: const Text(
+                          icon: Icon(Icons.flag_outlined,
+                              size: 16, color: DDartTheme.textSecondary(context)),
+                          label: Text(
                             'Report a problem with this delivery',
-                            style: TextStyle(fontSize: 12, color: Colors.black54),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: DDartTheme.textSecondary(context),
+                            ),
                           ),
                         ),
                       ),
@@ -982,7 +1020,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             label,
             style: TextStyle(
               fontSize: 12,
-              color: Colors.black54,
+              color: DDartTheme.textSecondary(context),
               fontWeight: bold ? FontWeight.bold : FontWeight.w500,
             ),
           ),
@@ -993,7 +1031,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             style: TextStyle(
               fontSize: 13,
               fontWeight: bold ? FontWeight.bold : FontWeight.w600,
-              color: bold ? primaryMaroon : Colors.black87,
+              color: bold
+                  ? DDartTheme.accentText(context)
+                  : DDartTheme.textPrimary(context),
             ),
           ),
         ),
@@ -1015,6 +1055,7 @@ class _DeliveryProgressStepper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = DDartTheme.accentText(context);
     return Column(
       children: List.generate(steps.length, (i) {
         final done = currentIndex >= i;
@@ -1026,7 +1067,7 @@ class _DeliveryProgressStepper extends StatelessWidget {
               Icon(
                 done ? Icons.check_circle : Icons.radio_button_unchecked,
                 size: 18,
-                color: done ? const Color(0xFF7F0000) : Colors.grey.shade400,
+                color: done ? accent : DDartTheme.textMuted(context),
               ),
               const SizedBox(width: 10),
               Text(
@@ -1034,7 +1075,9 @@ class _DeliveryProgressStepper extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                  color: done ? Colors.black87 : Colors.black45,
+                  color: done
+                      ? DDartTheme.textPrimary(context)
+                      : DDartTheme.textMuted(context),
                 ),
               ),
             ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/class_schedule.dart';
+import 'responsive_shell.dart';
 
 const Color _primaryMaroon = Color(0xFF7F0000);
 
@@ -126,7 +127,11 @@ Future<ClassSession?> showClassSessionEditorDialog(
         ],
       ),
     ),
-  );
+  ).whenComplete(() {
+    subjectCtrl.dispose();
+    startCtrl.dispose();
+    endCtrl.dispose();
+  });
 }
 
 /// Reusable list + controls for reviewing verified COR class sessions (Read-Only).
@@ -148,10 +153,12 @@ class ScheduleReviewSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = DDartTheme.isDark(context);
+    final accent = DDartTheme.accentText(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(
+        Row(
           children: [
             Expanded(
               child: Text(
@@ -159,17 +166,17 @@ class ScheduleReviewSection extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.bold,
-                  color: _primaryMaroon,
+                  color: accent,
                 ),
               ),
             ),
-            Icon(Icons.verified, color: Colors.green, size: 22),
+            const Icon(Icons.verified, color: Colors.green, size: 22),
           ],
         ),
         const SizedBox(height: 4),
-        const Text(
+        Text(
           'Official class schedule extracted from your CIT-U Certificate of Registration (COR). Sessions are tamper-locked to preserve academic integrity and Duty Lock compliance.',
-          style: TextStyle(fontSize: 12, color: Colors.black54),
+          style: TextStyle(fontSize: 12, color: DDartTheme.textSecondary(context)),
         ),
         if (isDemoFallback) ...[
           const SizedBox(height: 8),
@@ -177,24 +184,27 @@ class ScheduleReviewSection extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.amber.shade50,
+              color: isDark ? Colors.amber.withValues(alpha: 0.16) : Colors.amber.shade50,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: Colors.amber.shade400),
             ),
-            child: const Text(
+            child: Text(
               'Demo OCR mode active (no live GEMINI_API_KEY). Official schedule extracted.',
-              style: TextStyle(fontSize: 11, color: Colors.black87),
+              style: TextStyle(
+                fontSize: 11,
+                color: isDark ? Colors.amber.shade200 : Colors.black87,
+              ),
             ),
           ),
         ],
         const Divider(height: 20),
         Expanded(
           child: sessions.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text(
                     'No class sessions were extracted from the document.\nPlease re-upload a clear copy of your official COR.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.black54),
+                    style: TextStyle(color: DDartTheme.textSecondary(context)),
                   ),
                 )
               : ListView.builder(

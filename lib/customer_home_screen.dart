@@ -1,17 +1,14 @@
 import 'package:flutter/material.dart';
 import 'canteen_category_screen.dart';
-import 'canteen_menu_screen.dart';
 import 'cart_screen.dart';
 import 'category_browse_screen.dart';
 import 'cor_upload_screen.dart';
 import 'login.dart';
 import 'main_dashboard.dart';
-import 'models/class_schedule.dart';
 import 'models/delivery_order.dart';
 import 'models/problem_report.dart';
 import 'models/user_profile.dart';
 import 'order_tracking_screen.dart';
-import 'pabili_request_screen.dart';
 import 'services/cart_service.dart';
 import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
@@ -36,16 +33,17 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   UserProfile? _profile;
   String? _idPhotoUrl;
   final _searchController = TextEditingController();
+  late Stream<List<Map<String, dynamic>>> _customerOrdersStream;
 
   static const Color primaryMaroon = DDartTheme.deepMaroon;
   static const Color accentGold = DDartTheme.brightGold;
-  static const Color searchFieldBg = Color(0xFFF4EDED);
-  static const Color outlineBorderColor = Color(0xFFB0B0B0);
 
   @override
   void initState() {
     super.initState();
     _selectedIndex = widget.initialTabIndex.clamp(0, 3);
+    _customerOrdersStream =
+        SupabaseService().streamCustomerOrders().asBroadcastStream();
     _loadProfileAndExpireStale();
   }
 
@@ -69,18 +67,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         _idPhotoUrl = idUrl;
       });
     }
-  }
-
-  void _openPabili({String? pickup, String? hint}) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PabiliRequestScreen(
-          initialPickup: pickup,
-          initialHint: hint,
-        ),
-      ),
-    ).then((_) => _loadProfileAndExpireStale());
   }
 
   void _openOrderTracking(String orderId) {
@@ -207,14 +193,25 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     final text = descCtrl.text.trim();
     descCtrl.dispose();
     if (submit == true && text.isNotEmpty) {
-      await SupabaseService().submitProblemReport(
-        category: category,
-        description: text,
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Problem report submitted to Administrators.')),
+      try {
+        await SupabaseService().submitProblemReport(
+          category: category,
+          description: text,
         );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Problem report submitted to Administrators.')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.redAccent,
+              content: Text('Could not submit report: $e'),
+            ),
+          );
+        }
       }
     }
   }
@@ -621,7 +618,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   Widget _buildLiveRunnerUpdateCard() {
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: SupabaseService().streamCustomerOrders(),
+      stream: _customerOrdersStream,
       builder: (context, snapshot) {
         final orders = (snapshot.data ?? [])
             .map(DeliveryOrder.fromJson)
@@ -722,13 +719,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   Widget _buildOrdersTab() {
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: SupabaseService().streamCustomerOrders(),
+      stream: _customerOrdersStream,
       builder: (context, snapshot) {
         final orders = (snapshot.data ?? []).map(DeliveryOrder.fromJson).toList();
         if (orders.isEmpty) {
           return const Center(
             child: Text(
-              'You have not placed any Pabili requests yet.\nTap "New Pabili" to start!',
+              'You have not placed any campus delivery orders yet.\nBrowse a canteen on Home to get started!',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey, fontSize: 14),
             ),
@@ -1102,20 +1099,26 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Icon(Icons.calendar_today_rounded, size: 18, color: accent),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Enrolled Class Schedule',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: textPrimary,
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Icon(Icons.calendar_today_rounded, size: 18, color: accent),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              'Enrolled Class Schedule',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: textPrimary,
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(

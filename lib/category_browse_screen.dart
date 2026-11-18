@@ -84,7 +84,7 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
     }
 
     if (widget.initialQuery != null && widget.initialQuery!.isNotEmpty) {
-      _applyFilters();
+      _filteredItems = _computeFilteredItems();
     }
 
     _loadFromDatabase();
@@ -162,36 +162,43 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
           );
           _itemQuantities.putIfAbsent(item.id, () => 1);
         }
-        _applyFilters();
+        _filteredItems = _computeFilteredItems();
       });
     } catch (_) {}
   }
 
+  Timer? _snackTimer;
+
   @override
   void dispose() {
+    _snackTimer?.cancel();
     _messenger?.clearSnackBars();
     _searchController.dispose();
     super.dispose();
   }
 
-  void _applyFilters() {
+  List<CanteenMenuItem> _computeFilteredItems() {
     final query = _searchController.text.trim().toLowerCase();
+    return _allItems.where((item) {
+      final matchesQuery = query.isEmpty ||
+          item.name.toLowerCase().contains(query) ||
+          item.unitDescription.toLowerCase().contains(query);
+
+      final matchesCanteen = _selectedCanteenFilter == 'All' ||
+          item.canteensList.any((c) =>
+              c.toLowerCase() == _selectedCanteenFilter.toLowerCase());
+
+      final matchesCategory = !_isFullMenuBrowse ||
+          _selectedCategoryFilter == 'All' ||
+          CampusMenuCatalog.matchesCategory(item.category, _selectedCategoryFilter);
+
+      return matchesQuery && matchesCanteen && matchesCategory;
+    }).toList();
+  }
+
+  void _applyFilters() {
     setState(() {
-      _filteredItems = _allItems.where((item) {
-        final matchesQuery = query.isEmpty ||
-            item.name.toLowerCase().contains(query) ||
-            item.unitDescription.toLowerCase().contains(query);
-
-        final matchesCanteen = _selectedCanteenFilter == 'All' ||
-            item.canteensList.any((c) =>
-                c.toLowerCase() == _selectedCanteenFilter.toLowerCase());
-
-        final matchesCategory = !_isFullMenuBrowse ||
-            _selectedCategoryFilter == 'All' ||
-            CampusMenuCatalog.matchesCategory(item.category, _selectedCategoryFilter);
-
-        return matchesQuery && matchesCanteen && matchesCategory;
-      }).toList();
+      _filteredItems = _computeFilteredItems();
     });
   }
 
@@ -204,6 +211,7 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
     CartService.instance.addItem(customizedItem, quantity: qty);
 
     final messenger = ScaffoldMessenger.of(context);
+    _snackTimer?.cancel();
     messenger.clearSnackBars();
     messenger.showSnackBar(
       SnackBar(
@@ -232,7 +240,7 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
     );
 
     // Hard timer guarantee that forcibly clears the banner after 2s on all platforms/browsers
-    Timer(const Duration(milliseconds: 2000), () {
+    _snackTimer = Timer(const Duration(milliseconds: 2000), () {
       try {
         messenger.clearSnackBars();
       } catch (_) {}
@@ -660,33 +668,39 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
                     border: Border.all(color: accent.withValues(alpha: 0.35)),
                   ),
                   child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: item.canteensList.contains(selectedCanteen)
-                          ? selectedCanteen
-                          : item.canteensList.first,
-                      isExpanded: true,
-                      dropdownColor: DDartTheme.card(context),
-                      icon: Icon(Icons.arrow_drop_down, color: accent),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: textPrimary,
-                      ),
-                      items: item.canteensList.map((canteen) {
-                        return DropdownMenuItem<String>(
-                          value: canteen,
-                          child: Text(
-                            canteen,
-                            overflow: TextOverflow.ellipsis,
+                    child: Builder(
+                      builder: (context) {
+                        final uniqueCanteens = item.canteensList.toSet().toList();
+                        final dropdownValue = uniqueCanteens.contains(selectedCanteen)
+                            ? selectedCanteen
+                            : uniqueCanteens.first;
+                        return DropdownButton<String>(
+                          value: dropdownValue,
+                          isExpanded: true,
+                          dropdownColor: DDartTheme.card(context),
+                          icon: Icon(Icons.arrow_drop_down, color: accent),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: textPrimary,
                           ),
+                          items: uniqueCanteens.map((canteen) {
+                            return DropdownMenuItem<String>(
+                              value: canteen,
+                              child: Text(
+                                canteen,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (newCanteen) {
+                            if (newCanteen != null) {
+                              setState(() {
+                                _itemSelectedCanteen[item.id] = newCanteen;
+                              });
+                            }
+                          },
                         );
-                      }).toList(),
-                      onChanged: (newCanteen) {
-                        if (newCanteen != null) {
-                          setState(() {
-                            _itemSelectedCanteen[item.id] = newCanteen;
-                          });
-                        }
                       },
                     ),
                   ),

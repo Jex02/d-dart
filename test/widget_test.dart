@@ -13,10 +13,12 @@ import 'package:sd2/order_tracking_screen.dart';
 import 'package:sd2/pabili_request_screen.dart';
 import 'package:sd2/pending_verification_screen.dart';
 import 'package:sd2/reset_password_page.dart';
+import 'package:sd2/services/cart_service.dart';
 import 'package:sd2/services/duty_lock_service.dart';
 import 'package:sd2/signup.dart';
 import 'package:sd2/widgets/cor_timetable_dialog.dart';
 import 'package:sd2/widgets/order_chat_sheet.dart';
+import 'package:sd2/widgets/responsive_shell.dart';
 
 void main() {
   setUp(() {
@@ -70,8 +72,9 @@ void main() {
     );
     await tester.pump();
 
-    // Option A: Mini Canteen -> Backgate Annex is 240.53 m (>200m tier = ₱30 fee), so 85 + 30 = ₱115.00
-    expect(find.text('₱115.00'), findsOneWidget);
+    // Option A: Main Canteen -> Backgate Annex is 141.30 m (>100-200m tier = ₱25 fee), so 85 + 25 = ₱110.00
+    expect(find.text('₱25.00'), findsOneWidget);
+    expect(find.text('₱110.00'), findsOneWidget);
   });
 
   testWidgets('OrderTrackingScreen reveals OTP only on arrival and enforces runner flow',
@@ -294,5 +297,80 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('Email link is invalid or has expired'), findsOneWidget);
+  });
+
+  testWidgets('CanteenMenuScreen scopes added cart item to selected canteen',
+      (WidgetTester tester) async {
+    CartService.instance.clearCart();
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: CanteenMenuScreen(
+          canteenName: 'Highschool Canteen',
+          categoryName: 'Beverages',
+          userName: 'Jerick',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Tap the first menu item card to open Add-to-Cart bottom sheet
+    await tester.tap(
+      find.descendant(of: find.byType(GridView), matching: find.byType(InkWell)).first,
+    );
+    await tester.pumpAndSettle();
+
+    final addButton = find.textContaining('Add to Cart');
+    expect(addButton, findsOneWidget);
+    await tester.tap(addButton);
+    await tester.pumpAndSettle();
+
+    expect(CartService.instance.items, isNotEmpty);
+    expect(CartService.instance.items.first.item.canteen, 'Highschool Canteen');
+
+    // Clean up pending 2s snackbar timer and cart
+    await tester.pump(const Duration(seconds: 3));
+    CartService.instance.clearCart();
+  });
+
+  testWidgets('Core demo screens render cleanly in Dark Mode without overflow',
+      (WidgetTester tester) async {
+    addPabiliRequest(
+      orderId: 'ORD-DARK-1',
+      verificationCode: '9182',
+      pickup: 'Main Canteen',
+      dropoff: 'GLE',
+      description: '1x Pork Siomai Rice',
+      price: 55.0,
+    );
+    mockDeliveryRequests
+        .firstWhere((o) => o['id'] == 'ORD-DARK-1')['status'] = 'arrived';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: DDartTheme.darkTheme,
+        home: const OrderTrackingScreen(orderId: 'ORD-DARK-1', isRunner: false),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('9182'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: DDartTheme.darkTheme,
+        home: PendingVerificationScreen(
+          initialProfile: UserProfile.fromJson({
+            'id': 'u-dark-1',
+            'full_name': 'Demo Wildcat',
+            'student_id': '23-1626-937',
+            'account_type': 'student',
+            'verification_status': 'pending',
+          }),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Pending Admin Verification'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

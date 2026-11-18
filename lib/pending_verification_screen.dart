@@ -41,7 +41,7 @@ class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
         maxHeight: 1920,
         imageQuality: 85,
       );
-      if (file == null) return;
+      if (file == null || !mounted) return;
 
       setState(() => _isUploadingId = true);
       final bytes = await file.readAsBytes();
@@ -82,31 +82,43 @@ class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
   }
 
   Future<void> _refreshStatus() async {
-    setState(() => _isChecking = true);
-    await DutyLockService.syncFromSupabase();
-    final updated = await SupabaseService().fetchUserProfileModel();
     if (!mounted) return;
-    setState(() {
-      if (updated != null) _profile = updated;
-      _isChecking = false;
-    });
-
-    if (updated != null && updated.isVerified) {
-      final nextScreen = await AppRouter.resolveHomeForProfile(updated);
+    setState(() => _isChecking = true);
+    try {
+      await DutyLockService.syncFromSupabase();
+      final updated = await SupabaseService().fetchUserProfileModel();
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => nextScreen),
-      );
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _profile.isRejected
-                ? 'Verification remains rejected.'
-                : 'Still awaiting administrator approval.',
+      setState(() {
+        if (updated != null) _profile = updated;
+      });
+
+      if (updated != null && updated.isVerified) {
+        final nextScreen = await AppRouter.resolveHomeForProfile(updated);
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => nextScreen),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _profile.isRejected
+                  ? 'Verification remains rejected.'
+                  : 'Still awaiting administrator approval.',
+            ),
           ),
-        ),
-      );
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not refresh status: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isChecking = false);
+      }
     }
   }
 
@@ -126,13 +138,14 @@ class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
     final isRejected = _profile.isRejected;
     final statusColor = isRejected ? Colors.red.shade700 : Colors.orange.shade800;
 
+    final isDark = DDartTheme.isDark(context);
     return Scaffold(
       backgroundColor: MediaQuery.of(context).size.width > 600
           ? const Color(0xFF252525)
-          : Colors.white,
+          : DDartTheme.surface(context),
       body: ResponsiveMobileShell(
         child: Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: DDartTheme.surface(context),
           body: SafeArea(
             child: Center(
               child: SingleChildScrollView(
@@ -158,10 +171,10 @@ class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
                           ? 'Verification Rejected'
                           : 'Pending Admin Verification',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
-                        color: DDartTheme.primaryMaroon,
+                        color: DDartTheme.accentText(context),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -170,9 +183,9 @@ class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
                           ? 'Your account verification request was declined by an administrator.'
                           : 'Thank you for registering, ${_profile.fullName.isEmpty ? 'Wildcat' : _profile.fullName}!\n\nAn administrator needs to verify your submitted ID${_profile.isStudent ? ' and COR schedule' : ''} before Customer${_profile.isStudent ? ' and Runner modes are' : ' Mode is'} unlocked.',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
-                        color: Colors.black87,
+                        color: DDartTheme.textSecondary(context),
                         height: 1.4,
                       ),
                     ),
@@ -183,13 +196,18 @@ class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.red.shade50,
+                          color: isDark ? Colors.red.withValues(alpha: 0.18) : Colors.red.shade50,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.red.shade200),
+                          border: Border.all(
+                            color: isDark ? Colors.red.shade400 : Colors.red.shade200,
+                          ),
                         ),
                         child: Text(
                           'Reason: ${_profile.rejectionReason}',
-                          style: TextStyle(fontSize: 12.5, color: Colors.red.shade900),
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: isDark ? Colors.red.shade200 : Colors.red.shade900,
+                          ),
                         ),
                       ),
                     ],
@@ -198,9 +216,9 @@ class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
+                        color: DDartTheme.card(context),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade300),
+                        border: Border.all(color: DDartTheme.border(context)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

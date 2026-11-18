@@ -11,6 +11,9 @@ import '../models/user_profile.dart';
 import '../mock_data.dart';
 import '../data/campus_menu_catalog.dart';
 import '../models/cart_item.dart';
+import 'cart_service.dart';
+import 'chat_read_tracker.dart';
+import 'duty_lock_service.dart';
 import 'remember_me_service.dart';
 
 enum ClaimOrderStatus {
@@ -346,6 +349,9 @@ class SupabaseService {
 
   Future<void> signOut() async {
     cachedProfile = null;
+    CartService.instance.clearCart();
+    DutyLockService.reset();
+    ChatReadTracker.instance.clear();
     await RememberMeService.clearEphemeralFlag();
     await client.auth.signOut();
   }
@@ -391,6 +397,7 @@ class SupabaseService {
     }
 
     final meta = user.userMetadata ?? {};
+    final rawMetaCanteen = meta['assigned_canteen']?.toString().trim();
     cachedProfile = UserProfile(
       id: user.id,
       fullName: meta['full_name']?.toString() ?? '',
@@ -401,6 +408,9 @@ class SupabaseService {
       accountType: meta['account_type']?.toString() ?? 'student',
       verificationStatus: meta['verification_status']?.toString() ?? 'pending',
       corVerified: meta['cor_verified'] == true,
+      assignedCanteen: (rawMetaCanteen != null && rawMetaCanteen.isNotEmpty)
+          ? rawMetaCanteen
+          : null,
     );
     return cachedProfile;
   }
@@ -801,7 +811,7 @@ class SupabaseService {
           'email': email.trim().toLowerCase(),
           'password': password,
           'phone_number': phoneNumber.trim(),
-          if (normalizedCanteen != null) 'assigned_canteen': normalizedCanteen,
+          'assigned_canteen': ?normalizedCanteen,
         },
       );
       final Map<String, dynamic> created = response.data is Map

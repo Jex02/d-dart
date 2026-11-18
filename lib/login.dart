@@ -85,8 +85,9 @@ class _LoginPageState extends State<LoginPage> {
       final targetScreen = await AppRouter.resolveHomeForProfile();
 
       if (mounted) {
-        Navigator.of(context).pushReplacement(
+        Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => targetScreen),
+          (_) => false,
         );
       }
     } on AuthException catch (e) {

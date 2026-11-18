@@ -29,25 +29,26 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
   bool _isReviewMode = false;
 
   Future<void> _pickAndProcessCOR() async {
-    final XFile? file = await _picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1920,
-      maxHeight: 1920,
-      imageQuality: 85,
-    );
-    if (file == null) return;
-
-    final bytes = await file.readAsBytes();
-    final ext = file.name.contains('.')
-        ? file.name.split('.').last.toLowerCase()
-        : 'jpg';
-    setState(() {
-      _selectedImageBytes = bytes;
-      _selectedImageExt = ext;
-      _isProcessing = true;
-    });
-
     try {
+      final XFile? file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+      if (file == null) return;
+
+      final bytes = await file.readAsBytes();
+      final ext = file.name.contains('.')
+          ? file.name.split('.').last.toLowerCase()
+          : 'jpg';
+      if (!mounted) return;
+      setState(() {
+        _selectedImageBytes = bytes;
+        _selectedImageExt = ext;
+        _isProcessing = true;
+      });
+
       final profile = await SupabaseService().fetchUserProfileModel();
       final result = await GeminiService.verifyAndExtractCOR(
         bytes,
@@ -63,7 +64,7 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
                 children: [
                   Icon(Icons.error_outline, color: primaryMaroon),
                   SizedBox(width: 8),
-                  Text('Invalid Document'),
+                  Expanded(child: Text('Invalid Document')),
                 ],
               ),
               content: Text(result.message),
@@ -79,6 +80,7 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
         return;
       }
 
+      if (!mounted) return;
       setState(() {
         _extractedSessions = result.sessions;
         _isDemoFallback = result.isDemoFallback;
@@ -100,13 +102,13 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
   Future<void> _confirmSchedule() async {
     setState(() => _isSaving = true);
     try {
-      DutyLockService.verifiedSchedule = _extractedSessions;
-      DutyLockService.isRunnerScheduleUploaded = _extractedSessions.isNotEmpty;
       await SupabaseService().saveClassSchedule(
         _extractedSessions,
         corImageBytes: _selectedImageBytes,
         corDocumentExt: _selectedImageExt,
       );
+      DutyLockService.verifiedSchedule = _extractedSessions;
+      DutyLockService.isRunnerScheduleUploaded = _extractedSessions.isNotEmpty;
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -116,6 +118,15 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
           ),
         );
         Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text('Could not save schedule: $e'),
+          ),
+        );
       }
     } finally {
       if (mounted) {
@@ -210,9 +221,9 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
                       _isReviewMode = true;
                     });
                   },
-                  child: const Text(
-                    'Edit existing verified schedule',
-                    style: TextStyle(color: primaryMaroon),
+                  child: Text(
+                    'View current verified schedule',
+                    style: TextStyle(color: DDartTheme.accentText(context)),
                   ),
                 ),
               ],

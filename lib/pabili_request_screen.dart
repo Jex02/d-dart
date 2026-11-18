@@ -95,8 +95,6 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
     final description = qty.isNotEmpty && qty != '1' ? '${qty}x $rawItem' : rawItem;
     final instructions = _notesController.text.trim();
 
-    setState(() => _isSubmitting = true);
-
     final computedDeliveryFee = CampusLocation.calculateDeliveryFee(
       canteen: _selectedPickup,
       destination: _selectedDropoff,
@@ -113,6 +111,8 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
       );
       return;
     }
+
+    setState(() => _isSubmitting = true);
 
     String createdId;
     try {
@@ -296,7 +296,9 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                           margin: const EdgeInsets.only(top: 8),
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFBF4E6),
+                            color: DDartTheme.isDark(context)
+                                ? const Color(0xFFE5A824).withValues(alpha: 0.14)
+                                : const Color(0xFFFBF4E6),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: const Color(0xFFE5A824).withValues(alpha: 0.4),
@@ -305,16 +307,16 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.straighten, size: 14, color: Color(0xFF7F0000)),
+                              Icon(Icons.straighten, size: 14, color: DDartTheme.accentText(context)),
                               const SizedBox(width: 6),
                               Flexible(
                                 child: Text(
                                   'Distance: ${CampusLocation.formatDistance(distance)} ($_selectedPickup → $_selectedDropoff)',
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
-                                    color: Color(0xFF7F0000),
+                                    color: DDartTheme.accentText(context),
                                   ),
                                 ),
                               ),
@@ -427,9 +429,11 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFBF4F4),
+                        color: DDartTheme.maroonTint(context),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: primaryMaroon.withValues(alpha: 0.3)),
+                        border: Border.all(
+                          color: DDartTheme.accentText(context).withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Column(
                         children: [
@@ -460,7 +464,7 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                                         'Distance: ${CampusLocation.formatDistance(distance)}',
                                         style: TextStyle(
                                           fontSize: 11,
-                                          color: Colors.grey.shade600,
+                                          color: DDartTheme.textSecondary(context),
                                         ),
                                       ),
                                   ],
@@ -473,7 +477,7 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
                                   color: deliveryFee != null
-                                      ? Colors.black87
+                                      ? DDartTheme.textPrimary(context)
                                       : Colors.red,
                                 ),
                               ),
@@ -496,7 +500,7 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: totalEstimate != null
-                                      ? primaryMaroon
+                                      ? DDartTheme.accentText(context)
                                       : Colors.red,
                                   fontSize: 17,
                                 ),
@@ -516,7 +520,10 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                             alignment: Alignment.centerLeft,
                             child: Text(
                               'Unclaimed requests expire automatically after ${_config.requestExpirationMinutes} minutes.',
-                              style: const TextStyle(fontSize: 11, color: Colors.black54),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: DDartTheme.textSecondary(context),
+                              ),
                             ),
                           ),
                         ],

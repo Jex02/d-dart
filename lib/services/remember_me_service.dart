@@ -12,6 +12,8 @@ class RememberMeService {
   static const String _keyRememberMe = 'ddart_remember_me';
   static const String _keyRememberedEmail = 'ddart_remembered_email';
   static const String _keyEphemeralSession = 'ddart_ephemeral_session';
+  static const String _supabaseFlutterSessionKey = 'SUPABASE_PERSIST_SESSION_KEY';
+  static bool _pendingStartupSignOut = false;
 
   static Future<({bool rememberMe, String email})> loadLoginDefaults() async {
     try {
@@ -72,9 +74,11 @@ class RememberMeService {
       if (!wasEphemeral) return false;
 
       await prefs.setBool(_keyEphemeralSession, false);
+      _pendingStartupSignOut = true;
       final projectRef = Uri.parse(supabaseUrl).host.split('.').first;
       final sessionKey = 'sb-$projectRef-auth-token';
       await prefs.remove(sessionKey);
+      await prefs.remove(_supabaseFlutterSessionKey);
       return true;
     } catch (_) {
       return false;
@@ -85,13 +89,20 @@ class RememberMeService {
   /// If the last login had "Remember me" unchecked, sign out any remaining
   /// Supabase session so the app returns to the login/landing flow.
   static Future<void> enforceSessionOnStartup({bool skipIfRecovery = false}) async {
-    if (skipIfRecovery) return;
+    if (skipIfRecovery) {
+      _pendingStartupSignOut = false;
+      return;
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
-      final wasEphemeral = prefs.getBool(_keyEphemeralSession) ?? false;
+      final wasEphemeral =
+          _pendingStartupSignOut || (prefs.getBool(_keyEphemeralSession) ?? false);
+      _pendingStartupSignOut = false;
       if (wasEphemeral) {
         await prefs.setBool(_keyEphemeralSession, false);
-        await Supabase.instance.client.auth.signOut();
+        if (Supabase.instance.client.auth.currentSession != null) {
+          await Supabase.instance.client.auth.signOut();
+        }
       }
     } catch (_) {}
   }
