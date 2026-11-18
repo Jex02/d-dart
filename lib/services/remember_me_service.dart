@@ -58,8 +58,31 @@ class RememberMeService {
     } catch (_) {}
   }
 
+  /// Called BEFORE Supabase.initialize() so that an ephemeral ("Remember me"
+  /// unchecked) session is cleared from local storage before Supabase even
+  /// attempts to restore or refresh it on startup.
+  static Future<bool> clearEphemeralBeforeInit({
+    required String supabaseUrl,
+    bool skipIfRecovery = false,
+  }) async {
+    if (skipIfRecovery) return false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final wasEphemeral = prefs.getBool(_keyEphemeralSession) ?? false;
+      if (!wasEphemeral) return false;
+
+      await prefs.setBool(_keyEphemeralSession, false);
+      final projectRef = Uri.parse(supabaseUrl).host.split('.').first;
+      final sessionKey = 'sb-$projectRef-auth-token';
+      await prefs.remove(sessionKey);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Called once during app startup right after Supabase.initialize().
-  /// If the last login had "Remember me" unchecked, sign out the persisted
+  /// If the last login had "Remember me" unchecked, sign out any remaining
   /// Supabase session so the app returns to the login/landing flow.
   static Future<void> enforceSessionOnStartup({bool skipIfRecovery = false}) async {
     if (skipIfRecovery) return;
@@ -68,9 +91,7 @@ class RememberMeService {
       final wasEphemeral = prefs.getBool(_keyEphemeralSession) ?? false;
       if (wasEphemeral) {
         await prefs.setBool(_keyEphemeralSession, false);
-        if (Supabase.instance.client.auth.currentSession != null) {
-          await Supabase.instance.client.auth.signOut();
-        }
+        await Supabase.instance.client.auth.signOut();
       }
     } catch (_) {}
   }

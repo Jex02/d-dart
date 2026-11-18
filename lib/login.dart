@@ -305,7 +305,7 @@ class _LoginPanel extends StatelessWidget {
                   hintText: 'Email',
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
-                  autofillHints: const [AutofillHints.email],
+                  autofillHints: const [AutofillHints.username, AutofillHints.email],
                   onSubmitted: (_) {
                     if (passwordController.text.isNotEmpty) {
                       onLogin();

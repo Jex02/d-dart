@@ -62,6 +62,10 @@ Future<void> main() async {
   }
 
   try {
+    await RememberMeService.clearEphemeralBeforeInit(
+      supabaseUrl: SupabaseConstants.url,
+      skipIfRecovery: hasAuthCallback || _isPasswordRecoveryActive,
+    );
     await Supabase.initialize(
       url: SupabaseConstants.url,
       publishableKey: SupabaseConstants.anonKey,
