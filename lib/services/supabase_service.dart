@@ -320,7 +320,7 @@ class SupabaseService {
 
   Future<void> resetPassword(String email, {String? redirectTo}) async {
     final effectiveRedirect =
-        redirectTo ?? (kIsWeb ? Uri.base.origin : null);
+        redirectTo ?? (kIsWeb ? Uri.base.origin : 'ddart://reset-password');
     await client.auth.resetPasswordForEmail(
       email.trim(),
       redirectTo: effectiveRedirect,
