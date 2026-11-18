@@ -39,7 +39,20 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
 
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  late Stream<List<OrderMessage>> _messagesStream;
   bool _isSending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _messagesStream = SupabaseService().streamOrderMessages(widget.order.id);
+  }
+
+  void _retryStream() {
+    setState(() {
+      _messagesStream = SupabaseService().streamOrderMessages(widget.order.id);
+    });
+  }
 
   List<String> get _quickChips => widget.isRunner
       ? [
@@ -100,6 +113,12 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
       );
       _scrollToBottom();
     } catch (e) {
+      if (prefilledText == null && _textController.text.isEmpty) {
+        _textController.text = text;
+        _textController.selection = TextSelection.fromPosition(
+          TextPosition(offset: text.length),
+        );
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -273,8 +292,49 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
           // Messages List Stream
           Expanded(
             child: StreamBuilder<List<OrderMessage>>(
-              stream: SupabaseService().streamOrderMessages(widget.order.id),
+              stream: _messagesStream,
               builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.cloud_off_outlined,
+                            size: 44,
+                            color: Colors.red.shade300,
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Could not load chat messages',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '${snapshot.error}',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: _retryStream,
+                            icon: const Icon(Icons.refresh, size: 16),
+                            label: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
                   return const Center(

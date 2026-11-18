@@ -122,12 +122,21 @@ class _SignupPageState extends State<SignupPage> {
 
     setState(() {
       _isLoading = true;
-      _loadingMessage = _accountType == 'student'
-          ? 'Analyzing COR with Gemini AI...'
-          : 'Creating account...';
+      _loadingMessage = 'Checking ID availability...';
     });
 
     try {
+      final isIdAvailable = await SupabaseService().isStudentIdAvailable(idNumber);
+      if (!isIdAvailable) {
+        _showSnackbar(
+          _accountType == 'student'
+              ? 'This Student ID ($idNumber) is already registered to an existing account.'
+              : 'This Faculty / Employee ID ($idNumber) is already registered to an existing account.',
+          Colors.redAccent,
+        );
+        return;
+      }
+
       List<ClassSession> confirmedSessions = [];
 
       if (_accountType == 'student') {
@@ -324,7 +333,18 @@ class _SignupPageState extends State<SignupPage> {
         );
       }
     } on AuthException catch (e) {
-      _showSnackbar(e.message, Colors.redAccent);
+      var message = e.message;
+      if (message.toLowerCase().contains('database error saving new user')) {
+        try {
+          final stillAvailable = await SupabaseService().isStudentIdAvailable(idNumber);
+          if (!stillAvailable) {
+            message = _accountType == 'student'
+                ? 'This Student ID ($idNumber) is already registered to an existing account.'
+                : 'This Faculty / Employee ID ($idNumber) is already registered to an existing account.';
+          }
+        } catch (_) {}
+      }
+      _showSnackbar(message, Colors.redAccent);
     } catch (e) {
       _showSnackbar('Signup failed: ${e.toString()}', Colors.redAccent);
     } finally {

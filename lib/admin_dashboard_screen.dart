@@ -8,6 +8,7 @@ import 'models/problem_report.dart';
 import 'models/user_profile.dart';
 import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
+import 'utils/validators.dart';
 import 'widgets/responsive_shell.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -36,6 +37,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final _expirationCtrl = TextEditingController();
   final _deliveryFeeCtrl = TextEditingController();
 
+  // Co-Admin account creation form state
+  final _coAdminNameCtrl = TextEditingController();
+  final _coAdminEmailCtrl = TextEditingController();
+  final _coAdminPhoneCtrl = TextEditingController();
+  final _coAdminPasswordCtrl = TextEditingController();
+  final _coAdminConfirmPasswordCtrl = TextEditingController();
+  bool _creatingCoAdmin = false;
+  bool _obscureCoAdminPassword = true;
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +58,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     _dailyLimitCtrl.dispose();
     _expirationCtrl.dispose();
     _deliveryFeeCtrl.dispose();
+    _coAdminNameCtrl.dispose();
+    _coAdminEmailCtrl.dispose();
+    _coAdminPhoneCtrl.dispose();
+    _coAdminPasswordCtrl.dispose();
+    _coAdminConfirmPasswordCtrl.dispose();
     super.dispose();
   }
 
@@ -139,7 +154,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         backgroundColor: Colors.grey.shade100,
         appBar: AppBar(
@@ -179,6 +194,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             unselectedLabelColor: Colors.white70,
             tabs: [
               Tab(icon: Icon(Icons.verified_user_outlined, size: 18), text: 'Accounts'),
+              Tab(icon: Icon(Icons.admin_panel_settings_outlined, size: 18), text: 'Co-Admins'),
               Tab(icon: Icon(Icons.local_shipping_outlined, size: 18), text: 'Monitor'),
               Tab(icon: Icon(Icons.report_problem_outlined, size: 18), text: 'Reports'),
               Tab(icon: Icon(Icons.tune_outlined, size: 18), text: 'Settings & Locations'),
@@ -191,6 +207,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             child: TabBarView(
               children: [
                 _buildAccountsTab(),
+                _buildCoAdminsTab(),
                 _buildMonitorTab(),
                 _buildReportsTab(),
                 _buildSettingsAndLocationsTab(),
@@ -207,11 +224,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   // ==========================================
 
   Widget _buildAccountsTab() {
-    final filtered = _profiles.where((p) {
+    final nonAdminProfiles = _profiles.where((p) => !p.isAdmin).toList();
+    final filtered = nonAdminProfiles.where((p) {
       if (_userFilter == 'all') return true;
-      if (_userFilter == 'admin') return p.isAdmin;
-      if (_userFilter == 'verified') return p.isVerified && !p.isAdmin;
-      return p.verificationStatus == _userFilter && !p.isAdmin;
+      if (_userFilter == 'verified') return p.isVerified;
+      return p.verificationStatus == _userFilter;
     }).toList();
 
     return Column(
@@ -221,17 +238,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           child: Wrap(
             spacing: 8,
             runSpacing: 6,
-            children: ['pending', 'verified', 'rejected', 'admin', 'all'].map((filter) {
+            children: ['pending', 'verified', 'rejected', 'all'].map((filter) {
               final count = filter == 'all'
-                  ? _profiles.length
-                  : filter == 'admin'
-                      ? _profiles.where((p) => p.isAdmin).length
-                      : filter == 'verified'
-                          ? _profiles.where((p) => p.isVerified && !p.isAdmin).length
-                          : _profiles.where((p) => p.verificationStatus == filter && !p.isAdmin).length;
-              final label = filter == 'admin' ? 'CO-ADMINS' : filter.toUpperCase();
+                  ? nonAdminProfiles.length
+                  : filter == 'verified'
+                      ? nonAdminProfiles.where((p) => p.isVerified).length
+                      : nonAdminProfiles.where((p) => p.verificationStatus == filter).length;
               return ChoiceChip(
-                label: Text('$label ($count)'),
+                label: Text('${filter.toUpperCase()} ($count)'),
                 selected: _userFilter == filter,
                 selectedColor: DDartTheme.primaryMaroon.withValues(alpha: 0.16),
                 onSelected: (_) => setState(() => _userFilter = filter),
@@ -245,9 +259,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               : filtered.isEmpty
                   ? Center(
                       child: Text(
-                        _userFilter == 'admin'
-                            ? 'No co-administrators found.'
-                            : 'No $_userFilter accounts found.',
+                        'No $_userFilter accounts found.',
                         style: const TextStyle(color: Colors.black54),
                       ),
                     )
@@ -266,15 +278,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildProfileReviewCard(UserProfile user) {
-    final statusColor = user.isAdmin
-        ? const Color(0xFFD4AF37)
-        : user.isVerified
-            ? Colors.green
-            : user.isRejected
-                ? Colors.red
-                : Colors.orange.shade800;
-
-    final isCurrentAdminUser = user.id == _service.currentUser?.id;
+    final statusColor = user.isVerified
+        ? Colors.green
+        : user.isRejected
+            ? Colors.red
+            : Colors.orange.shade800;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -299,9 +307,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    user.isAdmin
-                        ? (isCurrentAdminUser ? 'ADMIN (YOU)' : 'ADMINISTRATOR')
-                        : user.verificationLabel.toUpperCase(),
+                    user.verificationLabel.toUpperCase(),
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
@@ -335,7 +341,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   icon: const Icon(Icons.folder_shared_outlined, size: 16),
                   label: const Text('Inspect Docs & Schedule'),
                 ),
-                if (!user.isAdmin && !user.isVerified)
+                if (!user.isVerified)
                   ElevatedButton.icon(
                     onPressed: () => _approveUser(user),
                     style: ElevatedButton.styleFrom(
@@ -345,7 +351,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     icon: const Icon(Icons.check, size: 16),
                     label: const Text('Verify'),
                   ),
-                if (!user.isAdmin && !user.isRejected)
+                if (!user.isRejected)
                   OutlinedButton.icon(
                     onPressed: () => _rejectUser(user),
                     style: OutlinedButton.styleFrom(
@@ -355,26 +361,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     icon: const Icon(Icons.close, size: 16),
                     label: const Text('Reject'),
                   ),
-                if (!user.isAdmin && user.isVerified)
-                  ElevatedButton.icon(
-                    onPressed: () => _confirmPromoteToAdmin(user),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: DDartTheme.primaryMaroon,
-                      foregroundColor: Colors.white,
-                    ),
-                    icon: const Icon(Icons.admin_panel_settings, size: 16),
-                    label: const Text('Make Co-Admin'),
-                  ),
-                if (user.isAdmin && !isCurrentAdminUser)
-                  OutlinedButton.icon(
-                    onPressed: () => _confirmDemoteAdmin(user),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.deepOrange,
-                      side: const BorderSide(color: Colors.deepOrange),
-                    ),
-                    icon: const Icon(Icons.remove_moderator, size: 16),
-                    label: const Text('Remove Co-Admin'),
-                  ),
               ],
             ),
           ],
@@ -383,68 +369,315 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Future<void> _confirmPromoteToAdmin(UserProfile user) async {
+  // ==========================================
+  // TAB 2: DEDICATED CO-ADMIN MANAGEMENT
+  // ==========================================
+
+  Widget _buildCoAdminsTab() {
+    final admins = _profiles.where((p) => p.isAdmin).toList();
+
+    return RefreshIndicator(
+      onRefresh: _loadProfiles,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.person_add_alt_1, color: DDartTheme.primaryMaroon),
+                      SizedBox(width: 8),
+                      Text(
+                        'Create Co-Admin Account',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Provision a dedicated administrator account directly. Co-admins receive full console access without needing a Student ID or COR.',
+                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _coAdminNameCtrl,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Full Name',
+                      prefixIcon: Icon(Icons.person_outline, size: 18),
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _coAdminEmailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email Address',
+                      prefixIcon: Icon(Icons.email_outlined, size: 18),
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _coAdminPhoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone Number (optional)',
+                      hintText: 'e.g. 09171234567',
+                      prefixIcon: Icon(Icons.phone_outlined, size: 18),
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _coAdminPasswordCtrl,
+                    obscureText: _obscureCoAdminPassword,
+                    decoration: InputDecoration(
+                      labelText: 'Temporary Password (min 6 chars)',
+                      prefixIcon: const Icon(Icons.lock_outline, size: 18),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureCoAdminPassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          size: 18,
+                        ),
+                        onPressed: () => setState(
+                          () => _obscureCoAdminPassword = !_obscureCoAdminPassword,
+                        ),
+                      ),
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _coAdminConfirmPasswordCtrl,
+                    obscureText: _obscureCoAdminPassword,
+                    decoration: const InputDecoration(
+                      labelText: 'Confirm Password',
+                      prefixIcon: Icon(Icons.lock_outline, size: 18),
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _creatingCoAdmin ? null : _handleCreateCoAdmin,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: DDartTheme.primaryMaroon,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: _creatingCoAdmin
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.admin_panel_settings, size: 18),
+                      label: Text(
+                        _creatingCoAdmin
+                            ? 'Creating Co-Admin Account...'
+                            : 'Create Co-Admin Account',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              const Icon(Icons.shield_outlined, size: 18, color: DDartTheme.primaryMaroon),
+              const SizedBox(width: 6),
+              Text(
+                'Active Administrators (${admins.length})',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (_loadingUsers)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (admins.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'No administrator accounts found.',
+                  style: TextStyle(color: Colors.black54),
+                ),
+              ),
+            )
+          else
+            ...admins.map(_buildCoAdminCard),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoAdminCard(UserProfile admin) {
+    final isCurrentAdminUser = admin.id == _service.currentUser?.id;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: DDartTheme.primaryMaroon.withValues(alpha: 0.12),
+              child: const Icon(
+                Icons.admin_panel_settings,
+                color: DDartTheme.primaryMaroon,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          admin.fullName.isEmpty ? admin.email : admin.fullName,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD4AF37).withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          isCurrentAdminUser ? 'ADMIN (YOU)' : 'CO-ADMIN',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF9C7B12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    admin.phoneNumber.isNotEmpty
+                        ? '${admin.email}  •  ${admin.phoneNumber}'
+                        : admin.email,
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                ],
+              ),
+            ),
+            if (!isCurrentAdminUser)
+              IconButton(
+                tooltip: 'Delete Co-Admin Account',
+                icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                onPressed: () => _confirmDeleteCoAdmin(admin),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleCreateCoAdmin() async {
+    final fullName = _coAdminNameCtrl.text.trim();
+    final email = _coAdminEmailCtrl.text.trim();
+    final phone = _coAdminPhoneCtrl.text.trim();
+    final password = _coAdminPasswordCtrl.text;
+    final confirmPassword = _coAdminConfirmPasswordCtrl.text;
+
+    final validationError = Validators.validateFullName(fullName) ??
+        Validators.validateEmail(email) ??
+        (phone.isNotEmpty ? Validators.validatePhoneNumber(phone) : null) ??
+        Validators.validatePassword(password) ??
+        Validators.validateConfirmPassword(confirmPassword, password);
+
+    if (validationError != null) {
+      _showAdminError(validationError);
+      return;
+    }
+
+    setState(() => _creatingCoAdmin = true);
+    try {
+      await _service.createCoAdminAccount(
+        fullName: fullName,
+        email: email,
+        password: password,
+        phoneNumber: phone,
+      );
+      _coAdminNameCtrl.clear();
+      _coAdminEmailCtrl.clear();
+      _coAdminPhoneCtrl.clear();
+      _coAdminPasswordCtrl.clear();
+      _coAdminConfirmPasswordCtrl.clear();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.green,
+            content: Text('Co-Admin account created for $fullName ($email).'),
+          ),
+        );
+        await _loadProfiles();
+      }
+    } catch (e) {
+      if (mounted) {
+        final msg = e.toString().replaceFirst('Exception: ', '');
+        _showAdminError('Could not create co-admin: $msg');
+      }
+    } finally {
+      if (mounted) setState(() => _creatingCoAdmin = false);
+    }
+  }
+
+  Future<void> _confirmDeleteCoAdmin(UserProfile admin) async {
+    final displayName = admin.fullName.isEmpty ? admin.email : admin.fullName;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Row(
           children: [
-            Icon(Icons.admin_panel_settings, color: DDartTheme.primaryMaroon),
+            Icon(Icons.delete_forever, color: Colors.redAccent),
             SizedBox(width: 8),
-            Text('Make Co-Admin?'),
+            Text('Delete Co-Admin?'),
           ],
         ),
         content: Text(
-          'Are you sure you want to promote ${user.fullName.isEmpty ? user.email : user.fullName} to Co-Administrator?\n\n'
-          'They will receive full administrative access to:\n'
-          '• Verify or reject student and faculty IDs\n'
-          '• Add or modify campus canteen locations\n'
-          '• Adjust Duty Lock buffers and system settings\n'
-          '• Review dispute problem reports',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: DDartTheme.primaryMaroon,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Confirm & Promote'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    try {
-      await _service.promoteUserToAdmin(user.id);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.green,
-            content: Text('${user.fullName.isEmpty ? user.email : user.fullName} is now a Co-Administrator.'),
-          ),
-        );
-        _loadProfiles();
-      }
-    } catch (e) {
-      if (mounted) _showAdminError('Failed to promote user to Co-Admin: $e');
-    }
-  }
-
-  Future<void> _confirmDemoteAdmin(UserProfile user) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Revoke Co-Admin Access?'),
-        content: Text(
-          'Are you sure you want to remove administrative access for ${user.fullName.isEmpty ? user.email : user.fullName}? '
-          'Their account will be returned to a standard Student/Customer account.',
+          'Permanently delete the co-administrator account for $displayName (${admin.email})?\n\n'
+          'They will immediately lose access to the D-DART Admin Console.',
         ),
         actions: [
           TextButton(
@@ -457,7 +690,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Revoke Admin'),
+            child: const Text('Delete Co-Admin'),
           ),
         ],
       ),
@@ -466,17 +699,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (confirm != true) return;
 
     try {
-      await _service.demoteAdminToUser(user.id);
+      await _service.deleteCoAdminAccount(admin.id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Removed admin privileges for ${user.fullName.isEmpty ? user.email : user.fullName}.'),
+            content: Text('Deleted co-admin account for $displayName.'),
           ),
         );
-        _loadProfiles();
+        await _loadProfiles();
       }
     } catch (e) {
-      if (mounted) _showAdminError('Failed to revoke admin privileges: $e');
+      if (mounted) {
+        final msg = e.toString().replaceFirst('Exception: ', '');
+        _showAdminError('Failed to delete co-admin: $msg');
+      }
     }
   }
 

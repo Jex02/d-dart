@@ -45,6 +45,11 @@ alter table public.profiles drop constraint if exists profiles_verification_stat
 alter table public.profiles add constraint profiles_verification_status_check
   check (verification_status in ('pending', 'verified', 'rejected'));
 
+-- Enforce unique non-empty Student / Employee IDs (case-insensitive, trimmed)
+create unique index if not exists idx_profiles_unique_student_id
+  on public.profiles (upper(trim(student_id)))
+  where nullif(trim(student_id), '') is not null;
+
 -- Helper function in private schema to check admin privileges without RLS recursion
 create or replace function private.is_admin()
 returns boolean
@@ -737,7 +742,7 @@ begin
     coalesce(new.raw_user_meta_data->>'full_name', ''),
     new.email,
     coalesce(new.raw_user_meta_data->>'phone_number', ''),
-    coalesce(new.raw_user_meta_data->>'student_id', ''),
+    trim(coalesce(new.raw_user_meta_data->>'student_id', '')),
     'customer',
     v_account_type,
     'pending',
@@ -759,6 +764,28 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- Lightweight boolean RPC so the signup screen can check ID uniqueness before OCR/auth signup
+create or replace function public.is_student_id_available(p_student_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select case
+    when nullif(trim(coalesce(p_student_id, '')), '') is null then false
+    else not exists (
+      select 1
+      from public.profiles
+      where upper(trim(student_id)) = upper(trim(p_student_id))
+        and nullif(trim(student_id), '') is not null
+    )
+  end;
+$$;
+
+revoke all on function public.is_student_id_available(text) from public;
+grant execute on function public.is_student_id_available(text) to anon, authenticated;
 
 -- 20. Backfill any existing auth users into public.profiles safely
 insert into public.profiles (id, full_name, email, phone_number, student_id, role, account_type, verification_status, cor_verified)
@@ -945,6 +972,7 @@ alter table public.order_messages enable row level security;
 drop policy if exists "Allow participants read order messages" on public.order_messages;
 create policy "Allow participants read order messages"
   on public.order_messages for select
+  to authenticated
   using (
     exists (
       select 1
@@ -955,13 +983,14 @@ create policy "Allow participants read order messages"
           or dr.runner_id = (select auth.uid())
         )
     )
-    or private.is_admin()
+    or (select private.is_admin())
   );
 
 -- INSERT policy: authenticated user can send message if they are customer or assigned runner
 drop policy if exists "Allow participants insert order messages" on public.order_messages;
 create policy "Allow participants insert order messages"
   on public.order_messages for insert
+  to authenticated
   with check (
     sender_id = (select auth.uid())
     and exists (

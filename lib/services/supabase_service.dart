@@ -77,6 +77,18 @@ class SupabaseService {
 
   bool get isAuthenticated => currentUser != null;
 
+  /// Checks whether a Student / Employee ID number is not yet registered.
+  /// Uses a boolean-only Postgres RPC backed by `idx_profiles_unique_student_id`.
+  Future<bool> isStudentIdAvailable(String studentId) async {
+    final trimmed = studentId.trim();
+    if (trimmed.isEmpty) return false;
+    final result = await client.rpc(
+      'is_student_id_available',
+      params: {'p_student_id': trimmed},
+    );
+    return result == true;
+  }
+
   /// Sign up user (Student or Faculty/Staff) with pending admin verification per SRS 3.1.1.
   Future<AuthResponse> signUp({
     required String email,
@@ -95,6 +107,7 @@ class SupabaseService {
     final isStudent = accountType == 'student';
     const verificationStatus = 'pending';
     final normalizedEmail = email.trim().toLowerCase();
+    final trimmedStudentId = studentId.trim();
 
     final response = await client.auth.signUp(
       email: email.trim(),
@@ -102,7 +115,7 @@ class SupabaseService {
       data: {
         'full_name': fullName,
         'phone_number': phoneNumber,
-        'student_id': studentId,
+        'student_id': trimmedStudentId,
         'role': 'customer',
         'account_type': accountType,
         'verification_status': verificationStatus,
@@ -138,7 +151,7 @@ class SupabaseService {
             'full_name': fullName,
             'email': email.trim(),
             'phone_number': phoneNumber,
-            'student_id': studentId,
+            'student_id': trimmedStudentId,
             'cor_verified': isStudent && corVerified,
             'id_document_path': ?idDocPath,
             'cor_document_path': ?corDocPath,
@@ -713,28 +726,55 @@ class SupabaseService {
     }).eq('id', userId);
   }
 
-  /// Promotes a verified user to Co-Administrator (SRS 3.1.5 / Role Management).
-  /// Requires caller to be an authenticated administrator.
-  Future<void> promoteUserToAdmin(String userId) async {
-    await client.from('profiles').update({
-      'account_type': 'admin',
-      'role': 'admin',
-      'verification_status': 'verified',
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', userId);
+  /// Creates a dedicated Co-Administrator account via the `manage-co-admin` Edge Function
+  /// without disturbing the currently signed-in administrator's session.
+  Future<Map<String, dynamic>> createCoAdminAccount({
+    required String fullName,
+    required String email,
+    required String password,
+    String phoneNumber = '',
+  }) async {
+    try {
+      final response = await client.functions.invoke(
+        'manage-co-admin',
+        body: {
+          'action': 'create',
+          'full_name': fullName.trim(),
+          'email': email.trim().toLowerCase(),
+          'password': password,
+          'phone_number': phoneNumber.trim(),
+        },
+      );
+      if (response.data is Map) {
+        return Map<String, dynamic>.from(response.data as Map);
+      }
+      return {'email': email.trim().toLowerCase(), 'full_name': fullName.trim()};
+    } on FunctionException catch (e) {
+      final details = e.details;
+      if (details is Map && details['error'] != null) {
+        throw Exception(details['error'].toString());
+      }
+      throw Exception(details?.toString() ?? e.reasonPhrase ?? 'Failed to create co-admin account.');
+    }
   }
 
-  /// Revokes administrative privileges from a co-admin and sets them back to customer.
-  Future<void> demoteAdminToUser(
-    String userId, {
-    String newAccountType = 'student',
-    String newRole = 'customer',
-  }) async {
-    await client.from('profiles').update({
-      'account_type': newAccountType,
-      'role': newRole,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', userId);
+  /// Permanently removes a dedicated Co-Administrator account via the `manage-co-admin` Edge Function.
+  Future<void> deleteCoAdminAccount(String userId) async {
+    try {
+      await client.functions.invoke(
+        'manage-co-admin',
+        body: {
+          'action': 'delete',
+          'user_id': userId,
+        },
+      );
+    } on FunctionException catch (e) {
+      final details = e.details;
+      if (details is Map && details['error'] != null) {
+        throw Exception(details['error'].toString());
+      }
+      throw Exception(details?.toString() ?? e.reasonPhrase ?? 'Failed to delete co-admin account.');
+    }
   }
 
   // ==========================================
@@ -902,11 +942,14 @@ class SupabaseService {
     if (trimmed.isEmpty) return false;
 
     final senderId = currentUser?.id;
+    final metaName = currentUser?.userMetadata?['full_name']?.toString().trim();
     final effectiveSenderName = (senderName != null && senderName.trim().isNotEmpty)
         ? senderName.trim()
         : (cachedProfile?.fullName.isNotEmpty == true
             ? cachedProfile!.fullName
-            : (senderRole == 'runner' ? 'Runner' : 'Customer'));
+            : (metaName != null && metaName.isNotEmpty
+                ? metaName
+                : (senderRole == 'runner' ? 'Runner' : 'Customer')));
 
     if (orderId.startsWith('ORD-') || !isAuthenticated) {
       addMockOrderMessage(
@@ -923,29 +966,17 @@ class SupabaseService {
       return true;
     }
 
-    try {
-      await client.from('order_messages').insert({
-        'order_id': orderId,
-        'sender_id': senderId,
-        'sender_role': senderRole,
-        'sender_name': effectiveSenderName,
-        'message': trimmed,
-      });
-      return true;
-    } catch (e) {
-      debugPrint('sendOrderMessage Supabase insert error: $e. Storing in local fallback stream.');
-      addMockOrderMessage(
-        orderId: orderId,
-        message: trimmed,
-        senderRole: senderRole,
-        senderName: effectiveSenderName,
-        senderId: senderId ?? 'mock-user',
-      );
-      final updated = getMockMessagesForOrder(orderId)
-          .map((m) => OrderMessage.fromJson(m))
-          .toList();
-      _mockMessageStreamControllers[orderId]?.add(updated);
-      return true;
+    if (senderId == null) {
+      throw Exception('You must be signed in to send messages.');
     }
+
+    await client.from('order_messages').insert({
+      'order_id': orderId,
+      'sender_id': senderId,
+      'sender_role': senderRole,
+      'sender_name': effectiveSenderName,
+      'message': trimmed,
+    });
+    return true;
   }
 }
