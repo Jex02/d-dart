@@ -124,7 +124,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       if (mounted) {
         setState(() => _step = _ResetStep.verifyCode);
         _showSnack(
-          'Password reset instructions sent to $email.',
+          'Recovery code sent to $email. Check your inbox!',
           background: Colors.green,
         );
       }
@@ -351,8 +351,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                       _step == _ResetStep.setNewPassword
                           ? 'Choose a strong new password (at least 6 characters) for your D-DART account.'
                           : _step == _ResetStep.verifyCode
-                              ? 'We sent password recovery instructions to ${_emailCtrl.text.trim()}. Open the link in your email, or enter the recovery code below.'
-                              : 'Enter your registered email address and we will send you instructions to reset your password.',
+                              ? 'We sent a recovery code to ${_emailCtrl.text.trim()}. Enter the code from your email below to verify your account.'
+                              : 'Enter your registered email address and we will send you a recovery code to reset your password.',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: Colors.white70,
@@ -415,7 +415,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       ),
       const SizedBox(height: 20),
       _buildPrimaryButton(
-        label: 'Send Reset Instructions',
+        label: 'Send Recovery Code',
         onPressed: _sendResetEmail,
       ),
       const SizedBox(height: 14),
@@ -449,7 +449,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
             SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Tip: Clicking the "Reset Password" link in your email will automatically bring you to the new password screen. If your email contains a code instead, enter it below.',
+                'Check your inbox (and spam folder) for your D-DART password reset email, then enter the recovery code below.',
                 style: TextStyle(color: Colors.white, fontSize: 11.5, height: 1.35),
               ),
             ),
@@ -492,7 +492,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
           TextButton(
             onPressed: _isLoading ? null : _sendResetEmail,
             child: const Text(
-              'Resend Email',
+              'Resend Code',
               style: TextStyle(
                 color: _resetGoldAccent,
                 fontSize: 12,
