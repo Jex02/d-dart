@@ -11,6 +11,7 @@ class UserProfile {
   final String? idDocumentPath;
   final String? corDocumentPath;
   final String? rejectionReason;
+  final String? assignedCanteen;
 
   const UserProfile({
     required this.id,
@@ -25,11 +26,15 @@ class UserProfile {
     this.idDocumentPath,
     this.corDocumentPath,
     this.rejectionReason,
+    this.assignedCanteen,
   });
 
   bool get isStudent => accountType == 'student';
   bool get isFacultyOrStaff => accountType == 'faculty_staff';
   bool get isAdmin => accountType == 'admin' || role == 'admin';
+  bool get isCanteenAdmin =>
+      isAdmin && assignedCanteen != null && assignedCanteen!.trim().isNotEmpty;
+  bool get isSuperAdmin => isAdmin && !isCanteenAdmin;
   bool get isVerified => verificationStatus == 'verified';
   bool get isPending => verificationStatus == 'pending';
   bool get isRejected => verificationStatus == 'rejected';
@@ -44,11 +49,14 @@ class UserProfile {
   bool get canUseRunnerMode => isStudent && isVerified && corVerified;
 
   String get accountTypeLabel {
+    if (isCanteenAdmin) {
+      return 'Canteen Admin ($assignedCanteen)';
+    }
     switch (accountType) {
       case 'faculty_staff':
         return 'Faculty / Staff';
       case 'admin':
-        return 'Administrator';
+        return 'Super Admin';
       default:
         return 'Student';
     }
@@ -66,6 +74,7 @@ class UserProfile {
   }
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
+    final rawCanteen = json['assigned_canteen']?.toString().trim();
     return UserProfile(
       id: json['id']?.toString() ?? '',
       fullName: json['full_name']?.toString() ?? '',
@@ -79,6 +88,7 @@ class UserProfile {
       idDocumentPath: json['id_document_path']?.toString(),
       corDocumentPath: json['cor_document_path']?.toString(),
       rejectionReason: json['rejection_reason']?.toString(),
+      assignedCanteen: (rawCanteen != null && rawCanteen.isNotEmpty) ? rawCanteen : null,
     );
   }
 }

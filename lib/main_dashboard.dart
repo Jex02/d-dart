@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'admin_dashboard_screen.dart';
+import 'canteen_menu_manager_screen.dart';
 import 'cor_upload_screen.dart';
 import 'customer_home_screen.dart';
 import 'login.dart';
@@ -285,7 +286,12 @@ class _MainDashboardState extends State<MainDashboard> {
                             Navigator.pushReplacement(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const AdminDashboardScreen(),
+                                builder: (_) => _profile!.isCanteenAdmin
+                                    ? CanteenMenuManagerScreen(
+                                        assignedCanteen: _profile!.assignedCanteen!,
+                                        profile: _profile,
+                                      )
+                                    : const AdminDashboardScreen(),
                               ),
                             );
                           },
@@ -293,10 +299,16 @@ class _MainDashboardState extends State<MainDashboard> {
                             backgroundColor: gold,
                             foregroundColor: Colors.black,
                           ),
-                          icon: const Icon(Icons.admin_panel_settings_outlined),
-                          label: const Text(
-                            'Open Admin Console',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                          icon: Icon(
+                            _profile!.isCanteenAdmin
+                                ? Icons.storefront_outlined
+                                : Icons.admin_panel_settings_outlined,
+                          ),
+                          label: Text(
+                            _profile!.isCanteenAdmin
+                                ? 'Open ${_profile!.assignedCanteen} Manager'
+                                : 'Open Admin Console',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),

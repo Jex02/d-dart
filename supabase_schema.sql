@@ -32,6 +32,18 @@ alter table public.profiles add column if not exists cor_verified boolean not nu
 alter table public.profiles add column if not exists id_document_path text;
 alter table public.profiles add column if not exists cor_document_path text;
 alter table public.profiles add column if not exists rejection_reason text;
+alter table public.profiles add column if not exists assigned_canteen text;
+
+alter table public.profiles drop constraint if exists profiles_assigned_canteen_check;
+alter table public.profiles add constraint profiles_assigned_canteen_check
+  check (
+    assigned_canteen is null
+    or assigned_canteen in ('Main Canteen', 'Highschool Canteen', 'Mini Canteen')
+  );
+
+create index if not exists idx_profiles_assigned_canteen
+  on public.profiles (assigned_canteen)
+  where assigned_canteen is not null;
 
 alter table public.profiles drop constraint if exists profiles_role_check;
 alter table public.profiles add constraint profiles_role_check
@@ -50,7 +62,8 @@ create unique index if not exists idx_profiles_unique_student_id
   on public.profiles (upper(trim(student_id)))
   where nullif(trim(student_id), '') is not null;
 
--- Helper function in private schema to check admin privileges without RLS recursion
+-- Helper functions in private schema to check admin/canteen-admin privileges without RLS recursion
+-- Super Admin = admin with assigned_canteen IS NULL
 create or replace function private.is_admin()
 returns boolean
 language sql
@@ -63,11 +76,30 @@ as $$
     from public.profiles
     where id = (select auth.uid())
       and (account_type = 'admin' or role = 'admin')
+      and assigned_canteen is null
   );
+$$;
+
+create or replace function private.assigned_canteen()
+returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select assigned_canteen
+  from public.profiles
+  where id = (select auth.uid())
+    and (account_type = 'admin' or role = 'admin')
+    and assigned_canteen is not null
+  limit 1;
 $$;
 
 revoke all on function private.is_admin() from public, anon;
 grant execute on function private.is_admin() to authenticated;
+
+revoke all on function private.assigned_canteen() from public, anon;
+grant execute on function private.assigned_canteen() to authenticated;
 
 -- 2. Campus Pickup & Drop-off Locations Directory
 create table if not exists public.locations (

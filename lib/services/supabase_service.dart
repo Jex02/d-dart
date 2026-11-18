@@ -779,14 +779,19 @@ class SupabaseService {
     }).eq('id', userId);
   }
 
-  /// Creates a dedicated Co-Administrator account via the `manage-co-admin` Edge Function
-  /// without disturbing the currently signed-in administrator's session.
+  /// Creates a dedicated Co-Administrator or Canteen-Scoped Admin account via the
+  /// `manage-co-admin` Edge Function without disturbing the current Super Admin session.
   Future<Map<String, dynamic>> createCoAdminAccount({
     required String fullName,
     required String email,
     required String password,
     String phoneNumber = '',
+    String? assignedCanteen,
   }) async {
+    final normalizedCanteen =
+        (assignedCanteen != null && assignedCanteen.trim().isNotEmpty)
+            ? assignedCanteen.trim()
+            : null;
     try {
       final response = await client.functions.invoke(
         'manage-co-admin',
@@ -796,12 +801,28 @@ class SupabaseService {
           'email': email.trim().toLowerCase(),
           'password': password,
           'phone_number': phoneNumber.trim(),
+          if (normalizedCanteen != null) 'assigned_canteen': normalizedCanteen,
         },
       );
-      if (response.data is Map) {
-        return Map<String, dynamic>.from(response.data as Map);
+      final Map<String, dynamic> created = response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : {'email': email.trim().toLowerCase(), 'full_name': fullName.trim()};
+
+      // Ensure assigned_canteen is persisted on public.profiles even if the
+      // deployed Edge Function predates the assigned_canteen field.
+      final newUserId = created['id']?.toString();
+      if (normalizedCanteen != null && newUserId != null && newUserId.isNotEmpty) {
+        await client
+            .from('profiles')
+            .update({
+              'assigned_canteen': normalizedCanteen,
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .eq('id', newUserId);
+        created['assigned_canteen'] = normalizedCanteen;
       }
-      return {'email': email.trim().toLowerCase(), 'full_name': fullName.trim()};
+
+      return created;
     } on FunctionException catch (e) {
       final details = e.details;
       if (details is Map && details['error'] != null) {
@@ -905,6 +926,27 @@ class SupabaseService {
   // CANTEEN MENU ITEMS (CATALOG & DATABASE)
   // ==========================================
 
+  CanteenMenuItem _mapMenuRow(Map<String, dynamic> row) {
+    final rawCanteens = row['available_canteens'];
+    final List<String> availableCanteens = (rawCanteens is List)
+        ? rawCanteens.map((e) => e.toString()).toList()
+        : const [];
+
+    return CanteenMenuItem(
+      id: row['id']?.toString() ?? '',
+      name: row['name']?.toString() ?? '',
+      canteen: row['canteen']?.toString() ?? 'Main Canteen',
+      category: row['category']?.toString() ?? 'Food and snacks',
+      price: (row['price'] is num)
+          ? (row['price'] as num).toDouble()
+          : (double.tryParse(row['price']?.toString() ?? '0') ?? 0.0),
+      unitDescription: row['unit_description']?.toString() ?? '',
+      imageUrl: row['image_url']?.toString(),
+      isAvailable: row['is_available'] != false,
+      availableCanteens: availableCanteens,
+    );
+  }
+
   /// Fetches campus canteen menu items from `public.canteen_menu_items`.
   /// Falls back to [CampusMenuCatalog.allItems] if the table does not yet exist or is offline.
   Future<List<CanteenMenuItem>> fetchCanteenMenuItems() async {
@@ -914,31 +956,105 @@ class SupabaseService {
           .select()
           .eq('is_available', true);
 
-      if (data is List && data.isNotEmpty) {
-        return data.map<CanteenMenuItem>((row) {
-          final rawCanteens = row['available_canteens'];
-          final List<String> availableCanteens = (rawCanteens is List)
-              ? rawCanteens.map((e) => e.toString()).toList()
-              : const [];
-
-          return CanteenMenuItem(
-            id: row['id']?.toString() ?? '',
-            name: row['name']?.toString() ?? '',
-            canteen: row['canteen']?.toString() ?? 'Main Canteen',
-            category: row['category']?.toString() ?? 'Food and snacks',
-            price: (row['price'] is num)
-                ? (row['price'] as num).toDouble()
-                : (double.tryParse(row['price']?.toString() ?? '0') ?? 0.0),
-            unitDescription: row['unit_description']?.toString() ?? '',
-            imageUrl: row['image_url']?.toString(),
-            availableCanteens: availableCanteens,
-          );
-        }).toList();
+      if (data.isNotEmpty) {
+        return data
+            .map<CanteenMenuItem>((row) => _mapMenuRow(Map<String, dynamic>.from(row)))
+            .toList();
       }
     } catch (e) {
       debugPrint('fetchCanteenMenuItems: falling back to built-in campus catalog ($e)');
     }
     return CampusMenuCatalog.allItems;
+  }
+
+  /// Fetches menu items for Super Admin (all canteens) or Canteen Admin (scoped canteen),
+  /// including temporarily unavailable / sold-out items.
+  Future<List<CanteenMenuItem>> fetchManageableMenuItems({String? canteen}) async {
+    var query = client.from('canteen_menu_items').select();
+    if (canteen != null && canteen.trim().isNotEmpty) {
+      query = query.eq('canteen', canteen.trim());
+    }
+    final rows = await query.order('category', ascending: true).order('name', ascending: true);
+    return rows
+        .map<CanteenMenuItem>((row) => _mapMenuRow(Map<String, dynamic>.from(row)))
+        .toList();
+  }
+
+  /// Creates or updates a canteen menu item (RLS enforces canteen ownership for Canteen Admins).
+  Future<CanteenMenuItem> upsertMenuItem(CanteenMenuItem item) async {
+    final effectiveId = item.id.trim().isEmpty
+        ? 'item-${DateTime.now().millisecondsSinceEpoch}'
+        : item.id.trim();
+    final canteens = item.availableCanteens.isNotEmpty
+        ? item.availableCanteens
+        : <String>[item.canteen];
+
+    final payload = {
+      'id': effectiveId,
+      'name': item.name.trim(),
+      'canteen': item.canteen.trim(),
+      'category': item.category.trim(),
+      'price': item.price,
+      'unit_description': item.unitDescription.trim(),
+      'image_url': (item.imageUrl != null && item.imageUrl!.trim().isNotEmpty)
+          ? item.imageUrl!.trim()
+          : null,
+      'is_available': item.isAvailable,
+      'available_canteens': canteens,
+    };
+
+    final res = await client
+        .from('canteen_menu_items')
+        .upsert(payload, onConflict: 'id')
+        .select()
+        .single();
+    return _mapMenuRow(Map<String, dynamic>.from(res));
+  }
+
+  Future<void> toggleMenuItemAvailability(String itemId, bool isAvailable) async {
+    await client
+        .from('canteen_menu_items')
+        .update({'is_available': isAvailable})
+        .eq('id', itemId);
+  }
+
+  Future<void> deleteMenuItem(String itemId) async {
+    await client.from('canteen_menu_items').delete().eq('id', itemId);
+  }
+
+  /// Uploads a menu item photo into the public `menu-images` Storage bucket
+  /// and returns its public URL.
+  Future<String> uploadMenuItemImage({
+    required String canteen,
+    required String fileName,
+    required Uint8List bytes,
+  }) async {
+    final safeCanteen = canteen.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+    final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : 'jpg';
+    final contentType = switch (ext) {
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      _ => 'image/jpeg',
+    };
+    final path = '$safeCanteen/${DateTime.now().millisecondsSinceEpoch}.$ext';
+    await client.storage.from('menu-images').uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(contentType: contentType, upsert: true),
+        );
+    return client.storage.from('menu-images').getPublicUrl(path);
+  }
+
+  /// Reassigns an admin account's canteen scope (Super Admin only; enforced by DB trigger).
+  Future<void> updateAdminCanteenScope(String userId, String? assignedCanteen) async {
+    final normalized =
+        (assignedCanteen != null && assignedCanteen.trim().isNotEmpty)
+            ? assignedCanteen.trim()
+            : null;
+    await client.from('profiles').update({
+      'assigned_canteen': normalized,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', userId);
   }
 
   // ==========================================

@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import '../admin_dashboard_screen.dart';
+import '../canteen_menu_manager_screen.dart';
 import '../customer_home_screen.dart';
 import '../main_dashboard.dart';
 import '../models/user_profile.dart';
@@ -16,6 +17,12 @@ class AppRouter {
 
     if (profile == null) {
       return const MainDashboard();
+    }
+    if (profile.isCanteenAdmin) {
+      return CanteenMenuManagerScreen(
+        assignedCanteen: profile.assignedCanteen!,
+        profile: profile,
+      );
     }
     if (profile.isAdmin) {
       return const AdminDashboardScreen();

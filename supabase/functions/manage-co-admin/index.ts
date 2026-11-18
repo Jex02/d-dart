@@ -50,24 +50,31 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Invalid or expired session." }, 401);
   }
 
-  // 2. Authorize caller as Administrator via public.profiles
+  // 2. Authorize caller as Super Administrator (assigned_canteen IS NULL) via public.profiles
   const { data: callerProfile, error: profileErr } = await adminClient
     .from("profiles")
-    .select("role, account_type")
+    .select("role, account_type, assigned_canteen")
     .eq("id", caller.id)
     .maybeSingle();
 
-  const isCallerAdmin =
+  const isCallerSuperAdmin =
     !profileErr &&
     callerProfile != null &&
-    (callerProfile.account_type === "admin" || callerProfile.role === "admin");
+    (callerProfile.account_type === "admin" || callerProfile.role === "admin") &&
+    (callerProfile.assigned_canteen == null || callerProfile.assigned_canteen === "");
 
-  if (!isCallerAdmin) {
+  if (!isCallerSuperAdmin) {
     return jsonResponse(
-      { error: "Only administrators can manage co-admin accounts." },
+      { error: "Only Super Administrators can manage admin and canteen-admin accounts." },
       403,
     );
   }
+
+  const ALLOWED_CANTEENS = new Set([
+    "Main Canteen",
+    "Highschool Canteen",
+    "Mini Canteen",
+  ]);
 
   let body: Record<string, unknown>;
   try {
@@ -83,7 +90,15 @@ Deno.serve(async (req: Request) => {
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const password = typeof body.password === "string" ? body.password : "";
     const phoneNumber = typeof body.phone_number === "string" ? body.phone_number.trim() : "";
+    const rawCanteen = typeof body.assigned_canteen === "string" ? body.assigned_canteen.trim() : "";
+    const assignedCanteen = rawCanteen.length > 0 ? rawCanteen : null;
 
+    if (assignedCanteen !== null && !ALLOWED_CANTEENS.has(assignedCanteen)) {
+      return jsonResponse(
+        { error: `Invalid assigned_canteen: ${assignedCanteen}.` },
+        400,
+      );
+    }
     if (fullName.length < 2) {
       return jsonResponse({ error: "Full name must be at least 2 characters." }, 400);
     }
@@ -103,11 +118,12 @@ Deno.serve(async (req: Request) => {
           full_name: fullName,
           phone_number: phoneNumber,
           account_type: "admin",
+          assigned_canteen: assignedCanteen,
         },
       });
 
     if (createError || !created.user) {
-      const msg = createError?.message ?? "Failed to create co-admin account.";
+      const msg = createError?.message ?? "Failed to create admin account.";
       const status = msg.toLowerCase().includes("already") ? 409 : 400;
       return jsonResponse({ error: msg }, status);
     }
@@ -124,6 +140,7 @@ Deno.serve(async (req: Request) => {
         student_id: "",
         role: "admin",
         account_type: "admin",
+        assigned_canteen: assignedCanteen,
         verification_status: "verified",
         cor_verified: false,
         updated_at: nowIso,
@@ -135,7 +152,7 @@ Deno.serve(async (req: Request) => {
       // Clean up auth user so we don't leave a non-admin orphan account
       await adminClient.auth.admin.deleteUser(newUserId);
       return jsonResponse(
-        { error: `Failed to initialize co-admin profile: ${upsertError.message}` },
+        { error: `Failed to initialize admin profile: ${upsertError.message}` },
         500,
       );
     }
@@ -148,6 +165,7 @@ Deno.serve(async (req: Request) => {
         phone_number: phoneNumber,
         role: "admin",
         account_type: "admin",
+        assigned_canteen: assignedCanteen,
         verification_status: "verified",
       },
       201,

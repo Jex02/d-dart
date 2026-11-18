@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'canteen_menu_manager_screen.dart';
 import 'login.dart';
 import 'main_dashboard.dart';
 import 'models/campus_location.dart';
@@ -37,12 +38,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final _expirationCtrl = TextEditingController();
   final _deliveryFeeCtrl = TextEditingController();
 
-  // Co-Admin account creation form state
+  // Co-Admin / Canteen Admin account creation form state
   final _coAdminNameCtrl = TextEditingController();
   final _coAdminEmailCtrl = TextEditingController();
   final _coAdminPhoneCtrl = TextEditingController();
   final _coAdminPasswordCtrl = TextEditingController();
   final _coAdminConfirmPasswordCtrl = TextEditingController();
+  String? _selectedAssignedCanteen; // null => Full Super Admin; otherwise specific canteen
   bool _creatingCoAdmin = false;
   bool _obscureCoAdminPassword = true;
 
@@ -154,7 +156,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 5,
+      length: 6,
       child: Scaffold(
         backgroundColor: DDartTheme.scaffoldBg(context),
         appBar: AppBar(
@@ -195,7 +197,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             unselectedLabelColor: Colors.white70,
             tabs: [
               Tab(icon: Icon(Icons.verified_user_outlined, size: 18), text: 'Accounts'),
-              Tab(icon: Icon(Icons.admin_panel_settings_outlined, size: 18), text: 'Co-Admins'),
+              Tab(icon: Icon(Icons.admin_panel_settings_outlined, size: 18), text: 'Admins'),
+              Tab(icon: Icon(Icons.restaurant_menu_outlined, size: 18), text: 'Menu'),
               Tab(icon: Icon(Icons.local_shipping_outlined, size: 18), text: 'Monitor'),
               Tab(icon: Icon(Icons.report_problem_outlined, size: 18), text: 'Reports'),
               Tab(icon: Icon(Icons.tune_outlined, size: 18), text: 'Settings & Locations'),
@@ -209,6 +212,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               children: [
                 _buildAccountsTab(),
                 _buildCoAdminsTab(),
+                const CanteenMenuManagerBody(),
                 _buildMonitorTab(),
                 _buildReportsTab(),
                 _buildSettingsAndLocationsTab(),
@@ -393,18 +397,43 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     children: [
                       Icon(Icons.person_add_alt_1, color: DDartTheme.primaryMaroon),
                       SizedBox(width: 8),
-                      Text(
-                        'Create Co-Admin Account',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      Expanded(
+                        child: Text(
+                          'Create Admin / Canteen Admin',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 4),
-                  const Text(
-                    'Provision a dedicated administrator account directly. Co-admins receive full console access without needing a Student ID or COR.',
-                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                  Text(
+                    'Provision either a Full Super Admin or a Canteen Admin locked strictly to one canteen\'s food menu.',
+                    style: TextStyle(fontSize: 12, color: DDartTheme.textSecondary(context)),
                   ),
                   const SizedBox(height: 14),
+                  DropdownButtonFormField<String?>(
+                    initialValue: _selectedAssignedCanteen,
+                    decoration: const InputDecoration(
+                      labelText: 'Admin Tier / Assigned Canteen',
+                      prefixIcon: Icon(Icons.storefront_outlined, size: 18),
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Full Super Admin (All Console Access)'),
+                      ),
+                      ...CampusLocation.officialCanteens.map(
+                        (canteen) => DropdownMenuItem<String?>(
+                          value: canteen,
+                          child: Text('Canteen Admin — $canteen'),
+                        ),
+                      ),
+                    ],
+                    onChanged: (val) => setState(() => _selectedAssignedCanteen = val),
+                  ),
+                  const SizedBox(height: 10),
                   TextField(
                     controller: _coAdminNameCtrl,
                     textCapitalization: TextCapitalization.words,
@@ -493,8 +522,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           : const Icon(Icons.admin_panel_settings, size: 18),
                       label: Text(
                         _creatingCoAdmin
-                            ? 'Creating Co-Admin Account...'
-                            : 'Create Co-Admin Account',
+                            ? 'Creating Account...'
+                            : _selectedAssignedCanteen != null
+                                ? 'Create $_selectedAssignedCanteen Admin'
+                                : 'Create Full Super Admin',
                       ),
                     ),
                   ),
@@ -540,6 +571,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _buildCoAdminCard(UserProfile admin) {
     final isCurrentAdminUser = admin.id == _service.currentUser?.id;
+    final isCanteenScoped = admin.isCanteenAdmin;
+    final badgeLabel = isCurrentAdminUser
+        ? 'SUPER ADMIN (YOU)'
+        : isCanteenScoped
+            ? 'CANTEEN • ${admin.assignedCanteen!.toUpperCase()}'
+            : 'SUPER ADMIN';
+    final badgeBg = isCanteenScoped
+        ? DDartTheme.primaryMaroon.withValues(alpha: 0.14)
+        : const Color(0xFFD4AF37).withValues(alpha: 0.2);
+    final badgeFg = isCanteenScoped
+        ? DDartTheme.accentText(context)
+        : const Color(0xFF9C7B12);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -551,9 +594,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             CircleAvatar(
               radius: 20,
               backgroundColor: DDartTheme.primaryMaroon.withValues(alpha: 0.12),
-              child: const Icon(
-                Icons.admin_panel_settings,
-                color: DDartTheme.primaryMaroon,
+              child: Icon(
+                isCanteenScoped ? Icons.storefront : Icons.admin_panel_settings,
+                color: DDartTheme.accentText(context),
                 size: 20,
               ),
             ),
@@ -562,31 +605,31 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
-                      Flexible(
-                        child: Text(
-                          admin.fullName.isEmpty ? admin.email : admin.fullName,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      Text(
+                        admin.fullName.isEmpty ? admin.email : admin.fullName,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFD4AF37).withValues(alpha: 0.18),
+                          color: badgeBg,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          isCurrentAdminUser ? 'ADMIN (YOU)' : 'CO-ADMIN',
-                          style: const TextStyle(
+                          badgeLabel,
+                          style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF9C7B12),
+                            color: badgeFg,
                           ),
                         ),
                       ),
@@ -597,21 +640,93 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     admin.phoneNumber.isNotEmpty
                         ? '${admin.email}  •  ${admin.phoneNumber}'
                         : admin.email,
-                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                    style: TextStyle(fontSize: 12, color: DDartTheme.textSecondary(context)),
                   ),
                 ],
               ),
             ),
-            if (!isCurrentAdminUser)
+            if (!isCurrentAdminUser) ...[
               IconButton(
-                tooltip: 'Delete Co-Admin Account',
+                tooltip: 'Change Assigned Canteen',
+                icon: Icon(Icons.edit_outlined, size: 19, color: DDartTheme.accentText(context)),
+                onPressed: () => _showReassignCanteenDialog(admin),
+              ),
+              IconButton(
+                tooltip: 'Delete Admin Account',
                 icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
                 onPressed: () => _confirmDeleteCoAdmin(admin),
               ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _showReassignCanteenDialog(UserProfile admin) async {
+    String? chosen = admin.assignedCanteen;
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('Assign Role • ${admin.firstName}'),
+          content: DropdownButtonFormField<String?>(
+            initialValue: chosen,
+            decoration: const InputDecoration(
+              labelText: 'Admin Tier / Assigned Canteen',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('Full Super Admin (All Access)'),
+              ),
+              ...CampusLocation.officialCanteens.map(
+                (canteen) => DropdownMenuItem<String?>(
+                  value: canteen,
+                  child: Text('Canteen Admin — $canteen'),
+                ),
+              ),
+            ],
+            onChanged: (v) => setDialogState(() => chosen = v),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: DDartTheme.primaryMaroon,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (save != true) return;
+    try {
+      await _service.updateAdminCanteenScope(admin.id, chosen);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.green,
+            content: Text(
+              chosen == null
+                  ? '${admin.fullName} is now a Full Super Admin.'
+                  : '${admin.fullName} is now assigned to $chosen.',
+            ),
+          ),
+        );
+        await _loadProfiles();
+      }
+    } catch (e) {
+      if (mounted) _showAdminError('Failed to update admin scope: $e');
+    }
   }
 
   Future<void> _handleCreateCoAdmin() async {
@@ -620,6 +735,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final phone = _coAdminPhoneCtrl.text.trim();
     final password = _coAdminPasswordCtrl.text;
     final confirmPassword = _coAdminConfirmPasswordCtrl.text;
+    final assignedCanteen = _selectedAssignedCanteen;
 
     final validationError = Validators.validateFullName(fullName) ??
         Validators.validateEmail(email) ??
@@ -639,6 +755,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         email: email,
         password: password,
         phoneNumber: phone,
+        assignedCanteen: assignedCanteen,
       );
       _coAdminNameCtrl.clear();
       _coAdminEmailCtrl.clear();
@@ -649,7 +766,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: Colors.green,
-            content: Text('Co-Admin account created for $fullName ($email).'),
+            content: Text(
+              assignedCanteen != null
+                  ? '$assignedCanteen Admin created for $fullName ($email).'
+                  : 'Super Admin account created for $fullName ($email).',
+            ),
           ),
         );
         await _loadProfiles();
@@ -657,7 +778,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     } catch (e) {
       if (mounted) {
         final msg = e.toString().replaceFirst('Exception: ', '');
-        _showAdminError('Could not create co-admin: $msg');
+        _showAdminError('Could not create admin: $msg');
       }
     } finally {
       if (mounted) setState(() => _creatingCoAdmin = false);
