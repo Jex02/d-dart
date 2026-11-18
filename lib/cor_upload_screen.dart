@@ -6,6 +6,7 @@ import 'models/class_schedule.dart';
 import 'services/gemini_service.dart';
 import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
+import 'widgets/responsive_shell.dart';
 import 'widgets/schedule_editor.dart';
 
 class CorUploadScreen extends StatefulWidget {
@@ -126,7 +127,7 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: DDartTheme.surface(context),
       appBar: AppBar(
         title: const Text(
           'Study Load / COR Verification',
@@ -173,10 +174,10 @@ class _CorUploadScreenState extends State<CorUploadScreen> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'D-DART uses Google Gemini AI to extract your enrolled class hours. This protects your studies by preventing gig claims while class is in session.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black87, fontSize: 13),
+              style: TextStyle(color: DDartTheme.textSecondary(context), fontSize: 13),
             ),
             const SizedBox(height: 28),
             if (_isProcessing) ...[

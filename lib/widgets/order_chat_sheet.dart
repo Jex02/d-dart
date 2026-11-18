@@ -3,6 +3,7 @@ import '../models/delivery_order.dart';
 import '../models/order_message.dart';
 import '../services/chat_read_tracker.dart';
 import '../services/supabase_service.dart';
+import 'responsive_shell.dart';
 
 class OrderChatSheet extends StatefulWidget {
   final DeliveryOrder order;
@@ -271,9 +272,9 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
 
     return Container(
       height: media.size.height * (isKeyboardOpen ? 0.88 : 0.78),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: DDartTheme.card(context),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         children: [
@@ -283,7 +284,7 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
             width: 44,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.grey.shade300,
+              color: DDartTheme.divider(context),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -292,7 +293,7 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+              border: Border(bottom: BorderSide(color: DDartTheme.border(context))),
             ),
             child: Row(
               children: [
@@ -580,10 +581,10 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
                 return ActionChip(
                   label: Text(
                     chip,
-                    style: const TextStyle(fontSize: 11.5, color: primaryMaroon),
+                    style: TextStyle(fontSize: 11.5, color: DDartTheme.accentText(context)),
                   ),
-                  backgroundColor: const Color(0xFFFBEAEA),
-                  side: BorderSide(color: primaryMaroon.withValues(alpha: 0.2)),
+                  backgroundColor: DDartTheme.maroonTint(context),
+                  side: BorderSide(color: DDartTheme.accentText(context).withValues(alpha: 0.25)),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -604,8 +605,8 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
               bottom: media.viewInsets.bottom + 10,
             ),
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: Colors.grey.shade200)),
+              color: DDartTheme.card(context),
+              border: Border(top: BorderSide(color: DDartTheme.border(context))),
             ),
             child: Row(
               children: [
@@ -613,9 +614,9 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
+                      color: DDartTheme.cardSubtle(context),
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.grey.shade300),
+                      border: Border.all(color: DDartTheme.border(context)),
                     ),
                     child: TextField(
                       controller: _textController,
@@ -660,6 +661,7 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
   }
 
   Widget _buildMessageBubble(OrderMessage msg, bool isMe) {
+    final isDark = DDartTheme.isDark(context);
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -676,10 +678,10 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
                 msg.senderName.isNotEmpty
                     ? msg.senderName
                     : (msg.isRunner ? 'Runner' : 'Customer'),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  color: primaryMaroon,
+                  color: DDartTheme.accentText(context),
                 ),
               ),
               const SizedBox(height: 3),
@@ -687,7 +689,9 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: isMe ? primaryMaroon : const Color(0xFFF1F3F5),
+                color: isMe
+                    ? primaryMaroon
+                    : (isDark ? const Color(0xFF2B2B32) : const Color(0xFFF1F3F5)),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(14),
                   topRight: const Radius.circular(14),
@@ -699,7 +703,7 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
                 msg.message,
                 style: TextStyle(
                   fontSize: 13.5,
-                  color: isMe ? Colors.white : const Color(0xFF1E1E1E),
+                  color: isMe ? Colors.white : DDartTheme.textPrimary(context),
                 ),
               ),
             ),

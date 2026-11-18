@@ -156,7 +156,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return DefaultTabController(
       length: 5,
       child: Scaffold(
-        backgroundColor: Colors.grey.shade100,
+        backgroundColor: DDartTheme.scaffoldBg(context),
         appBar: AppBar(
           backgroundColor: DDartTheme.primaryMaroon,
           foregroundColor: Colors.white,
@@ -165,6 +165,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           actions: [
+            const ThemeToggleButton(iconColor: Colors.white, iconSize: 21),
             IconButton(
               tooltip: 'Switch / Mode Preview',
               icon: const Icon(Icons.dashboard_customize_outlined),

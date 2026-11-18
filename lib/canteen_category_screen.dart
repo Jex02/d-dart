@@ -105,9 +105,13 @@ class _CanteenCategoryScreenState extends State<CanteenCategoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final surface = DDartTheme.surface(context);
+    final textPrimary = DDartTheme.textPrimary(context);
+    final accent = DDartTheme.accentText(context);
+
     return ResponsiveMobileShell(
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: surface,
         appBar: AppBar(
           backgroundColor: primaryMaroon,
           elevation: 0,
@@ -125,6 +129,7 @@ class _CanteenCategoryScreenState extends State<CanteenCategoryScreen> {
             ),
           ),
           actions: [
+            const ThemeToggleButton(iconColor: Colors.white, iconSize: 21),
             IconButton(
               tooltip: 'Notifications & Orders',
               icon: const Icon(Icons.notifications_outlined, color: Colors.white),
@@ -170,23 +175,23 @@ class _CanteenCategoryScreenState extends State<CanteenCategoryScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Greeting Header (per Wireframe 2)
-                      const Text(
+                      Text(
                         'Good day!',
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
                           fontFamily: 'serif',
-                          color: Color(0xFF1E1E1E),
+                          color: textPrimary,
                           height: 1.1,
                         ),
                       ),
                       Text(
                         '$_displayName!',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
                           fontFamily: 'serif',
-                          color: primaryMaroon,
+                          color: accent,
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -194,24 +199,24 @@ class _CanteenCategoryScreenState extends State<CanteenCategoryScreen> {
                       // Canteen Name Header (e.g. MAIN CANTEEN)
                       Text(
                         widget.canteenName.toUpperCase(),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 1.2,
-                          color: Colors.black87,
+                          color: textPrimary,
                         ),
                       ),
                       const SizedBox(height: 18),
 
                       // Popular Categories Subheader
-                      const Center(
+                      Center(
                         child: Text(
                           'Popular categories',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                             fontFamily: 'serif',
-                            color: Color(0xFF222222),
+                            color: textPrimary,
                           ),
                         ),
                       ),
@@ -271,7 +276,7 @@ class _CanteenCategoryScreenState extends State<CanteenCategoryScreen> {
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: DDartTheme.surface(context),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.08),
@@ -369,11 +374,11 @@ class _CanteenCategoryScreenState extends State<CanteenCategoryScreen> {
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
               fontFamily: 'serif',
-              color: Color(0xFF222222),
+              color: DDartTheme.textPrimary(context),
             ),
           ),
         ],

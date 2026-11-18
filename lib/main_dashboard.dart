@@ -164,6 +164,10 @@ class _MainDashboardState extends State<MainDashboard> {
     final showRunnerOption = _profile == null || _profile!.isStudent;
     final dailyLimit = DutyLockService.activeConfig.dailyDeliveryLimit;
     final completedToday = DutyLockService.completedDeliveriesToday;
+    final isDark = DDartTheme.isDark(context);
+    final textPrimary = DDartTheme.textPrimary(context);
+    final textSecondary = DDartTheme.textSecondary(context);
+    final accent = DDartTheme.accentText(context);
 
     Widget content = Stack(
       children: [
@@ -171,7 +175,11 @@ class _MainDashboardState extends State<MainDashboard> {
           child: Image.asset('assets/lrac.jpg', fit: BoxFit.cover),
         ),
         Positioned.fill(
-          child: Container(color: Colors.white.withValues(alpha: 0.86)),
+          child: Container(
+            color: isDark
+                ? const Color(0xFF121214).withValues(alpha: 0.86)
+                : Colors.white.withValues(alpha: 0.86),
+          ),
         ),
         SafeArea(
           child: Center(
@@ -186,52 +194,61 @@ class _MainDashboardState extends State<MainDashboard> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Flexible(
+                        Flexible(
                           child: Text(
                             'Order.Run.Deliver.',
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: Colors.black87,
+                              color: textPrimary,
                               fontSize: 13,
                               letterSpacing: 2.2,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
-                        IconButton(
-                          tooltip: 'Sign out',
-                          onPressed: _handleSignOut,
-                          icon: const Icon(Icons.logout, color: darkRed, size: 20),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ThemeToggleButton(iconColor: accent, iconSize: 20),
+                            IconButton(
+                              tooltip: 'Sign out',
+                              onPressed: _handleSignOut,
+                              icon: Icon(Icons.logout, color: accent, size: 20),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                     Container(
                       width: double.infinity,
                       height: 1,
-                      color: Colors.black26,
+                      color: isDark ? Colors.white24 : Colors.black26,
                     ),
                     const SizedBox(height: 18),
                     RichText(
                       textAlign: TextAlign.center,
-                      text: const TextSpan(
-                        style: TextStyle(
+                      text: TextSpan(
+                        style: const TextStyle(
                           fontFamily: 'serif',
                           fontSize: 34,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 2,
                         ),
                         children: [
-                          TextSpan(text: 'D', style: TextStyle(color: gold)),
-                          TextSpan(text: '-DART', style: TextStyle(color: darkRed)),
+                          const TextSpan(text: 'D', style: TextStyle(color: gold)),
+                          TextSpan(
+                            text: '-DART',
+                            style: TextStyle(color: isDark ? Colors.white : darkRed),
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       'Peer-to-Peer Campus Delivery Application',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.black87,
+                        color: textPrimary,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.8,
@@ -243,7 +260,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.12),
+                          color: Colors.green.withValues(alpha: isDark ? 0.2 : 0.12),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(color: Colors.green),
                         ),
@@ -253,7 +270,7 @@ class _MainDashboardState extends State<MainDashboard> {
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: Colors.green.shade800,
+                            color: isDark ? Colors.green.shade300 : Colors.green.shade800,
                           ),
                         ),
                       ),
@@ -286,19 +303,19 @@ class _MainDashboardState extends State<MainDashboard> {
                       const SizedBox(height: 16),
                     ],
 
-                    const Text(
+                    Text(
                       'Choose Mode',
                       style: TextStyle(
-                        color: darkRed,
+                        color: accent,
                         fontSize: 22,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
+                    Text(
                       'Select how you want to use D-DART right now',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.black54, fontSize: 12),
+                      style: TextStyle(color: textSecondary, fontSize: 12),
                     ),
                     const SizedBox(height: 18),
 
@@ -364,12 +381,12 @@ class _MainDashboardState extends State<MainDashboard> {
                           );
                           _syncAccountState();
                         },
-                        icon: const Icon(Icons.school_outlined, size: 16, color: darkRed),
-                        label: const Text(
+                        icon: Icon(Icons.school_outlined, size: 16, color: accent),
+                        label: Text(
                           'Manage / Update Study Load',
                           style: TextStyle(
                             fontSize: 12,
-                            color: darkRed,
+                            color: accent,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -385,7 +402,9 @@ class _MainDashboardState extends State<MainDashboard> {
     );
 
     return Scaffold(
-      backgroundColor: isDesktopOrTablet ? const Color(0xFF2B2B2B) : Colors.white,
+      backgroundColor: isDesktopOrTablet
+          ? (isDark ? const Color(0xFF0A0A0C) : const Color(0xFF2B2B2B))
+          : DDartTheme.surface(context),
       body: ResponsiveMobileShell(
         maxWidth: 450,
         maxHeight: 900,
@@ -415,6 +434,9 @@ class _RoleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = DDartTheme.isDark(context);
+    final accent = DDartTheme.accentText(context);
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -422,10 +444,12 @@ class _RoleCard extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.94),
+          color: isDark
+              ? DDartTheme.card(context).withValues(alpha: 0.94)
+              : Colors.white.withValues(alpha: 0.94),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? gold : darkRed.withValues(alpha: 0.6),
+            color: selected ? gold : (isDark ? DDartTheme.border(context) : darkRed.withValues(alpha: 0.6)),
             width: selected ? 2 : 1,
           ),
           boxShadow: [
@@ -442,10 +466,10 @@ class _RoleCard extends StatelessWidget {
               width: 50,
               height: 50,
               decoration: BoxDecoration(
-                color: darkRed.withValues(alpha: 0.08),
+                color: accent.withValues(alpha: 0.14),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, color: darkRed, size: 28),
+              child: Icon(icon, color: accent, size: 28),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -458,15 +482,15 @@ class _RoleCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: selected ? darkRed : Colors.black87,
+                      color: selected ? accent : DDartTheme.textPrimary(context),
                     ),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     description,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
-                      color: Colors.black54,
+                      color: DDartTheme.textSecondary(context),
                       height: 1.25,
                     ),
                   ),
@@ -476,7 +500,7 @@ class _RoleCard extends StatelessWidget {
             const SizedBox(width: 10),
             Icon(
               selected ? Icons.check_circle : Icons.circle_outlined,
-              color: selected ? gold : Colors.grey.shade400,
+              color: selected ? gold : DDartTheme.textMuted(context),
               size: 22,
             ),
           ],

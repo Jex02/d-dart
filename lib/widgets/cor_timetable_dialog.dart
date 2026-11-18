@@ -3,6 +3,7 @@ import '../cor_upload_screen.dart';
 import '../models/class_schedule.dart';
 import '../models/user_profile.dart';
 import '../services/duty_lock_service.dart';
+import 'responsive_shell.dart';
 
 class CorTimetableDialog extends StatefulWidget {
   final UserProfile? profile;
@@ -162,7 +163,7 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
     final isMobile = screenSize.width < 700;
 
     return Dialog(
-      backgroundColor: Colors.white,
+      backgroundColor: DDartTheme.card(context),
       insetPadding: EdgeInsets.symmetric(
         horizontal: isMobile ? 12 : 32,
         vertical: isMobile ? 16 : 28,
@@ -180,7 +181,7 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
             // Modal Header with Close Button
             _buildHeader(context, isLocked, reason),
 
-            const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+            Divider(height: 1, thickness: 1, color: DDartTheme.divider(context)),
 
             // View switch bar & sample toggle
             _buildControlsBar(hasVerified),
@@ -201,19 +202,21 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
   }
 
   Widget _buildHeader(BuildContext context, bool isLocked, String reason) {
+    final isDark = DDartTheme.isDark(context);
+    final accent = DDartTheme.accentText(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 16, 14),
-      color: Colors.white,
+      color: DDartTheme.card(context),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: primaryMaroon.withValues(alpha: 0.1),
+              color: accent.withValues(alpha: 0.14),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.calendar_month, color: primaryMaroon, size: 22),
+            child: Icon(Icons.calendar_month, color: accent, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -221,19 +224,21 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
+                Text(
                   'Enrolled Class Schedule',
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E1E1E),
+                    color: DDartTheme.textPrimary(context),
                   ),
                 ),
                 Text(
                   isLocked ? 'Duty Lock Active • $reason' : 'Vacant Period • Eligible for Errand Runs',
                   style: TextStyle(
                     fontSize: 11.5,
-                    color: isLocked ? Colors.red.shade700 : Colors.green.shade700,
+                    color: isLocked
+                        ? (isDark ? Colors.red.shade300 : Colors.red.shade700)
+                        : (isDark ? Colors.green.shade300 : Colors.green.shade700),
                     fontWeight: FontWeight.w600,
                   ),
                   maxLines: 1,
@@ -245,7 +250,7 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
           IconButton(
             tooltip: 'Close schedule (or tap outside)',
             onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close, color: Colors.black54, size: 22),
+            icon: Icon(Icons.close, color: DDartTheme.textSecondary(context), size: 22),
           ),
         ],
       ),
@@ -253,9 +258,11 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
   }
 
   Widget _buildControlsBar(bool hasVerified) {
+    final isDark = DDartTheme.isDark(context);
+    final accent = DDartTheme.accentText(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: const Color(0xFFFAFAFA),
+      color: DDartTheme.cardSubtle(context),
       child: Row(
         children: [
           // Segmented button for Timetable vs List
@@ -281,15 +288,15 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               backgroundColor: WidgetStateProperty.resolveWith((states) {
                 if (states.contains(WidgetState.selected)) {
-                  return primaryMaroon.withValues(alpha: 0.12);
+                  return accent.withValues(alpha: 0.16);
                 }
-                return Colors.white;
+                return DDartTheme.card(context);
               }),
               foregroundColor: WidgetStateProperty.resolveWith((states) {
                 if (states.contains(WidgetState.selected)) {
-                  return primaryMaroon;
+                  return accent;
                 }
-                return Colors.black87;
+                return DDartTheme.textPrimary(context);
               }),
             ),
           ),
@@ -298,18 +305,22 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.amber.shade100,
+                color: isDark ? Colors.amber.withValues(alpha: 0.18) : Colors.amber.shade100,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.amber.shade400, width: 0.8),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.info_outline, size: 13, color: Colors.brown),
-                  SizedBox(width: 4),
+                  Icon(Icons.info_outline, size: 13, color: isDark ? Colors.amber.shade200 : Colors.brown),
+                  const SizedBox(width: 4),
                   Text(
                     'Previewing Sample CIT-U Schedule',
-                    style: TextStyle(fontSize: 11, color: Colors.brown, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.amber.shade200 : Colors.brown,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
@@ -323,6 +334,17 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
     const double timeColWidth = 128.0;
     const double dayColWidth = 116.0;
     const double rowHeight = 32.0;
+
+    final isDark = DDartTheme.isDark(context);
+    final surface = DDartTheme.card(context);
+    final headerBg = isDark ? const Color(0xFF27272E) : const Color(0xFFF5F5F5);
+    final lineColor = isDark ? const Color(0xFF33333C) : gridLineColor;
+    final subLineColor = isDark ? const Color(0xFF272730) : const Color(0xFFF0F0F0);
+    final hourLineColor = isDark ? const Color(0xFF3F3F4A) : const Color(0xFFD6D6D6);
+    final timeBgFull = isDark ? const Color(0xFF202026) : const Color(0xFFF7F7F7);
+    final timeBgHalf = isDark ? const Color(0xFF1A1A20) : const Color(0xFFFCFCFC);
+    final textPrimary = DDartTheme.textPrimary(context);
+    final textSecondary = DDartTheme.textSecondary(context);
 
     final timeSlots = _buildHalfHourSlots(sessions);
     final gridStartMinutes = timeSlots.first.startMinutes;
@@ -343,7 +365,7 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
             controller: _horizontalScrollCtrl,
             scrollDirection: Axis.horizontal,
             child: Container(
-              color: Colors.white,
+              color: surface,
               padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -356,16 +378,16 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
                         height: 38,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF5F5F5),
-                          border: Border.all(color: gridLineColor, width: 0.7),
+                          color: headerBg,
+                          border: Border.all(color: lineColor, width: 0.7),
                         ),
-                        child: const Text(
+                        child: Text(
                           'TIME (30-MIN)',
                           style: TextStyle(
                             fontSize: 10.5,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 0.6,
-                            color: Colors.black54,
+                            color: textSecondary,
                           ),
                         ),
                       ),
@@ -375,15 +397,15 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
                           height: 38,
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF5F5F5),
-                            border: Border.all(color: gridLineColor, width: 0.7),
+                            color: headerBg,
+                            border: Border.all(color: lineColor, width: 0.7),
                           ),
                           child: Text(
                             day,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF2E2E2E),
+                              color: textPrimary,
                             ),
                           ),
                         );
@@ -405,19 +427,15 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
                             padding: const EdgeInsets.symmetric(horizontal: 6),
                             alignment: Alignment.centerLeft,
                             decoration: BoxDecoration(
-                              color: isHalfHour
-                                  ? const Color(0xFFFCFCFC)
-                                  : const Color(0xFFF7F7F7),
+                              color: isHalfHour ? timeBgHalf : timeBgFull,
                               border: Border(
-                                left: const BorderSide(color: gridLineColor, width: 0.7),
-                                right: const BorderSide(color: gridLineColor, width: 0.7),
+                                left: BorderSide(color: lineColor, width: 0.7),
+                                right: BorderSide(color: lineColor, width: 0.7),
                                 top: BorderSide(
-                                  color: isHalfHour
-                                      ? const Color(0xFFEEEEEE)
-                                      : const Color(0xFFD6D6D6),
+                                  color: isHalfHour ? subLineColor : hourLineColor,
                                   width: isHalfHour ? 0.5 : 0.8,
                                 ),
-                                bottom: const BorderSide(color: gridLineColor, width: 0.5),
+                                bottom: BorderSide(color: lineColor, width: 0.5),
                               ),
                             ),
                             child: Text(
@@ -425,7 +443,7 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
                               style: TextStyle(
                                 fontSize: 9.2,
                                 fontWeight: isHalfHour ? FontWeight.w500 : FontWeight.w700,
-                                color: isHalfHour ? Colors.black54 : Colors.black87,
+                                color: isHalfHour ? textSecondary : textPrimary,
                               ),
                             ),
                           );
@@ -451,18 +469,16 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
                                     width: dayColWidth,
                                     height: rowHeight,
                                     decoration: BoxDecoration(
-                                      color: Colors.white,
+                                      color: surface,
                                       border: Border(
-                                        left: const BorderSide(color: gridLineColor, width: 0.5),
-                                        right: const BorderSide(color: gridLineColor, width: 0.5),
+                                        left: BorderSide(color: lineColor, width: 0.5),
+                                        right: BorderSide(color: lineColor, width: 0.5),
                                         top: BorderSide(
-                                          color: isHalfHour
-                                              ? const Color(0xFFF0F0F0)
-                                              : const Color(0xFFDADADA),
+                                          color: isHalfHour ? subLineColor : hourLineColor,
                                           width: isHalfHour ? 0.5 : 0.7,
                                         ),
-                                        bottom: const BorderSide(
-                                          color: Color(0xFFEEEEEE),
+                                        bottom: BorderSide(
+                                          color: subLineColor,
                                           width: 0.4,
                                         ),
                                       ),
@@ -590,9 +606,9 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
         return Container(
           margin: const EdgeInsets.only(bottom: 14),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: DDartTheme.card(context),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
+            border: Border.all(color: DDartTheme.border(context)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -601,16 +617,16 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: primaryMaroon.withValues(alpha: 0.08),
+                  color: DDartTheme.accentText(context).withValues(alpha: 0.12),
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                 ),
                 child: Text(
                   day.toUpperCase(),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.0,
-                    color: primaryMaroon,
+                    color: DDartTheme.accentText(context),
                   ),
                 ),
               ),
@@ -667,11 +683,12 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
   }
 
   Widget _buildFooter(BuildContext context, bool hasVerified) {
+    final accent = DDartTheme.accentText(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFEEEEEE), width: 1)),
+      decoration: BoxDecoration(
+        color: DDartTheme.card(context),
+        border: Border(top: BorderSide(color: DDartTheme.divider(context), width: 1)),
       ),
       child: Row(
         children: [
@@ -686,8 +703,8 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
             icon: const Icon(Icons.upload_file, size: 16),
             label: Text(hasVerified ? 'Re-upload / Update COR' : 'Upload Verified COR'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: primaryMaroon,
-              side: const BorderSide(color: primaryMaroon),
+              foregroundColor: accent,
+              side: BorderSide(color: accent),
               visualDensity: VisualDensity.compact,
             ),
           ),

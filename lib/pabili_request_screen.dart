@@ -6,6 +6,7 @@ import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
 import 'mock_data.dart';
 import 'utils/validators.dart';
+import 'widgets/responsive_shell.dart';
 
 class PabiliRequestScreen extends StatefulWidget {
   final String? initialPickup;
@@ -198,7 +199,7 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
         deliveryFee != null ? (_parsedItemCost + deliveryFee) : null;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: DDartTheme.surface(context),
       appBar: AppBar(
         title: const Text(
           'New Pabili Request',

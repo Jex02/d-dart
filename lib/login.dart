@@ -7,6 +7,7 @@ import 'services/remember_me_service.dart';
 import 'services/supabase_service.dart';
 import 'signup.dart';
 import 'utils/validators.dart';
+import 'widgets/responsive_shell.dart';
 
 const Color panelColor = Color(0xFF8F1F0D);
 const Color accentColor = Color(0xFFD4AF37);
@@ -129,6 +130,7 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktopOrTablet = screenWidth > 600;
+    final isDark = DDartTheme.isDark(context);
 
     Widget content = Stack(
       children: [
@@ -136,7 +138,11 @@ class _LoginPageState extends State<LoginPage> {
           child: Image.asset('assets/lrac.jpg', fit: BoxFit.cover),
         ),
         Positioned.fill(
-          child: Container(color: Colors.white.withValues(alpha: 0.62)),
+          child: Container(
+            color: isDark
+                ? const Color(0xFF121214).withValues(alpha: 0.78)
+                : Colors.white.withValues(alpha: 0.62),
+          ),
         ),
         SafeArea(
           child: LayoutBuilder(
@@ -150,6 +156,16 @@ class _LoginPageState extends State<LoginPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        Align(
+                          alignment: Alignment.topRight,
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 6, right: 8),
+                            child: ThemeToggleButton(
+                              iconColor: isDark ? Colors.white : Colors.black87,
+                              iconSize: 22,
+                            ),
+                          ),
+                        ),
                         const Expanded(child: Center(child: _Branding())),
                         _LoginPanel(
                           rememberMe: _rememberMe,
@@ -200,26 +216,28 @@ class _Branding extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textPrimary = DDartTheme.textPrimary(context);
+    final accent = DDartTheme.accentText(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
+          Text(
             'D-DART',
             style: TextStyle(
-              color: Colors.black87,
+              color: textPrimary,
               fontSize: 40,
               fontWeight: FontWeight.w600,
               letterSpacing: 2,
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'CIT-U WILDCATS ERRAND & DELIVERY',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: Colors.black87,
+              color: textPrimary,
               fontSize: 12,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.8,
@@ -227,12 +245,12 @@ class _Branding extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           RichText(
-            text: const TextSpan(
-              style: TextStyle(fontSize: 18, letterSpacing: 3, fontWeight: FontWeight.w600),
+            text: TextSpan(
+              style: const TextStyle(fontSize: 18, letterSpacing: 3, fontWeight: FontWeight.w600),
               children: [
-                TextSpan(text: 'Order.', style: TextStyle(color: Colors.black87)),
-                TextSpan(text: 'Run.', style: TextStyle(color: accentColor)),
-                TextSpan(text: 'Deliver.', style: TextStyle(color: panelColor)),
+                TextSpan(text: 'Order.', style: TextStyle(color: textPrimary)),
+                const TextSpan(text: 'Run.', style: TextStyle(color: accentColor)),
+                TextSpan(text: 'Deliver.', style: TextStyle(color: accent)),
               ],
             ),
           ),
@@ -474,7 +492,7 @@ class _LoginTextField extends StatelessWidget {
         textInputAction: textInputAction,
         autofillHints: autofillHints,
         onSubmitted: onSubmitted,
-        style: const TextStyle(fontSize: 13),
+        style: const TextStyle(fontSize: 13, color: Colors.black87),
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: const TextStyle(color: Colors.black54, fontSize: 12),

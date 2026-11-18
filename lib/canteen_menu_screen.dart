@@ -154,9 +154,9 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
 
             return Container(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              decoration: BoxDecoration(
+                color: DDartTheme.card(ctx),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -167,7 +167,7 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
+                        color: DDartTheme.divider(ctx),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -196,10 +196,10 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
                           children: [
                             Text(
                               item.name,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF1E1E1E),
+                                color: DDartTheme.textPrimary(ctx),
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -207,16 +207,16 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
                               item.unitDescription,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.grey.shade700,
+                                color: DDartTheme.textSecondary(ctx),
                               ),
                             ),
                             const SizedBox(height: 6),
                             Text(
                               '₱${item.price.toStringAsFixed(2)}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w700,
-                                color: primaryMaroon,
+                                color: DDartTheme.accentText(ctx),
                               ),
                             ),
                           ],
@@ -230,18 +230,19 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         'Quantity',
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
+                          color: DDartTheme.textPrimary(ctx),
                         ),
                       ),
                       Container(
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
+                          color: DDartTheme.cardSubtle(ctx),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.grey.shade300),
+                          border: Border.all(color: DDartTheme.border(ctx)),
                         ),
                         child: Row(
                           children: [
@@ -352,9 +353,13 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final surface = DDartTheme.surface(context);
+    final textPrimary = DDartTheme.textPrimary(context);
+    final textSecondary = DDartTheme.textSecondary(context);
+
     return ResponsiveMobileShell(
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: surface,
         appBar: AppBar(
           backgroundColor: primaryMaroon,
           elevation: 0,
@@ -372,6 +377,7 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
             ),
           ),
           actions: [
+            const ThemeToggleButton(iconColor: Colors.white, iconSize: 21),
             IconButton(
               tooltip: 'Notifications & Orders',
               icon: const Icon(Icons.notifications_outlined, color: Colors.white),
@@ -418,21 +424,21 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
                   children: [
                     Text(
                       widget.canteenName.toUpperCase(),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.2,
-                        color: Colors.black54,
+                        color: textSecondary,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       widget.categoryName,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                         fontFamily: 'serif',
-                        color: Color(0xFF1E1E1E),
+                        color: textPrimary,
                       ),
                     ),
                   ],
@@ -465,7 +471,7 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: DDartTheme.surface(context),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.08),
@@ -542,7 +548,7 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
-                color: Colors.grey.shade100,
+                color: DDartTheme.cardSubtle(context),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.04),
@@ -570,20 +576,20 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               fontFamily: 'serif',
-              color: Color(0xFF1E1E1E),
+              color: DDartTheme.textPrimary(context),
             ),
           ),
           const SizedBox(height: 2),
           Text(
             '₱${item.price.toStringAsFixed(0)}',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,
-              color: primaryMaroon,
+              color: DDartTheme.accentText(context),
             ),
           ),
         ],

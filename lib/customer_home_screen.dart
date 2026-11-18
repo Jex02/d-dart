@@ -15,6 +15,7 @@ import 'pabili_request_screen.dart';
 import 'services/cart_service.dart';
 import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
+import 'services/theme_service.dart';
 import 'widgets/cor_timetable_dialog.dart';
 import 'widgets/responsive_shell.dart';
 
@@ -276,6 +277,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       ),
                     ],
                     const Spacer(),
+                    const ThemeToggleButton(iconColor: Colors.white, iconSize: 22),
                     IconButton(
                       tooltip: 'Active Orders',
                       icon: const Icon(Icons.notifications_none, color: Colors.white, size: 24),
@@ -309,9 +311,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             Expanded(
               child: Container(
                 width: double.infinity,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                decoration: BoxDecoration(
+                  color: DDartTheme.surface(context),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                 ),
                 child: Center(
                   child: ConstrainedBox(
@@ -337,8 +339,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Colors.grey.shade300, width: 0.8)),
+          color: DDartTheme.surface(context),
+          border: Border(top: BorderSide(color: DDartTheme.divider(context), width: 0.8)),
         ),
         child: ListenableBuilder(
           listenable: CartService.instance,
@@ -352,9 +354,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 setState(() => _selectedIndex = index);
               },
               type: BottomNavigationBarType.fixed,
-              backgroundColor: Colors.white,
-              selectedItemColor: primaryMaroon,
-              unselectedItemColor: Colors.grey.shade600,
+              backgroundColor: DDartTheme.surface(context),
+              selectedItemColor: DDartTheme.accentText(context),
+              unselectedItemColor: DDartTheme.textMuted(context),
               selectedFontSize: 11,
               unselectedFontSize: 11,
               elevation: 0,
@@ -414,38 +416,42 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   }
 
   Widget _buildHomeTab(String firstName) {
+    final textPrimary = DDartTheme.textPrimary(context);
+    final textSecondary = DDartTheme.textSecondary(context);
+    final accent = DDartTheme.accentText(context);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 90),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Good day,',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
               fontFamily: 'serif',
-              color: Color(0xFF1E1E1E),
+              color: textPrimary,
               height: 1.1,
             ),
           ),
           Text(
             '$firstName!',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
               fontFamily: 'serif',
-              color: primaryMaroon,
+              color: accent,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'What would you like delivered on campus today?',
             style: TextStyle(
               fontSize: 13,
               fontFamily: 'serif',
               fontStyle: FontStyle.italic,
-              color: Colors.black87,
+              color: textSecondary,
             ),
           ),
           const SizedBox(height: 14),
@@ -453,13 +459,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           Container(
             height: 44,
             decoration: BoxDecoration(
-              color: searchFieldBg,
+              color: DDartTheme.fieldFill(context),
               borderRadius: BorderRadius.circular(22),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: TextField(
               controller: _searchController,
               textInputAction: TextInputAction.search,
+              style: TextStyle(color: textPrimary, fontSize: 13),
               onSubmitted: (query) {
                 final trimmed = query.trim();
                 _searchController.clear();
@@ -467,11 +474,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   _openSearchResults(trimmed);
                 }
               },
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 border: InputBorder.none,
-                icon: Icon(Icons.search, size: 18, color: Colors.black54),
+                icon: Icon(Icons.search, size: 18, color: textSecondary),
                 hintText: 'Request food, drinks, or school supplies...',
-                hintStyle: TextStyle(fontSize: 12, color: Colors.black45),
+                hintStyle: TextStyle(fontSize: 12, color: DDartTheme.textMuted(context)),
               ),
             ),
           ),
@@ -489,7 +496,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: _buildCategoryItem(
-                  iconWidget: const Icon(Icons.local_drink, size: 32, color: Color(0xFF2C3E50)),
+                  iconWidget: Icon(
+                    Icons.local_drink,
+                    size: 32,
+                    color: DDartTheme.isDark(context)
+                        ? const Color(0xFF7FB3D5)
+                        : const Color(0xFF2C3E50),
+                  ),
                   label: 'Drinks\n',
                   onTap: () => _openCategoryBrowse('Beverages'),
                 ),
@@ -508,14 +521,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
+            children: [
               Text(
                 'Choose Pickup Canteen',
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E1E1E),
+                  color: textPrimary,
                 ),
               ),
             ],
@@ -533,7 +546,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     'assets/lrac.jpg',
                     fit: BoxFit.cover,
                     errorBuilder: (_, _, _) => Container(
-                      color: Colors.grey.shade200,
+                      color: DDartTheme.cardSubtle(context),
                       child: const Icon(Icons.restaurant, color: Colors.grey),
                     ),
                   ),
@@ -545,8 +558,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   label: 'Highschool\nCanteen',
                   onTap: () => _openCanteenCategory('Highschool Canteen'),
                   child: Container(
-                    color: Colors.grey.shade100,
-                    child: const Icon(Icons.fastfood_outlined, color: primaryMaroon),
+                    color: DDartTheme.cardSubtle(context),
+                    child: Icon(Icons.fastfood_outlined, color: accent),
                   ),
                 ),
               ),
@@ -556,8 +569,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   label: 'Mini Canteen',
                   onTap: () => _openCanteenCategory('Mini Canteen'),
                   child: Container(
-                    color: Colors.grey.shade100,
-                    child: const Icon(Icons.storefront_outlined, color: primaryMaroon),
+                    color: DDartTheme.cardSubtle(context),
+                    child: Icon(Icons.storefront_outlined, color: accent),
                   ),
                 ),
               ),
@@ -565,12 +578,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           ),
           const SizedBox(height: 22),
 
-          const Text(
+          Text(
             'Quick Actions & Live Tracking',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1E1E1E),
+              color: textPrimary,
             ),
           ),
           const SizedBox(height: 12),
@@ -621,6 +634,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         final activeOrder = orders.isNotEmpty ? orders.first : null;
         final activeStatus = activeOrder?.effectiveStatus() ?? '';
         final showOtp = activeStatus == 'arrived';
+        final accent = DDartTheme.accentText(context);
+        final textPrimary = DDartTheme.textPrimary(context);
+        final textSecondary = DDartTheme.textSecondary(context);
 
         return InkWell(
           onTap: activeOrder != null
@@ -631,10 +647,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             height: 126,
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: DDartTheme.card(context),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: activeOrder != null ? primaryMaroon : outlineBorderColor,
+                color: activeOrder != null ? accent : DDartTheme.outlineBorder(context),
                 width: activeOrder != null ? 1.4 : 0.8,
               ),
             ),
@@ -642,19 +658,20 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 ? Column(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         'RUNNER UPDATE',
                         style: TextStyle(
                           fontSize: 9.5,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1.1,
+                          color: textPrimary,
                         ),
                       ),
-                      const Icon(Icons.local_shipping_outlined, size: 38, color: Colors.black54),
+                      Icon(Icons.local_shipping_outlined, size: 38, color: textSecondary),
                       Text(
                         'No active orders.\nTap to create one!',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                        style: TextStyle(fontSize: 10, color: DDartTheme.textMuted(context)),
                       ),
                     ],
                   )
@@ -663,29 +680,29 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     children: [
                       Text(
                         'LIVE: ${activeStatus.toUpperCase()}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 9.5,
                           fontWeight: FontWeight.bold,
-                          color: primaryMaroon,
+                          color: accent,
                         ),
                       ),
                       if (showOtp)
                         Text(
                           'OTP: ${activeOrder.verificationCode}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 3,
-                            color: primaryMaroon,
+                            color: accent,
                           ),
                         )
                       else
-                        const Text(
+                        Text(
                           'Tap to Track Live',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: primaryMaroon,
+                            color: accent,
                           ),
                         ),
                       Text(
@@ -693,7 +710,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 10.5, color: Colors.black87),
+                        style: TextStyle(fontSize: 10.5, color: textPrimary),
                       ),
                     ],
                   ),
@@ -730,9 +747,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   status != 'cancelled' &&
                   status != 'expired';
 
+              final accent = DDartTheme.accentText(context);
+              final textSecondary = DDartTheme.textSecondary(context);
+
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                color: DDartTheme.card(context),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: DDartTheme.border(context)),
+                ),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(12),
                   onTap: () => _openOrderTracking(order.id),
@@ -751,8 +775,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                               ),
                               decoration: BoxDecoration(
                                 color: isActive
-                                    ? primaryMaroon.withValues(alpha: 0.12)
-                                    : Colors.grey.shade200,
+                                    ? accent.withValues(alpha: 0.16)
+                                    : DDartTheme.cardSubtle(context),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
@@ -760,15 +784,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                 style: TextStyle(
                                   fontSize: 10.5,
                                   fontWeight: FontWeight.bold,
-                                  color: isActive ? primaryMaroon : Colors.black54,
+                                  color: isActive ? accent : textSecondary,
                                 ),
                               ),
                             ),
                             Text(
                               'Total ₱${order.totalAmount.toStringAsFixed(2)}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: primaryMaroon,
+                                color: accent,
                               ),
                             ),
                           ],
@@ -776,12 +800,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                         const SizedBox(height: 8),
                         Text(
                           order.description,
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: DDartTheme.textPrimary(context),
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           '${order.pickupLocation} → ${order.dropoffLocation}',
-                          style: const TextStyle(fontSize: 12, color: Colors.black54),
+                          style: TextStyle(fontSize: 12, color: textSecondary),
                         ),
                         if (isActive) ...[
                           const SizedBox(height: 8),
@@ -792,15 +820,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                 status == 'arrived'
                                     ? 'OTP Code: ${order.verificationCode}'
                                     : 'OTP unlocks on arrival',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: primaryMaroon,
+                                  color: accent,
                                   fontSize: 11.5,
                                 ),
                               ),
-                              const Text(
+                              Text(
                                 'Tap to Track →',
-                                style: TextStyle(fontSize: 11, color: Colors.black54),
+                                style: TextStyle(fontSize: 11, color: textSecondary),
                               ),
                             ],
                           ),
@@ -878,6 +906,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     final firstName = profile?.firstName ?? 'Wildcat';
     final isStudent = profile == null || profile.isStudent;
     final hasVerifiedCor = DutyLockService.verifiedSchedule.isNotEmpty || (profile?.corVerified ?? false);
+    final isDark = DDartTheme.isDark(context);
+    final cardColor = DDartTheme.card(context);
+    final borderColor = DDartTheme.border(context);
+    final textPrimary = DDartTheme.textPrimary(context);
+    final textSecondary = DDartTheme.textSecondary(context);
+    final accent = DDartTheme.accentText(context);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 90),
@@ -889,16 +923,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cardColor,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
+                color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 3),
               ),
             ],
-            border: Border.all(color: Colors.grey.shade200),
+            border: Border.all(color: borderColor),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -941,7 +975,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                         decoration: BoxDecoration(
                           color: primaryMaroon,
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
+                          border: Border.all(color: cardColor, width: 2),
                         ),
                         child: const Icon(Icons.badge, color: Colors.white, size: 14),
                       ),
@@ -955,11 +989,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               Text(
                 fullName,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   fontFamily: 'serif',
-                  color: Color(0xFF1E1E1E),
+                  color: textPrimary,
                 ),
               ),
               const SizedBox(height: 6),
@@ -973,16 +1007,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: primaryMaroon.withValues(alpha: 0.08),
+                      color: accent.withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: primaryMaroon.withValues(alpha: 0.3)),
+                      border: Border.all(color: accent.withValues(alpha: 0.4)),
                     ),
                     child: Text(
                       '🎓 ${profile?.accountTypeLabel ?? 'Student'}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.bold,
-                        color: primaryMaroon,
+                        color: accent,
                       ),
                     ),
                   ),
@@ -990,8 +1024,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: (profile?.isVerified ?? false)
-                          ? Colors.green.shade50
-                          : Colors.amber.shade50,
+                          ? (isDark ? Colors.green.withValues(alpha: 0.18) : Colors.green.shade50)
+                          : (isDark ? Colors.amber.withValues(alpha: 0.18) : Colors.amber.shade50),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: (profile?.isVerified ?? false)
@@ -1005,8 +1039,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                         fontSize: 11.5,
                         fontWeight: FontWeight.bold,
                         color: (profile?.isVerified ?? false)
-                            ? Colors.green.shade800
-                            : Colors.amber.shade900,
+                            ? (isDark ? Colors.green.shade300 : Colors.green.shade800)
+                            : (isDark ? Colors.amber.shade300 : Colors.amber.shade900),
                       ),
                     ),
                   ),
@@ -1020,20 +1054,20 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.badge_outlined, size: 15, color: Colors.grey.shade600),
+                  Icon(Icons.badge_outlined, size: 15, color: textSecondary),
                   const SizedBox(width: 5),
                   Text(
                     profile?.studentId.isNotEmpty == true ? profile!.studentId : 'CIT-U Student',
-                    style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                    style: TextStyle(fontSize: 12.5, color: textSecondary, fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(width: 14),
-                  Icon(Icons.email_outlined, size: 15, color: Colors.grey.shade600),
+                  Icon(Icons.email_outlined, size: 15, color: textSecondary),
                   const SizedBox(width: 5),
                   Flexible(
                     child: Text(
                       profile?.email ?? SupabaseService().currentUser?.email ?? '',
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+                      style: TextStyle(fontSize: 12.5, color: textSecondary),
                     ),
                   ),
                 ],
@@ -1051,16 +1085,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: cardColor,
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
+                  color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.04),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
               ],
-              border: Border.all(color: Colors.grey.shade200),
+              border: Border.all(color: borderColor),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1068,16 +1102,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Row(
+                    Row(
                       children: [
-                        Icon(Icons.calendar_today_rounded, size: 18, color: primaryMaroon),
-                        SizedBox(width: 8),
+                        Icon(Icons.calendar_today_rounded, size: 18, color: accent),
+                        const SizedBox(width: 8),
                         Text(
                           'Enrolled Class Schedule',
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E1E1E),
+                            color: textPrimary,
                           ),
                         ),
                       ],
@@ -1085,10 +1119,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: hasVerifiedCor ? Colors.green.shade50 : Colors.orange.shade50,
+                        color: hasVerifiedCor
+                            ? (isDark ? Colors.green.withValues(alpha: 0.18) : Colors.green.shade50)
+                            : (isDark ? Colors.orange.withValues(alpha: 0.18) : Colors.orange.shade50),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: hasVerifiedCor ? Colors.green.shade300 : Colors.orange.shade300,
+                          color: hasVerifiedCor ? Colors.green.shade400 : Colors.orange.shade400,
                         ),
                       ),
                       child: Text(
@@ -1098,7 +1134,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
-                          color: hasVerifiedCor ? Colors.green.shade800 : Colors.orange.shade900,
+                          color: hasVerifiedCor
+                              ? (isDark ? Colors.green.shade300 : Colors.green.shade800)
+                              : (isDark ? Colors.orange.shade300 : Colors.orange.shade900),
                         ),
                       ),
                     ),
@@ -1109,7 +1147,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   hasVerifiedCor
                       ? 'Your class hours are synced to automatically pause runner mode during lectures.'
                       : 'Upload your verified Study Load to activate Runner Mode privileges.',
-                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  style: TextStyle(fontSize: 12, color: textSecondary),
                 ),
                 const SizedBox(height: 14),
 
@@ -1148,12 +1186,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         // -------------------------------------------------------------
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cardColor,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade200),
+            border: Border.all(color: borderColor),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
+                color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.04),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -1161,19 +1199,56 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           ),
           child: Column(
             children: [
+              ValueListenableBuilder<ThemeMode>(
+                valueListenable: ThemeService.instance.themeModeNotifier,
+                builder: (context, mode, _) {
+                  final darkEnabled = mode == ThemeMode.dark;
+                  return SwitchListTile(
+                    secondary: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.14),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        darkEnabled ? Icons.dark_mode : Icons.light_mode_outlined,
+                        color: accent,
+                        size: 20,
+                      ),
+                    ),
+                    title: Text(
+                      'Dark Mode',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: textPrimary,
+                      ),
+                    ),
+                    subtitle: Text(
+                      darkEnabled ? 'Dark theme enabled' : 'Light theme enabled',
+                      style: TextStyle(fontSize: 11.5, color: textSecondary),
+                    ),
+                    activeThumbColor: accentGold,
+                    activeTrackColor: primaryMaroon,
+                    value: darkEnabled,
+                    onChanged: (val) => ThemeService.instance.setDarkMode(val),
+                  );
+                },
+              ),
+              const Divider(height: 1, indent: 56),
               if (canSwitchToRunner) ...[
                 ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: primaryMaroon.withValues(alpha: 0.08),
+                      color: accent.withValues(alpha: 0.14),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.swap_horiz, color: primaryMaroon, size: 20),
+                    child: Icon(Icons.swap_horiz, color: accent, size: 20),
                   ),
-                  title: const Text('Switch Mode (Customer / Runner)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                  subtitle: const Text('Accept gigs and deliver for peers on campus', style: TextStyle(fontSize: 11.5)),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.black38),
+                  title: Text('Switch Mode (Customer / Runner)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: textPrimary)),
+                  subtitle: Text('Accept gigs and deliver for peers on campus', style: TextStyle(fontSize: 11.5, color: textSecondary)),
+                  trailing: Icon(Icons.arrow_forward_ios, size: 14, color: textSecondary),
                   onTap: _switchMode,
                 ),
                 const Divider(height: 1, indent: 56),
@@ -1181,14 +1256,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: primaryMaroon.withValues(alpha: 0.08),
+                      color: accent.withValues(alpha: 0.14),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.school_outlined, color: primaryMaroon, size: 20),
+                    child: Icon(Icons.school_outlined, color: accent, size: 20),
                   ),
-                  title: const Text('Manage COR / Study Load', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                  subtitle: const Text('Re-upload or adjust class schedule', style: TextStyle(fontSize: 11.5)),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.black38),
+                  title: Text('Manage COR / Study Load', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: textPrimary)),
+                  subtitle: Text('Re-upload or adjust class schedule', style: TextStyle(fontSize: 11.5, color: textSecondary)),
+                  trailing: Icon(Icons.arrow_forward_ios, size: 14, color: textSecondary),
                   onTap: () async {
                     await Navigator.push(
                       context,
@@ -1204,14 +1279,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.amber.withValues(alpha: 0.12),
+                    color: Colors.amber.withValues(alpha: 0.16),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.report_problem_outlined, color: Colors.amber, size: 20),
                 ),
-                title: const Text('Report a Problem / Support', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                subtitle: const Text('Submit delivery disputes or app feedback', style: TextStyle(fontSize: 11.5)),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.black38),
+                title: Text('Report a Problem / Support', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: textPrimary)),
+                subtitle: Text('Submit delivery disputes or app feedback', style: TextStyle(fontSize: 11.5, color: textSecondary)),
+                trailing: Icon(Icons.arrow_forward_ios, size: 14, color: textSecondary),
                 onTap: _openGeneralReportDialog,
               ),
               const Divider(height: 1, indent: 56),
@@ -1219,13 +1294,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.red.shade50,
+                    color: isDark ? Colors.red.withValues(alpha: 0.18) : Colors.red.shade50,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.logout, color: Colors.red, size: 20),
+                  child: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
                 ),
-                title: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red, fontSize: 14)),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.red),
+                title: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.redAccent, fontSize: 14)),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.redAccent),
                 onTap: () async {
                   ScaffoldMessenger.of(context).clearSnackBars();
                   CartService.instance.clearCart();
@@ -1276,9 +1351,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             width: double.infinity,
             height: 68,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: DDartTheme.card(context),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: outlineBorderColor, width: 0.9),
+              border: Border.all(color: DDartTheme.outlineBorder(context), width: 0.9),
             ),
             alignment: Alignment.center,
             child: iconWidget,
@@ -1287,10 +1362,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           Text(
             label,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,
-              color: primaryMaroon,
+              color: DDartTheme.accentText(context),
               height: 1.15,
             ),
           ),
@@ -1313,9 +1388,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             width: double.infinity,
             height: 80,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: DDartTheme.card(context),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: outlineBorderColor, width: 0.9),
+              border: Border.all(color: DDartTheme.outlineBorder(context), width: 0.9),
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(11),
@@ -1326,10 +1401,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           Text(
             label,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 10.5,
               fontWeight: FontWeight.bold,
-              color: primaryMaroon,
+              color: DDartTheme.accentText(context),
               height: 1.15,
             ),
           ),
@@ -1339,14 +1414,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   }
 
   Widget _buildQuickActionButton(String label) {
+    final accent = DDartTheme.accentText(context);
     return Container(
       width: double.infinity,
       height: 58,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: DDartTheme.card(context),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: primaryMaroon.withValues(alpha: 0.55), width: 1.0),
+        border: Border.all(color: accent.withValues(alpha: 0.55), width: 1.0),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1354,15 +1430,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           Flexible(
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 10.5,
-                color: primaryMaroon,
+                color: accent,
                 fontWeight: FontWeight.w600,
                 height: 1.2,
               ),
             ),
           ),
-          const Icon(Icons.arrow_forward, size: 14, color: Colors.black87),
+          Icon(Icons.arrow_forward, size: 14, color: DDartTheme.textPrimary(context)),
         ],
       ),
     );

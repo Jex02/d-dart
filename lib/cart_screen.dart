@@ -74,9 +74,9 @@ class _CartScreenState extends State<CartScreen> {
                 top: 20,
                 bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
               ),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              decoration: BoxDecoration(
+                color: DDartTheme.card(ctx),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -87,38 +87,43 @@ class _CartScreenState extends State<CartScreen> {
                       width: 44,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
+                        color: DDartTheme.divider(ctx),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'Campus Delivery Drop-off',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E1E1E),
+                      color: DDartTheme.textPrimary(ctx),
                     ),
                   ),
                   const SizedBox(height: 14),
 
                   // Drop-off Building Selector
-                  const Text(
+                  Text(
                     'Drop-off Location',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: DDartTheme.textPrimary(ctx),
+                    ),
                   ),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
-                    value: _selectedDropoff,
+                    initialValue: _selectedDropoff,
+                    dropdownColor: DDartTheme.card(ctx),
                     decoration: InputDecoration(
                       filled: true,
-                      fillColor: Colors.grey.shade50,
+                      fillColor: DDartTheme.cardSubtle(ctx),
                       contentPadding:
                           const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(color: DDartTheme.border(ctx)),
                       ),
                     ),
                     items: _dropoffLocations.map((loc) {
@@ -217,9 +222,13 @@ class _CartScreenState extends State<CartScreen> {
                           const SizedBox(height: 6),
 
                           // Delivery Notes Field
-                          const Text(
+                          Text(
                             'Special Instructions (Optional)',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: DDartTheme.textPrimary(ctx),
+                            ),
                           ),
                           const SizedBox(height: 6),
                           TextField(
@@ -227,12 +236,12 @@ class _CartScreenState extends State<CartScreen> {
                             decoration: InputDecoration(
                               hintText: 'e.g. 3rd floor CS Lab, call when near',
                               filled: true,
-                              fillColor: Colors.grey.shade50,
+                              fillColor: DDartTheme.cardSubtle(ctx),
                               contentPadding:
                                   const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(color: Colors.grey.shade300),
+                                borderSide: BorderSide(color: DDartTheme.border(ctx)),
                               ),
                             ),
                           ),
@@ -242,10 +251,10 @@ class _CartScreenState extends State<CartScreen> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFBF4F4),
+                              color: DDartTheme.maroonTint(ctx),
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                color: primaryMaroon.withValues(alpha: 0.2),
+                                color: DDartTheme.accentText(ctx).withValues(alpha: 0.25),
                               ),
                             ),
                             child: Column(
@@ -277,7 +286,9 @@ class _CartScreenState extends State<CartScreen> {
                                           : 'Unavailable',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
-                                        color: totalFee != null ? Colors.black87 : Colors.red,
+                                        color: totalFee != null
+                                            ? DDartTheme.textPrimary(ctx)
+                                            : Colors.red,
                                       ),
                                     ),
                                   ],
@@ -297,15 +308,20 @@ class _CartScreenState extends State<CartScreen> {
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 16,
-                                        color: grandTotal != null ? primaryMaroon : Colors.red,
+                                        color: grandTotal != null
+                                            ? DDartTheme.accentText(ctx)
+                                            : Colors.red,
                                       ),
                                     ),
                                   ],
                                 ),
                                 const SizedBox(height: 4),
-                                const Text(
+                                Text(
                                   'Payment Mode: Direct Cash or personal GCash to runner on handover.',
-                                  style: TextStyle(fontSize: 11, color: Colors.black54),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: DDartTheme.textSecondary(ctx),
+                                  ),
                                 ),
                               ],
                             ),
@@ -441,7 +457,7 @@ class _CartScreenState extends State<CartScreen> {
   @override
   Widget build(BuildContext context) {
     final screenContent = Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: DDartTheme.surface(context),
       body: SafeArea(
         child: Column(
           children: [
@@ -470,7 +486,7 @@ class _CartScreenState extends State<CartScreen> {
                 child: Padding(
                   padding: const EdgeInsets.only(left: 8, top: 4),
                   child: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.black87),
+                    icon: Icon(Icons.arrow_back, color: DDartTheme.textPrimary(context)),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ),
@@ -555,31 +571,31 @@ class _CartScreenState extends State<CartScreen> {
               width: 90,
               height: 90,
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: DDartTheme.cardSubtle(context),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.shopping_cart_outlined,
                 size: 46,
-                color: Colors.grey.shade400,
+                color: DDartTheme.textMuted(context),
               ),
             ),
             const SizedBox(height: 18),
-            const Text(
+            Text(
               'Your cart is empty',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF222222),
+                color: DDartTheme.textPrimary(context),
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Browse campus canteens to add food, drinks, and snacks to your cart.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
-                color: Colors.black54,
+                color: DDartTheme.textSecondary(context),
               ),
             ),
             const SizedBox(height: 20),
@@ -604,13 +620,16 @@ class _CartScreenState extends State<CartScreen> {
 
   Widget _buildCartItemCard(CartItem cartItem) {
     final item = cartItem.item;
+    final textPrimary = DDartTheme.textPrimary(context);
+    final textSecondary = DDartTheme.textSecondary(context);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: cardBgColor,
+        color: DDartTheme.cardSubtle(context),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: DDartTheme.border(context)),
       ),
       child: Stack(
         children: [
@@ -623,7 +642,7 @@ class _CartScreenState extends State<CartScreen> {
                 child: Container(
                   width: 72,
                   height: 72,
-                  color: Colors.white,
+                  color: DDartTheme.card(context),
                   child: item.imageUrl != null
                       ? Image.network(
                           item.imageUrl!,
@@ -644,10 +663,10 @@ class _CartScreenState extends State<CartScreen> {
                       padding: const EdgeInsets.only(right: 28),
                       child: Text(
                         item.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF1E1E1E),
+                          color: textPrimary,
                         ),
                       ),
                     ),
@@ -656,7 +675,7 @@ class _CartScreenState extends State<CartScreen> {
                       item.unitDescription,
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.grey.shade600,
+                        color: textSecondary,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -666,10 +685,10 @@ class _CartScreenState extends State<CartScreen> {
                       children: [
                         Text(
                           'Qty: ${cartItem.quantity}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
-                            color: Color(0xFF222222),
+                            color: textPrimary,
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -680,11 +699,11 @@ class _CartScreenState extends State<CartScreen> {
                           child: Container(
                             padding: const EdgeInsets.all(2),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: DDartTheme.card(context),
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.grey.shade300),
+                              border: Border.all(color: DDartTheme.border(context)),
                             ),
-                            child: const Icon(Icons.remove, size: 14),
+                            child: Icon(Icons.remove, size: 14, color: textPrimary),
                           ),
                         ),
                         const SizedBox(width: 6),
@@ -695,11 +714,11 @@ class _CartScreenState extends State<CartScreen> {
                           child: Container(
                             padding: const EdgeInsets.all(2),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: DDartTheme.card(context),
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.grey.shade300),
+                              border: Border.all(color: DDartTheme.border(context)),
                             ),
-                            child: const Icon(Icons.add, size: 14),
+                            child: Icon(Icons.add, size: 14, color: textPrimary),
                           ),
                         ),
                       ],
@@ -716,12 +735,12 @@ class _CartScreenState extends State<CartScreen> {
             right: 0,
             child: InkWell(
               onTap: () => CartService.instance.removeItem(item.id),
-              child: const Padding(
-                padding: EdgeInsets.all(4.0),
+              child: Padding(
+                padding: const EdgeInsets.all(4.0),
                 child: Icon(
                   Icons.close,
                   size: 16,
-                  color: Colors.black87,
+                  color: textPrimary,
                 ),
               ),
             ),
@@ -733,10 +752,10 @@ class _CartScreenState extends State<CartScreen> {
             right: 4,
             child: Text(
               'TOTAL : ${cartItem.totalPrice.toStringAsFixed(0)}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFF1E1E1E),
+                color: textPrimary,
                 letterSpacing: 0.5,
               ),
             ),
@@ -748,7 +767,7 @@ class _CartScreenState extends State<CartScreen> {
 
   Widget _cardItemFallback() {
     return Container(
-      color: Colors.grey.shade200,
+      color: DDartTheme.cardSubtle(context),
       child: const Center(
         child: Icon(Icons.fastfood, size: 28, color: Colors.grey),
       ),
@@ -761,16 +780,18 @@ class _CartScreenState extends State<CartScreen> {
     final fees = CartService.instance.getDeliveryFeesForDestination(_selectedDropoff);
     final totalFee = CartService.instance.calculateDeliveryFeeTo(_selectedDropoff);
     final orderTotal = totalFee != null ? (subtotal + totalFee) : CartService.instance.orderTotal;
+    final textPrimary = DDartTheme.textPrimary(context);
+    final textSecondary = DDartTheme.textSecondary(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Price Details',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF1E1E1E),
+            color: textPrimary,
           ),
         ),
         const SizedBox(height: 14),
@@ -779,19 +800,19 @@ class _CartScreenState extends State<CartScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'Total Product Price:',
               style: TextStyle(
                 fontSize: 13,
-                color: Color(0xFF333333),
+                color: textSecondary,
               ),
             ),
             Text(
               subtotal.toStringAsFixed(0),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1E1E1E),
+                color: textPrimary,
               ),
             ),
           ],
@@ -803,9 +824,9 @@ class _CartScreenState extends State<CartScreen> {
           activeCanteens.length > 1
               ? 'Campus Delivery Fee (${activeCanteens.length} canteens to $_selectedDropoff)'
               : 'Campus Delivery Fee (to $_selectedDropoff)',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
-            color: Color(0xFF333333),
+            color: textSecondary,
           ),
         ),
         const SizedBox(height: 6),
@@ -818,14 +839,14 @@ class _CartScreenState extends State<CartScreen> {
               children: [
                 Text(
                   'Standard Base Fee:',
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                  style: TextStyle(fontSize: 11, color: textSecondary),
                 ),
-                const Text(
+                Text(
                   '0',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E1E1E),
+                    color: textPrimary,
                   ),
                 ),
               ],
@@ -845,15 +866,15 @@ class _CartScreenState extends State<CartScreen> {
                     '$canteen$distStr:',
                     style: TextStyle(
                       fontSize: 11,
-                      color: Colors.grey.shade700,
+                      color: textSecondary,
                     ),
                   ),
                   Text(
                     fee != null ? fee.toStringAsFixed(0) : 'N/A',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E1E1E),
+                      color: textPrimary,
                     ),
                   ),
                 ],
@@ -866,20 +887,20 @@ class _CartScreenState extends State<CartScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'Order Total:',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1E1E1E),
+                color: textPrimary,
               ),
             ),
             Text(
               orderTotal.toStringAsFixed(0),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1E1E1E),
+                color: textPrimary,
               ),
             ),
           ],

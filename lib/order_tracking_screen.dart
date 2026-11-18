@@ -7,6 +7,7 @@ import 'services/chat_read_tracker.dart';
 import 'services/supabase_service.dart';
 import 'mock_data.dart';
 import 'widgets/order_chat_sheet.dart';
+import 'widgets/responsive_shell.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
   final String orderId;
@@ -417,7 +418,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             !snapshot.hasData &&
             snapshot.connectionState == ConnectionState.waiting) {
           return Scaffold(
-            backgroundColor: Colors.white,
+            backgroundColor: DDartTheme.surface(context),
             appBar: AppBar(
               title: const Text('Loading Order...', style: TextStyle(color: Colors.white, fontSize: 18)),
               backgroundColor: primaryMaroon,
@@ -462,7 +463,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     : null;
 
                 return Scaffold(
-                  backgroundColor: Colors.white,
+                  backgroundColor: DDartTheme.surface(context),
                   appBar: AppBar(
                     title: Text(
                       'Order ${order.id.length > 8 ? order.id.substring(0, 8) : order.id}',
@@ -471,6 +472,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     backgroundColor: primaryMaroon,
                     iconTheme: const IconThemeData(color: Colors.white),
                     actions: [
+                      const ThemeToggleButton(iconColor: Colors.white, iconSize: 21),
                       if (!isTerminated)
                         IconButton(
                           tooltip: widget.isRunner ? 'Chat with Customer' : 'Chat with Runner',

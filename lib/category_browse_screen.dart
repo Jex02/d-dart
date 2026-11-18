@@ -241,9 +241,13 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = DDartTheme.isDark(context);
+    final textPrimary = DDartTheme.textPrimary(context);
+    final textSecondary = DDartTheme.textSecondary(context);
+
     return ResponsiveMobileShell(
       child: Scaffold(
-        backgroundColor: const Color(0xFFF9F9FB),
+        backgroundColor: DDartTheme.scaffoldBg(context),
         appBar: AppBar(
           backgroundColor: primaryMaroon,
           elevation: 0,
@@ -261,6 +265,7 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
             ),
           ),
           actions: [
+            const ThemeToggleButton(iconColor: Colors.white, iconSize: 20),
             ListenableBuilder(
               listenable: CartService.instance,
               builder: (context, _) {
@@ -323,7 +328,7 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
             children: [
               // Search & Filter Header Container
               Container(
-                color: Colors.white,
+                color: DDartTheme.surface(context),
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -332,18 +337,19 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
                     Container(
                       height: 42,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF2ECEC),
+                        color: DDartTheme.fieldFill(context),
                         borderRadius: BorderRadius.circular(21),
                       ),
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       child: TextField(
                         controller: _searchController,
                         onChanged: (_) => _applyFilters(),
-                        decoration: const InputDecoration(
+                        style: TextStyle(color: textPrimary, fontSize: 13),
+                        decoration: InputDecoration(
                           border: InputBorder.none,
-                          icon: Icon(Icons.search, size: 18, color: Colors.black54),
+                          icon: Icon(Icons.search, size: 18, color: textSecondary),
                           hintText: 'Search within category...',
-                          hintStyle: TextStyle(fontSize: 12, color: Colors.black45),
+                          hintStyle: TextStyle(fontSize: 12, color: DDartTheme.textMuted(context)),
                         ),
                       ),
                     ),
@@ -366,12 +372,12 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
                                 style: TextStyle(
                                   fontSize: 11.5,
                                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                  color: isSelected ? Colors.white : Colors.black87,
+                                  color: isSelected ? Colors.white : textPrimary,
                                 ),
                               ),
                               selected: isSelected,
                               selectedColor: primaryMaroon,
-                              backgroundColor: Colors.grey.shade100,
+                              backgroundColor: DDartTheme.cardSubtle(context),
                               onSelected: (selected) {
                                 if (selected) {
                                   setState(() => _selectedCanteenFilter = canteen);
@@ -401,12 +407,13 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                    color: isSelected ? primaryMaroon : Colors.black87,
+                                    color: isSelected ? DDartTheme.accentText(context) : textPrimary,
                                   ),
                                 ),
                                 selected: isSelected,
-                                selectedColor: primaryMaroon.withValues(alpha: 0.14),
-                                backgroundColor: Colors.grey.shade100,
+                                selectedColor: (isDark ? DDartTheme.brightGold : primaryMaroon)
+                                    .withValues(alpha: 0.16),
+                                backgroundColor: DDartTheme.cardSubtle(context),
                                 onSelected: (selected) {
                                   if (selected) {
                                     setState(() => _selectedCategoryFilter = cat);
@@ -446,7 +453,7 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: DDartTheme.surface(context),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.08),
@@ -541,13 +548,17 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
     final selectedCanteen =
         _itemSelectedCanteen[item.id] ?? item.canteensList.first;
     final qty = _itemQuantities[item.id] ?? 1;
+    final textPrimary = DDartTheme.textPrimary(context);
+    final textSecondary = DDartTheme.textSecondary(context);
+    final accent = DDartTheme.accentText(context);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: DDartTheme.card(context),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: DDartTheme.border(context)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -568,18 +579,18 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
                 child: Container(
                   width: 76,
                   height: 76,
-                  color: Colors.grey.shade100,
+                  color: DDartTheme.cardSubtle(context),
                   child: item.imageUrl != null
                       ? Image.network(
                           item.imageUrl!,
                           fit: BoxFit.cover,
                           errorBuilder: (_, _, _) => Container(
-                            color: Colors.grey.shade200,
+                            color: DDartTheme.cardSubtle(context),
                             child: const Icon(Icons.fastfood, color: Colors.grey),
                           ),
                         )
                       : Container(
-                          color: Colors.grey.shade200,
+                          color: DDartTheme.cardSubtle(context),
                           child: const Icon(Icons.fastfood, color: Colors.grey),
                         ),
                 ),
@@ -593,10 +604,10 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
                   children: [
                     Text(
                       item.name,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E1E1E),
+                        color: textPrimary,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -604,16 +615,16 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
                       item.unitDescription,
                       style: TextStyle(
                         fontSize: 11.5,
-                        color: Colors.grey.shade600,
+                        color: textSecondary,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       '₱${item.price.toStringAsFixed(2)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
-                        color: primaryMaroon,
+                        color: accent,
                       ),
                     ),
                   ],
@@ -628,14 +639,14 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
           // Dropdown showing which canteen it is available at
           Row(
             children: [
-              const Icon(Icons.storefront_outlined, size: 16, color: primaryMaroon),
+              Icon(Icons.storefront_outlined, size: 16, color: accent),
               const SizedBox(width: 6),
-              const Text(
+              Text(
                 'Available at:',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF333333),
+                  color: textPrimary,
                 ),
               ),
               const SizedBox(width: 10),
@@ -644,9 +655,9 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
                   height: 36,
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF9F5F5),
+                    color: DDartTheme.maroonTint(context),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: primaryMaroon.withValues(alpha: 0.25)),
+                    border: Border.all(color: accent.withValues(alpha: 0.35)),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
@@ -654,11 +665,12 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
                           ? selectedCanteen
                           : item.canteensList.first,
                       isExpanded: true,
-                      icon: const Icon(Icons.arrow_drop_down, color: primaryMaroon),
-                      style: const TextStyle(
+                      dropdownColor: DDartTheme.card(context),
+                      icon: Icon(Icons.arrow_drop_down, color: accent),
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF1E1E1E),
+                        color: textPrimary,
                       ),
                       items: item.canteensList.map((canteen) {
                         return DropdownMenuItem<String>(
@@ -690,9 +702,9 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
               // Quantity Picker
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: DDartTheme.cardSubtle(context),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(color: DDartTheme.border(context)),
                 ),
                 child: Row(
                   children: [
@@ -706,7 +718,7 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
                         child: Icon(
                           Icons.remove,
                           size: 14,
-                          color: qty > 1 ? Colors.black87 : Colors.grey.shade400,
+                          color: qty > 1 ? textPrimary : DDartTheme.textMuted(context),
                         ),
                       ),
                     ),
@@ -714,18 +726,19 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       child: Text(
                         '$qty',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
+                          color: textPrimary,
                         ),
                       ),
                     ),
                     InkWell(
                       onTap: () => setState(() => _itemQuantities[item.id] = qty + 1),
                       borderRadius: BorderRadius.circular(8),
-                      child: const Padding(
-                        padding: EdgeInsets.all(6.0),
-                        child: Icon(Icons.add, size: 14, color: Colors.black87),
+                      child: Padding(
+                        padding: const EdgeInsets.all(6.0),
+                        child: Icon(Icons.add, size: 14, color: textPrimary),
                       ),
                     ),
                   ],

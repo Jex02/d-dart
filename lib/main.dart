@@ -10,6 +10,8 @@ import 'services/app_router.dart';
 import 'services/chat_read_tracker.dart';
 import 'services/remember_me_service.dart';
 import 'services/supabase_service.dart';
+import 'services/theme_service.dart';
+import 'widgets/responsive_shell.dart';
 
 bool _isPasswordRecoveryActive = false;
 
@@ -52,6 +54,7 @@ String? _extractAuthCallbackError() {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await ThemeService.instance.load();
 
   // Capture web URL callback state BEFORE Supabase.initialize() clears URL params.
   final launchedWithRecoveryUrl = _isRecoveryUrl();
@@ -178,14 +181,19 @@ class _DDartAppState extends State<DDartApp> {
       initialHome = const GetStartedPage();
     }
 
-    return MaterialApp(
-      navigatorKey: _navigatorKey,
-      debugShowCheckedModeBanner: false,
-      title: 'D-Dart',
-      theme: ThemeData(
-        useMaterial3: true,
-      ),
-      home: initialHome,
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.instance.themeModeNotifier,
+      builder: (context, themeMode, _) {
+        return MaterialApp(
+          navigatorKey: _navigatorKey,
+          debugShowCheckedModeBanner: false,
+          title: 'D-Dart',
+          theme: DDartTheme.lightTheme,
+          darkTheme: DDartTheme.darkTheme,
+          themeMode: themeMode,
+          home: initialHome,
+        );
+      },
     );
   }
 }

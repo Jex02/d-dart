@@ -568,7 +568,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
         keyboardType: keyboardType,
         obscureText: obscureText,
         onSubmitted: onSubmitted,
-        style: const TextStyle(fontSize: 13.5),
+        style: const TextStyle(fontSize: 13.5, color: Colors.black87),
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: const TextStyle(color: Colors.black54, fontSize: 12.5),

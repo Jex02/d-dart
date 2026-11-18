@@ -5,6 +5,7 @@ import 'models/user_profile.dart';
 import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
 import 'order_tracking_screen.dart';
+import 'widgets/responsive_shell.dart';
 
 class RunnerGigBoardScreen extends StatefulWidget {
   const RunnerGigBoardScreen({super.key});
@@ -195,10 +196,12 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
     final limit = DutyLockService.activeConfig.dailyDeliveryLimit;
     final canClaimNow = _isOnline && !isLocked;
 
+    final isDark = DDartTheme.isDark(context);
+
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: DDartTheme.surface(context),
         appBar: AppBar(
           title: const Text(
             'Runner Gig Board',
@@ -207,6 +210,7 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
           backgroundColor: primaryMaroon,
           iconTheme: const IconThemeData(color: Colors.white),
           actions: [
+            const ThemeToggleButton(iconColor: Colors.white, iconSize: 21),
             IconButton(
               tooltip: 'Refresh eligibility',
               icon: const Icon(Icons.refresh),
@@ -235,17 +239,17 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: isLocked
-                        ? Colors.red.shade50
+                        ? (isDark ? Colors.red.withValues(alpha: 0.16) : Colors.red.shade50)
                         : _isOnline
-                            ? Colors.green.shade50
-                            : Colors.grey.shade100,
+                            ? (isDark ? Colors.green.withValues(alpha: 0.16) : Colors.green.shade50)
+                            : DDartTheme.cardSubtle(context),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isLocked
                           ? Colors.red.shade300
                           : _isOnline
                               ? Colors.green.shade300
-                              : Colors.grey.shade300,
+                              : DDartTheme.border(context),
                     ),
                   ),
                   child: Row(
