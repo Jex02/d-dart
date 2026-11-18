@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'reset_password_page.dart';
 import 'services/app_router.dart';
+import 'services/remember_me_service.dart';
 import 'services/supabase_service.dart';
 import 'signup.dart';
 import 'utils/validators.dart';
@@ -32,9 +34,21 @@ class _LoginPageState extends State<LoginPage> {
     if (widget.initialEmail != null && widget.initialEmail!.isNotEmpty) {
       _emailController.text = widget.initialEmail!;
     }
+    _loadRememberedDefaults();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
+      }
+    });
+  }
+
+  Future<void> _loadRememberedDefaults() async {
+    final defaults = await RememberMeService.loadLoginDefaults();
+    if (!mounted) return;
+    setState(() {
+      _rememberMe = defaults.rememberMe;
+      if (_emailController.text.trim().isEmpty && defaults.email.isNotEmpty) {
+        _emailController.text = defaults.email;
       }
     });
   }
@@ -65,6 +79,8 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       await SupabaseService().signIn(email: email, password: password);
+      await RememberMeService.saveOnLogin(email: email, rememberMe: _rememberMe);
+      TextInput.finishAutofillContext(shouldSave: _rememberMe);
       final targetScreen = await AppRouter.resolveHomeForProfile();
 
       if (mounted) {
@@ -145,6 +161,7 @@ class _LoginPageState extends State<LoginPage> {
                           onForgotPassword: _handleForgotPassword,
                           onRememberChanged: (value) {
                             setState(() => _rememberMe = value);
+                            RememberMeService.setPreference(value);
                           },
                           onPasswordVisibilityChanged: () {
                             setState(() => _obscurePassword = !_obscurePassword);
@@ -280,52 +297,72 @@ class _LoginPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          _LoginTextField(
-            controller: emailController,
-            hintText: 'Email',
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.next,
-            onSubmitted: (_) {
-              if (passwordController.text.isNotEmpty) {
-                onLogin();
-              }
-            },
-          ),
-          const SizedBox(height: 14),
-          _LoginTextField(
-            controller: passwordController,
-            hintText: 'Password',
-            obscureText: obscurePassword,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => onLogin(),
-            suffix: IconButton(
-              onPressed: onPasswordVisibilityChanged,
-              icon: Icon(
-                obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                color: Colors.black45,
-                size: 21,
-              ),
+          AutofillGroup(
+            child: Column(
+              children: [
+                _LoginTextField(
+                  controller: emailController,
+                  hintText: 'Email',
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.email],
+                  onSubmitted: (_) {
+                    if (passwordController.text.isNotEmpty) {
+                      onLogin();
+                    }
+                  },
+                ),
+                const SizedBox(height: 14),
+                _LoginTextField(
+                  controller: passwordController,
+                  hintText: 'Password',
+                  obscureText: obscurePassword,
+                  textInputAction: TextInputAction.done,
+                  autofillHints: const [AutofillHints.password],
+                  onSubmitted: (_) => onLogin(),
+                  suffix: IconButton(
+                    onPressed: onPasswordVisibilityChanged,
+                    icon: Icon(
+                      obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      color: Colors.black45,
+                      size: 21,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: Checkbox(
-                  value: rememberMe,
-                  shape: const CircleBorder(),
-                  activeColor: Colors.white,
-                  checkColor: panelColor,
-                  side: const BorderSide(color: Colors.white, width: 1.5),
-                  onChanged: (value) => onRememberChanged(value ?? false),
+              InkWell(
+                onTap: () => onRememberChanged(!rememberMe),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: Checkbox(
+                          value: rememberMe,
+                          shape: const CircleBorder(),
+                          activeColor: Colors.white,
+                          checkColor: panelColor,
+                          side: const BorderSide(color: Colors.white, width: 1.5),
+                          onChanged: (value) => onRememberChanged(value ?? false),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Remember me',
+                        style: TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'Remember',
-                style: TextStyle(color: Colors.white, fontSize: 12),
               ),
               const Spacer(),
               TextButton(
@@ -414,6 +451,7 @@ class _LoginTextField extends StatelessWidget {
     this.suffix,
     this.onSubmitted,
     this.textInputAction,
+    this.autofillHints,
   });
 
   final TextEditingController? controller;
@@ -423,6 +461,7 @@ class _LoginTextField extends StatelessWidget {
   final Widget? suffix;
   final ValueChanged<String>? onSubmitted;
   final TextInputAction? textInputAction;
+  final Iterable<String>? autofillHints;
 
   @override
   Widget build(BuildContext context) {
@@ -433,6 +472,7 @@ class _LoginTextField extends StatelessWidget {
         keyboardType: keyboardType,
         obscureText: obscureText,
         textInputAction: textInputAction,
+        autofillHints: autofillHints,
         onSubmitted: onSubmitted,
         style: const TextStyle(fontSize: 13),
         decoration: InputDecoration(

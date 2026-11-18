@@ -11,6 +11,7 @@ import '../models/user_profile.dart';
 import '../mock_data.dart';
 import '../data/campus_menu_catalog.dart';
 import '../models/cart_item.dart';
+import 'remember_me_service.dart';
 
 enum ClaimOrderStatus {
   claimed,
@@ -345,6 +346,7 @@ class SupabaseService {
 
   Future<void> signOut() async {
     cachedProfile = null;
+    await RememberMeService.clearEphemeralFlag();
     await client.auth.signOut();
   }
 

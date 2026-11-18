@@ -8,6 +8,7 @@ import 'get_started.dart';
 import 'reset_password_page.dart';
 import 'services/app_router.dart';
 import 'services/chat_read_tracker.dart';
+import 'services/remember_me_service.dart';
 import 'services/supabase_service.dart';
 
 bool _isRecoveryUrl() {
@@ -24,6 +25,9 @@ Future<void> main() async {
     await Supabase.initialize(
       url: SupabaseConstants.url,
       anonKey: SupabaseConstants.anonKey,
+    );
+    await RememberMeService.enforceSessionOnStartup(
+      skipIfRecovery: _isRecoveryUrl(),
     );
   } catch (e) {
     debugPrint('Supabase initialization error: $e');
