@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sd2/canteen_category_screen.dart';
+import 'package:sd2/canteen_menu_screen.dart';
+import 'package:sd2/category_browse_screen.dart';
 import 'package:sd2/cor_upload_screen.dart';
 import 'package:sd2/main.dart';
 import 'package:sd2/main_dashboard.dart';
@@ -9,8 +12,10 @@ import 'package:sd2/models/delivery_order.dart';
 import 'package:sd2/order_tracking_screen.dart';
 import 'package:sd2/pabili_request_screen.dart';
 import 'package:sd2/pending_verification_screen.dart';
+import 'package:sd2/reset_password_page.dart';
 import 'package:sd2/services/duty_lock_service.dart';
 import 'package:sd2/signup.dart';
+import 'package:sd2/widgets/cor_timetable_dialog.dart';
 import 'package:sd2/widgets/order_chat_sheet.dart';
 
 void main() {
@@ -203,5 +208,91 @@ void main() {
     expect(find.text('Library 2nd Floor'), findsOneWidget);
     expect(find.text('Type a message...'), findsOneWidget);
     expect(find.text('🙏 Please ask for utensils & sauce.'), findsOneWidget);
+  });
+
+  testWidgets('CorTimetableDialog renders 30-minute intervals and mid-hour classes without overlap',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 960);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: CorTimetableDialog(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('07:30 AM - 08:00 AM'), findsOneWidget);
+    expect(find.text('10:00 AM - 10:30 AM'), findsOneWidget);
+    expect(find.text('10:30 AM - 11:00 AM'), findsOneWidget);
+    // Back-to-back Wednesday classes (07:30-10:30 and 10:30-13:30) must both appear
+    expect(find.text('CPE368\nGLE704'), findsOneWidget);
+    expect(find.text('CPE331\nGLE703'), findsOneWidget);
+  });
+
+  testWidgets('Canteen pages navigate to Notifications (tab 2) and Profile (tab 3)',
+      (WidgetTester tester) async {
+    final tappedTabs = <int>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CanteenCategoryScreen(
+          canteenName: 'Main Canteen',
+          userName: 'Jerick',
+          onNavigateToTab: tappedTabs.add,
+        ),
+      ),
+    );
+    await tester.tap(find.byTooltip('Notifications & Orders'));
+    await tester.tap(find.byTooltip('Profile'));
+    expect(tappedTabs, [2, 3]);
+
+    tappedTabs.clear();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CanteenMenuScreen(
+          canteenName: 'Main Canteen',
+          categoryName: 'Beverages',
+          userName: 'Jerick',
+          onNavigateToTab: tappedTabs.add,
+        ),
+      ),
+    );
+    await tester.tap(find.byTooltip('Notifications & Orders'));
+    await tester.tap(find.byTooltip('Profile'));
+    expect(tappedTabs, [2, 3]);
+
+    tappedTabs.clear();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CategoryBrowseScreen(
+          categoryTitle: 'Beverages',
+          userName: 'Jerick',
+          onNavigateToTab: tappedTabs.add,
+        ),
+      ),
+    );
+    await tester.tap(find.byTooltip('Notifications & Orders'));
+    await tester.tap(find.byTooltip('Profile'));
+    expect(tappedTabs, [2, 3]);
+  });
+
+  testWidgets('ResetPasswordPage surfaces expired/invalid recovery link error',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ResetPasswordPage(
+          initialErrorMessage: 'Email link is invalid or has expired',
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Email link is invalid or has expired'), findsOneWidget);
   });
 }

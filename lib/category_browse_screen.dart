@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'cart_screen.dart';
+import 'customer_home_screen.dart';
 import 'data/campus_menu_catalog.dart';
 import 'models/campus_location.dart';
 import 'models/cart_item.dart';
@@ -11,11 +12,17 @@ import 'widgets/responsive_shell.dart';
 class CategoryBrowseScreen extends StatefulWidget {
   final String categoryTitle;
   final String? initialQuery;
+  final String? userName;
+  final String? idPhotoUrl;
+  final ValueChanged<int>? onNavigateToTab;
 
   const CategoryBrowseScreen({
     super.key,
     required this.categoryTitle,
     this.initialQuery,
+    this.userName,
+    this.idPhotoUrl,
+    this.onNavigateToTab,
   });
 
   @override
@@ -30,6 +37,15 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
   String _selectedCanteenFilter = 'All';
   String _selectedCategoryFilter = 'All';
   final _searchController = TextEditingController();
+  String? _idPhotoUrl;
+  String _displayName = '';
+  ScaffoldMessengerState? _messenger;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _messenger = ScaffoldMessenger.maybeOf(context);
+  }
 
   // Stores currently selected canteen for each item id
   final Map<String, String> _itemSelectedCanteen = {};
@@ -47,6 +63,8 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
   @override
   void initState() {
     super.initState();
+    _idPhotoUrl = widget.idPhotoUrl;
+    _displayName = widget.userName ?? '';
     if (_isFullMenuBrowse) {
       _allItems = CampusMenuCatalog.allItems;
     } else {
@@ -70,6 +88,58 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
     }
 
     _loadFromDatabase();
+    if (_idPhotoUrl == null || _displayName.isEmpty) {
+      _loadProfileAvatar();
+    }
+  }
+
+  Future<void> _loadProfileAvatar() async {
+    try {
+      final profile = await SupabaseService().fetchUserProfileModel();
+      String? idUrl = _idPhotoUrl;
+      if (idUrl == null &&
+          profile?.idDocumentPath != null &&
+          profile!.idDocumentPath!.isNotEmpty) {
+        idUrl = await SupabaseService().getSignedDocumentUrl(profile.idDocumentPath!);
+      }
+      if (mounted) {
+        setState(() {
+          if (_displayName.isEmpty && profile != null && profile.firstName.isNotEmpty) {
+            _displayName = profile.firstName;
+          }
+          _idPhotoUrl = idUrl;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _navigateToTab(int tabIndex) {
+    if (widget.onNavigateToTab != null) {
+      widget.onNavigateToTab!(tabIndex);
+      return;
+    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => CustomerHomeScreen(initialTabIndex: tabIndex),
+      ),
+    );
+  }
+
+  Widget _buildHeaderAvatarFallback() {
+    final initial =
+        _displayName.isNotEmpty ? _displayName.substring(0, 1).toUpperCase() : 'W';
+    return CircleAvatar(
+      radius: 15,
+      backgroundColor: DDartTheme.brightGold.withValues(alpha: 0.25),
+      child: Text(
+        initial,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+        ),
+      ),
+    );
   }
 
   Future<void> _loadFromDatabase() async {
@@ -99,7 +169,7 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
 
   @override
   void dispose() {
-    ScaffoldMessenger.of(context).clearSnackBars();
+    _messenger?.clearSnackBars();
     _searchController.dispose();
     super.dispose();
   }
@@ -196,6 +266,7 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
               builder: (context, _) {
                 final count = CartService.instance.totalItemCount;
                 return IconButton(
+                  tooltip: 'Cart',
                   icon: Badge(
                     isLabelVisible: count > 0,
                     label: Text('$count'),
@@ -212,7 +283,39 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
                 );
               },
             ),
-            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Notifications & Orders',
+              icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+              onPressed: () => _navigateToTab(2),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Tooltip(
+                message: 'Profile',
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => _navigateToTab(3),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    child: ClipOval(
+                      child: _idPhotoUrl != null
+                          ? Image.network(
+                              _idPhotoUrl!,
+                              fit: BoxFit.cover,
+                              alignment: const Alignment(-0.55, -0.35),
+                              errorBuilder: (_, _, _) => _buildHeaderAvatarFallback(),
+                            )
+                          : _buildHeaderAvatarFallback(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
         body: SafeArea(

@@ -48,7 +48,16 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
   static const Color gridLineColor = Color(0xFFE0E0E0);
 
   bool _showTimetableGrid = true;
-  bool _useSampleIfEmpty = true;
+  final bool _useSampleIfEmpty = true;
+  final ScrollController _verticalScrollCtrl = ScrollController();
+  final ScrollController _horizontalScrollCtrl = ScrollController();
+
+  @override
+  void dispose() {
+    _verticalScrollCtrl.dispose();
+    _horizontalScrollCtrl.dispose();
+    super.dispose();
+  }
 
   static const List<String> _days = [
     'Monday',
@@ -60,22 +69,9 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
     'Sunday',
   ];
 
-  static const List<_TimeSlot> _timeSlots = [
-    _TimeSlot('07:00 AM - 08:00 AM', 7 * 60, 8 * 60),
-    _TimeSlot('08:00 AM - 09:00 AM', 8 * 60, 9 * 60),
-    _TimeSlot('09:00 AM - 10:00 AM', 9 * 60, 10 * 60),
-    _TimeSlot('10:00 AM - 11:00 AM', 10 * 60, 11 * 60),
-    _TimeSlot('11:00 AM - 12:00 PM', 11 * 60, 12 * 60),
-    _TimeSlot('12:00 PM - 01:00 PM', 12 * 60, 13 * 60),
-    _TimeSlot('01:00 PM - 02:00 PM', 13 * 60, 14 * 60),
-    _TimeSlot('02:00 PM - 03:00 PM', 14 * 60, 15 * 60),
-    _TimeSlot('03:00 PM - 04:00 PM', 15 * 60, 16 * 60),
-    _TimeSlot('04:00 PM - 05:00 PM', 16 * 60, 17 * 60),
-    _TimeSlot('05:00 PM - 06:00 PM', 17 * 60, 18 * 60),
-    _TimeSlot('06:00 PM - 07:00 PM', 18 * 60, 19 * 60),
-    _TimeSlot('07:00 PM - 08:00 PM', 19 * 60, 20 * 60),
-    _TimeSlot('08:00 PM - 09:00 PM', 20 * 60, 21 * 60),
-  ];
+  static const int _slotIntervalMinutes = 30;
+  static const int _defaultStartMinutes = 7 * 60; // 07:00 AM
+  static const int _defaultEndMinutes = 21 * 60; // 09:00 PM
 
   // Exact CIT-U CPE schedule matching the user's uploaded screenshot
   static final List<ClassSession> _sampleCpeSchedule = [
@@ -106,31 +102,48 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
     return hour * 60 + min;
   }
 
-  ClassSession? _findSessionForSlot(List<ClassSession> sessions, String day, _TimeSlot slot) {
-    for (final s in sessions) {
-      if (s.day.trim().toLowerCase() != day.trim().toLowerCase()) continue;
-      final startMin = _parseMinutes(s.startTime);
-      final endMin = _parseMinutes(s.endTime);
-      if (startMin == null || endMin == null) continue;
+  static String _formatMinutes12h(int totalMinutes) {
+    final clamped = totalMinutes.clamp(0, 24 * 60);
+    final hour24 = (clamped ~/ 60) % 24;
+    final minute = clamped % 60;
+    final period = hour24 >= 12 ? 'PM' : 'AM';
+    final hour12 = hour24 == 0 ? 12 : (hour24 > 12 ? hour24 - 12 : hour24);
+    final hh = hour12.toString().padLeft(2, '0');
+    final mm = minute.toString().padLeft(2, '0');
+    return '$hh:$mm $period';
+  }
 
-      // Overlap condition
-      if (startMin < slot.endMinutes && endMin > slot.startMinutes) {
-        return s;
+  static List<_TimeSlot> _buildHalfHourSlots(List<ClassSession> sessions) {
+    int startMin = _defaultStartMinutes;
+    int endMin = _defaultEndMinutes;
+
+    for (final s in sessions) {
+      final sStart = _parseMinutes(s.startTime);
+      final sEnd = _parseMinutes(s.endTime);
+      if (sStart != null && sStart < startMin) {
+        startMin = (sStart ~/ _slotIntervalMinutes) * _slotIntervalMinutes;
+      }
+      if (sEnd != null && sEnd > endMin) {
+        endMin = ((sEnd + _slotIntervalMinutes - 1) ~/ _slotIntervalMinutes) *
+            _slotIntervalMinutes;
       }
     }
-    return null;
-  }
 
-  bool _isFirstSlotOfSession(ClassSession session, _TimeSlot slot) {
-    final startMin = _parseMinutes(session.startTime);
-    if (startMin == null) return true;
-    return startMin >= slot.startMinutes && startMin < slot.endMinutes;
-  }
+    startMin = startMin.clamp(0, 23 * 60);
+    endMin = endMin.clamp(startMin + _slotIntervalMinutes, 24 * 60);
 
-  bool _isLastSlotOfSession(ClassSession session, _TimeSlot slot) {
-    final endMin = _parseMinutes(session.endTime);
-    if (endMin == null) return true;
-    return endMin > slot.startMinutes && endMin <= slot.endMinutes;
+    final slots = <_TimeSlot>[];
+    for (int m = startMin; m < endMin; m += _slotIntervalMinutes) {
+      final next = m + _slotIntervalMinutes;
+      slots.add(
+        _TimeSlot(
+          '${_formatMinutes12h(m)} - ${_formatMinutes12h(next)}',
+          m,
+          next,
+        ),
+      );
+    }
+    return slots;
   }
 
   @override
@@ -307,18 +320,27 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
   }
 
   Widget _buildTimetableGrid(List<ClassSession> sessions) {
-    const double timeColWidth = 120.0;
+    const double timeColWidth = 128.0;
     const double dayColWidth = 116.0;
-    const double rowHeight = 48.0;
+    const double rowHeight = 32.0;
+
+    final timeSlots = _buildHalfHourSlots(sessions);
+    final gridStartMinutes = timeSlots.first.startMinutes;
+    final gridEndMinutes = timeSlots.last.endMinutes;
+    final totalGridHeight = timeSlots.length * rowHeight;
 
     return Scrollbar(
+      controller: _verticalScrollCtrl,
       thumbVisibility: true,
       child: SingleChildScrollView(
+        controller: _verticalScrollCtrl,
         scrollDirection: Axis.vertical,
         child: Scrollbar(
+          controller: _horizontalScrollCtrl,
           thumbVisibility: true,
           notificationPredicate: (notif) => notif.depth == 1,
           child: SingleChildScrollView(
+            controller: _horizontalScrollCtrl,
             scrollDirection: Axis.horizontal,
             child: Container(
               color: Colors.white,
@@ -338,11 +360,11 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
                           border: Border.all(color: gridLineColor, width: 0.7),
                         ),
                         child: const Text(
-                          'TIME',
+                          'TIME (30-MIN)',
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 10.5,
                             fontWeight: FontWeight.bold,
-                            letterSpacing: 0.8,
+                            letterSpacing: 0.6,
                             color: Colors.black54,
                           ),
                         ),
@@ -369,93 +391,175 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
                     ],
                   ),
 
-                  // Table Body: 14 Hourly Rows
-                  ..._timeSlots.map((slot) {
-                    return Row(
-                      children: [
-                        // Left Time Column
-                        Container(
-                          width: timeColWidth,
-                          height: rowHeight,
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                          alignment: Alignment.centerLeft,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFAFAFA),
-                            border: Border.all(color: gridLineColor, width: 0.7),
-                          ),
-                          child: Text(
-                            slot.label,
-                            style: const TextStyle(
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ),
-
-                        // 7 Day Cells for this Time Slot
-                        ..._days.map((day) {
-                          final session = _findSessionForSlot(sessions, day, slot);
-
-                          if (session == null) {
-                            // Empty vacant cell
-                            return Container(
-                              width: dayColWidth,
-                              height: rowHeight,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                border: Border.all(color: gridLineColor, width: 0.5),
-                              ),
-                            );
-                          }
-
-                          // Occupied class slot with matching green block
-                          final isFirst = _isFirstSlotOfSession(session, slot);
-                          final isLast = _isLastSlotOfSession(session, slot);
-
+                  // Table Body: 30-Minute Time Column + 7 Positioned Day Columns
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Left 30-Minute Time Labels Column
+                      Column(
+                        children: timeSlots.map((slot) {
+                          final isHalfHour = slot.startMinutes % 60 != 0;
                           return Container(
-                            width: dayColWidth,
+                            width: timeColWidth,
                             height: rowHeight,
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            alignment: Alignment.centerLeft,
                             decoration: BoxDecoration(
-                              color: timetableGreen,
+                              color: isHalfHour
+                                  ? const Color(0xFFFCFCFC)
+                                  : const Color(0xFFF7F7F7),
                               border: Border(
-                                left: const BorderSide(color: Colors.white, width: 1),
-                                right: const BorderSide(color: Colors.white, width: 1),
-                                top: isFirst
-                                    ? const BorderSide(color: Colors.white, width: 1)
-                                    : BorderSide.none,
-                                bottom: isLast
-                                    ? const BorderSide(color: Colors.white, width: 1)
-                                    : BorderSide.none,
+                                left: const BorderSide(color: gridLineColor, width: 0.7),
+                                right: const BorderSide(color: gridLineColor, width: 0.7),
+                                top: BorderSide(
+                                  color: isHalfHour
+                                      ? const Color(0xFFEEEEEE)
+                                      : const Color(0xFFD6D6D6),
+                                  width: isHalfHour ? 0.5 : 0.8,
+                                ),
+                                bottom: const BorderSide(color: gridLineColor, width: 0.5),
                               ),
                             ),
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                            child: isFirst
-                                ? Center(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Text(
-                                          session.subject,
-                                          textAlign: TextAlign.center,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 10.5,
-                                            height: 1.15,
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                : const SizedBox.shrink(),
+                            child: Text(
+                              slot.label,
+                              style: TextStyle(
+                                fontSize: 9.2,
+                                fontWeight: isHalfHour ? FontWeight.w500 : FontWeight.w700,
+                                color: isHalfHour ? Colors.black54 : Colors.black87,
+                              ),
+                            ),
                           );
-                        }),
-                      ],
-                    );
-                  }),
+                        }).toList(),
+                      ),
+
+                      // 7 Day Columns with exact minute-accurate stacked class blocks
+                      ..._days.map((day) {
+                        final daySessions = sessions
+                            .where((s) => s.day.trim().toLowerCase() == day.toLowerCase())
+                            .toList();
+
+                        return SizedBox(
+                          width: dayColWidth,
+                          height: totalGridHeight,
+                          child: Stack(
+                            children: [
+                              // Background 30-minute grid cells
+                              Column(
+                                children: timeSlots.map((slot) {
+                                  final isHalfHour = slot.startMinutes % 60 != 0;
+                                  return Container(
+                                    width: dayColWidth,
+                                    height: rowHeight,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      border: Border(
+                                        left: const BorderSide(color: gridLineColor, width: 0.5),
+                                        right: const BorderSide(color: gridLineColor, width: 0.5),
+                                        top: BorderSide(
+                                          color: isHalfHour
+                                              ? const Color(0xFFF0F0F0)
+                                              : const Color(0xFFDADADA),
+                                          width: isHalfHour ? 0.5 : 0.7,
+                                        ),
+                                        bottom: const BorderSide(
+                                          color: Color(0xFFEEEEEE),
+                                          width: 0.4,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+
+                              // Foreground class blocks positioned precisely to the minute
+                              ...daySessions.map((session) {
+                                final rawStart = _parseMinutes(session.startTime);
+                                final rawEnd = _parseMinutes(session.endTime);
+                                if (rawStart == null || rawEnd == null || rawEnd <= rawStart) {
+                                  return const SizedBox.shrink();
+                                }
+
+                                final clampedStart =
+                                    rawStart.clamp(gridStartMinutes, gridEndMinutes);
+                                final clampedEnd =
+                                    rawEnd.clamp(gridStartMinutes, gridEndMinutes);
+                                if (clampedEnd <= clampedStart) {
+                                  return const SizedBox.shrink();
+                                }
+
+                                final topOffset =
+                                    ((clampedStart - gridStartMinutes) / _slotIntervalMinutes) *
+                                        rowHeight;
+                                final blockHeight =
+                                    ((clampedEnd - clampedStart) / _slotIntervalMinutes) *
+                                        rowHeight;
+
+                                final timeRangeLabel =
+                                    '${_formatMinutes12h(rawStart)} - ${_formatMinutes12h(rawEnd)}';
+                                final showTimeSublabel = blockHeight >= 54;
+
+                                return Positioned(
+                                  top: topOffset + 0.5,
+                                  left: 1,
+                                  right: 1,
+                                  height: (blockHeight - 1.0).clamp(16.0, totalGridHeight),
+                                  child: Tooltip(
+                                    message:
+                                        '${session.subject.replaceAll('\n', ' • ')}\n$day • $timeRangeLabel',
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: timetableGreen,
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: Colors.white, width: 1),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 2,
+                                      ),
+                                      child: Center(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              session.subject,
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: blockHeight < 36 ? 9.5 : 10.5,
+                                                height: 1.15,
+                                              ),
+                                              maxLines: blockHeight < 36 ? 1 : 3,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            if (showTimeSublabel) ...[
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                timeRangeLabel,
+                                                textAlign: TextAlign.center,
+                                                style: TextStyle(
+                                                  color: Colors.white.withValues(alpha: 0.9),
+                                                  fontSize: 8.5,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -477,7 +581,9 @@ class _CorTimetableDialogState extends State<CorTimetableDialog> {
       children: _days.map((day) {
         final daySessions = sessions
             .where((s) => s.day.toLowerCase() == day.toLowerCase())
-            .toList();
+            .toList()
+          ..sort((a, b) => (_parseMinutes(a.startTime) ?? 0)
+              .compareTo(_parseMinutes(b.startTime) ?? 0));
 
         if (daySessions.isEmpty) return const SizedBox.shrink();
 

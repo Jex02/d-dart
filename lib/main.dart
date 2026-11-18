@@ -11,6 +11,8 @@ import 'services/chat_read_tracker.dart';
 import 'services/remember_me_service.dart';
 import 'services/supabase_service.dart';
 
+bool _isPasswordRecoveryActive = false;
+
 bool _isRecoveryUrl() {
   if (!kIsWeb) return false;
   final uri = Uri.base;
@@ -18,26 +20,79 @@ bool _isRecoveryUrl() {
       uri.queryParameters['type'] == 'recovery';
 }
 
+bool _hasAuthCallbackUrl() {
+  if (!kIsWeb) return false;
+  final uri = Uri.base;
+  final frag = uri.fragment;
+  final params = uri.queryParameters;
+  return _isRecoveryUrl() ||
+      frag.contains('access_token=') ||
+      params.containsKey('code') ||
+      frag.contains('error=') ||
+      params.containsKey('error');
+}
+
+String? _extractAuthCallbackError() {
+  if (!kIsWeb) return null;
+  final uri = Uri.base;
+  final combined = <String, String>{
+    ...uri.queryParameters,
+    if (uri.fragment.isNotEmpty) ...Uri.splitQueryString(uri.fragment),
+  };
+  final desc = combined['error_description'];
+  final err = combined['error'];
+  if (desc != null && desc.trim().isNotEmpty) {
+    return desc.replaceAll('+', ' ').trim();
+  }
+  if (err != null && err.trim().isNotEmpty) {
+    return err.replaceAll('_', ' ').trim();
+  }
+  return null;
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Capture web URL callback state BEFORE Supabase.initialize() clears URL params.
+  final launchedWithRecoveryUrl = _isRecoveryUrl();
+  final hasAuthCallback = _hasAuthCallbackUrl();
+  final initialCallbackError = _extractAuthCallbackError();
+  if (launchedWithRecoveryUrl) {
+    _isPasswordRecoveryActive = true;
+  }
 
   try {
     await Supabase.initialize(
       url: SupabaseConstants.url,
-      anonKey: SupabaseConstants.anonKey,
+      publishableKey: SupabaseConstants.anonKey,
+      authOptions: const FlutterAuthClientOptions(
+        authFlowType: AuthFlowType.implicit,
+      ),
     );
     await RememberMeService.enforceSessionOnStartup(
-      skipIfRecovery: _isRecoveryUrl(),
+      skipIfRecovery: hasAuthCallback || _isPasswordRecoveryActive,
     );
   } catch (e) {
     debugPrint('Supabase initialization error: $e');
   }
 
-  runApp(const DDartApp());
+  runApp(
+    DDartApp(
+      launchedWithRecoveryLink: launchedWithRecoveryUrl,
+      initialRecoveryError: initialCallbackError,
+    ),
+  );
 }
 
 class DDartApp extends StatefulWidget {
-  const DDartApp({super.key});
+  const DDartApp({
+    super.key,
+    this.launchedWithRecoveryLink = false,
+    this.initialRecoveryError,
+  });
+
+  final bool launchedWithRecoveryLink;
+  final String? initialRecoveryError;
 
   @override
   State<DDartApp> createState() => _DDartAppState();
@@ -46,31 +101,52 @@ class DDartApp extends StatefulWidget {
 class _DDartAppState extends State<DDartApp> {
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   StreamSubscription<AuthState>? _authSub;
-  late final bool _launchedWithRecoveryLink;
 
   @override
   void initState() {
     super.initState();
-    _launchedWithRecoveryLink = _isRecoveryUrl();
     try {
-      _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-        if (data.event == AuthChangeEvent.signedOut) {
-          SupabaseService().cachedProfile = null;
-          ChatReadTracker.instance.clear();
-        } else if (data.event == AuthChangeEvent.passwordRecovery) {
+      _authSub = Supabase.instance.client.auth.onAuthStateChange.listen(
+        (data) {
+          if (data.event == AuthChangeEvent.signedOut) {
+            _isPasswordRecoveryActive = false;
+            SupabaseService().cachedProfile = null;
+            ChatReadTracker.instance.clear();
+          } else if (data.event == AuthChangeEvent.passwordRecovery) {
+            _isPasswordRecoveryActive = true;
+            RememberMeService.clearEphemeralFlag();
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _navigatorKey.currentState?.pushAndRemoveUntil(
+                MaterialPageRoute(
+                  builder: (_) => ResetPasswordPage(
+                    initialEmail: data.session?.user.email,
+                    startInUpdateMode: true,
+                  ),
+                ),
+                (_) => false,
+              );
+            });
+          } else if (data.event == AuthChangeEvent.userUpdated) {
+            _isPasswordRecoveryActive = false;
+          }
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          debugPrint('Auth stream error: $error');
+          final message = error is AuthException
+              ? error.message
+              : 'Password reset link is invalid or has expired. Please request a new one.';
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _navigatorKey.currentState?.pushAndRemoveUntil(
               MaterialPageRoute(
                 builder: (_) => ResetPasswordPage(
-                  initialEmail: data.session?.user.email,
-                  startInUpdateMode: true,
+                  initialErrorMessage: message,
                 ),
               ),
               (_) => false,
             );
           });
-        }
-      });
+        },
+      );
     } catch (_) {}
   }
 
@@ -83,10 +159,14 @@ class _DDartAppState extends State<DDartApp> {
   @override
   Widget build(BuildContext context) {
     final Widget initialHome;
-    if (_launchedWithRecoveryLink) {
+    if (widget.launchedWithRecoveryLink) {
       initialHome = ResetPasswordPage(
         initialEmail: SupabaseService().currentUser?.email,
         startInUpdateMode: true,
+      );
+    } else if (widget.initialRecoveryError != null) {
+      initialHome = ResetPasswordPage(
+        initialErrorMessage: widget.initialRecoveryError,
       );
     } else if (SupabaseService().isAuthenticated) {
       initialHome = const _SessionBootstrapScreen();
@@ -123,7 +203,7 @@ class _SessionBootstrapScreenState extends State<_SessionBootstrapScreen> {
 
   Future<void> _routeUser() async {
     final next = await AppRouter.resolveHomeForProfile();
-    if (!mounted) return;
+    if (!mounted || _isPasswordRecoveryActive) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => next),
     );

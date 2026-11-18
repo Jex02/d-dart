@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'cart_screen.dart';
+import 'customer_home_screen.dart';
 import 'data/campus_menu_catalog.dart';
 import 'models/cart_item.dart';
 import 'services/cart_service.dart';
@@ -11,12 +12,16 @@ class CanteenMenuScreen extends StatefulWidget {
   final String canteenName;
   final String categoryName;
   final String? userName;
+  final String? idPhotoUrl;
+  final ValueChanged<int>? onNavigateToTab;
 
   const CanteenMenuScreen({
     super.key,
     required this.canteenName,
     required this.categoryName,
     this.userName,
+    this.idPhotoUrl,
+    this.onNavigateToTab,
   });
 
   @override
@@ -27,10 +32,21 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
   static const Color primaryMaroon = DDartTheme.deepMaroon;
 
   late List<CanteenMenuItem> _items;
+  String? _idPhotoUrl;
+  String _displayName = '';
+  ScaffoldMessengerState? _messenger;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _messenger = ScaffoldMessenger.maybeOf(context);
+  }
 
   @override
   void initState() {
     super.initState();
+    _idPhotoUrl = widget.idPhotoUrl;
+    _displayName = widget.userName ?? '';
     _items = CampusMenuCatalog.getItemsByCanteenAndCategory(
       widget.canteenName,
       widget.categoryName,
@@ -42,6 +58,58 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
           .toList();
     }
     _loadFromDatabase();
+    if (_idPhotoUrl == null || _displayName.isEmpty) {
+      _loadProfileAvatar();
+    }
+  }
+
+  Future<void> _loadProfileAvatar() async {
+    try {
+      final profile = await SupabaseService().fetchUserProfileModel();
+      String? idUrl = _idPhotoUrl;
+      if (idUrl == null &&
+          profile?.idDocumentPath != null &&
+          profile!.idDocumentPath!.isNotEmpty) {
+        idUrl = await SupabaseService().getSignedDocumentUrl(profile.idDocumentPath!);
+      }
+      if (mounted) {
+        setState(() {
+          if (_displayName.isEmpty && profile != null && profile.firstName.isNotEmpty) {
+            _displayName = profile.firstName;
+          }
+          _idPhotoUrl = idUrl;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _navigateToTab(int tabIndex) {
+    if (widget.onNavigateToTab != null) {
+      widget.onNavigateToTab!(tabIndex);
+      return;
+    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => CustomerHomeScreen(initialTabIndex: tabIndex),
+      ),
+    );
+  }
+
+  Widget _buildHeaderAvatarFallback() {
+    final initial =
+        _displayName.isNotEmpty ? _displayName.substring(0, 1).toUpperCase() : 'W';
+    return CircleAvatar(
+      radius: 15,
+      backgroundColor: DDartTheme.brightGold.withValues(alpha: 0.25),
+      child: Text(
+        initial,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+        ),
+      ),
+    );
   }
 
   Future<void> _loadFromDatabase() async {
@@ -68,7 +136,7 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
 
   @override
   void dispose() {
-    ScaffoldMessenger.of(context).clearSnackBars();
+    _messenger?.clearSnackBars();
     super.dispose();
   }
 
@@ -305,15 +373,36 @@ class _CanteenMenuScreenState extends State<CanteenMenuScreen> {
           ),
           actions: [
             IconButton(
+              tooltip: 'Notifications & Orders',
               icon: const Icon(Icons.notifications_outlined, color: Colors.white),
-              onPressed: () {},
+              onPressed: () => _navigateToTab(2),
             ),
             Padding(
               padding: const EdgeInsets.only(right: 14),
-              child: CircleAvatar(
-                radius: 16,
-                backgroundColor: Colors.white.withValues(alpha: 0.2),
-                child: const Icon(Icons.person, color: Colors.white, size: 20),
+              child: Tooltip(
+                message: 'Profile',
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => _navigateToTab(3),
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    child: ClipOval(
+                      child: _idPhotoUrl != null
+                          ? Image.network(
+                              _idPhotoUrl!,
+                              fit: BoxFit.cover,
+                              alignment: const Alignment(-0.55, -0.35),
+                              errorBuilder: (_, _, _) => _buildHeaderAvatarFallback(),
+                            )
+                          : _buildHeaderAvatarFallback(),
+                    ),
+                  ),
+                ),
               ),
             ),
           ],

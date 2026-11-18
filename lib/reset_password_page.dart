@@ -20,6 +20,7 @@ class ResetPasswordPage extends StatefulWidget {
     super.key,
     this.initialEmail,
     this.startInUpdateMode = false,
+    this.initialErrorMessage,
   });
 
   final String? initialEmail;
@@ -27,6 +28,9 @@ class ResetPasswordPage extends StatefulWidget {
   /// When true, opens directly on the "Set New Password" step (e.g., after
   /// clicking the Supabase password recovery link in email).
   final bool startInUpdateMode;
+
+  /// Optional error message surfaced from an expired or invalid recovery link.
+  final String? initialErrorMessage;
 
   @override
   State<ResetPasswordPage> createState() => _ResetPasswordPageState();
@@ -54,17 +58,36 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
         ? _ResetStep.setNewPassword
         : _ResetStep.requestEmail;
 
-    try {
-      _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-        if (data.event == AuthChangeEvent.passwordRecovery && mounted) {
-          setState(() {
-            if (data.session?.user.email != null) {
-              _emailCtrl.text = data.session!.user.email!;
-            }
-            _step = _ResetStep.setNewPassword;
-          });
-        }
+    if (widget.initialErrorMessage != null &&
+        widget.initialErrorMessage!.trim().isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showSnack(
+          widget.initialErrorMessage!,
+          background: Colors.redAccent,
+        );
       });
+    }
+
+    try {
+      _authSub = Supabase.instance.client.auth.onAuthStateChange.listen(
+        (data) {
+          if (data.event == AuthChangeEvent.passwordRecovery && mounted) {
+            setState(() {
+              if (data.session?.user.email != null) {
+                _emailCtrl.text = data.session!.user.email!;
+              }
+              _step = _ResetStep.setNewPassword;
+            });
+          }
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          if (!mounted) return;
+          final msg = error is AuthException
+              ? error.message
+              : 'Your reset link is invalid or has expired. Please request a new one.';
+          _showSnack(msg, background: Colors.redAccent);
+        },
+      );
     } catch (_) {}
   }
 
@@ -116,7 +139,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
 
   Future<void> _verifyRecoveryCode() async {
     final email = _emailCtrl.text.trim();
-    final code = _otpCtrl.text.trim();
+    final code = _otpCtrl.text.replaceAll(RegExp(r'[\s-]+'), '');
 
     final emailErr = Validators.validateEmail(email);
     if (emailErr != null) {

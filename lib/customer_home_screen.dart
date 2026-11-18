@@ -19,14 +19,19 @@ import 'widgets/cor_timetable_dialog.dart';
 import 'widgets/responsive_shell.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
-  const CustomerHomeScreen({super.key});
+  final int initialTabIndex;
+
+  const CustomerHomeScreen({
+    super.key,
+    this.initialTabIndex = 0,
+  });
 
   @override
   State<CustomerHomeScreen> createState() => _CustomerHomeScreenState();
 }
 
 class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
-  int _selectedIndex = 0;
+  late int _selectedIndex;
   UserProfile? _profile;
   String? _idPhotoUrl;
   final _searchController = TextEditingController();
@@ -39,6 +44,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedIndex = widget.initialTabIndex.clamp(0, 3);
     _loadProfileAndExpireStale();
   }
 
@@ -85,6 +91,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     ).then((_) => _loadProfileAndExpireStale());
   }
 
+  void _navigateToTabFromChild(int tabIndex) {
+    final selfRoute = ModalRoute.of(context);
+    Navigator.of(context).popUntil((route) => route == selfRoute || route.isFirst);
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      setState(() => _selectedIndex = tabIndex.clamp(0, 3));
+      _loadProfileAndExpireStale();
+    }
+  }
+
   void _openCanteenCategory(String canteenName) {
     Navigator.push(
       context,
@@ -92,6 +108,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         builder: (_) => CanteenCategoryScreen(
           canteenName: canteenName,
           userName: _profile?.firstName,
+          idPhotoUrl: _idPhotoUrl,
+          onNavigateToTab: _navigateToTabFromChild,
         ),
       ),
     ).then((_) => _loadProfileAndExpireStale());
@@ -103,6 +121,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       MaterialPageRoute(
         builder: (_) => CategoryBrowseScreen(
           categoryTitle: category,
+          userName: _profile?.firstName,
+          idPhotoUrl: _idPhotoUrl,
+          onNavigateToTab: _navigateToTabFromChild,
         ),
       ),
     ).then((_) => _loadProfileAndExpireStale());
@@ -115,6 +136,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         builder: (_) => CategoryBrowseScreen(
           categoryTitle: 'Search: $query',
           initialQuery: query,
+          userName: _profile?.firstName,
+          idPhotoUrl: _idPhotoUrl,
+          onNavigateToTab: _navigateToTabFromChild,
         ),
       ),
     ).then((_) => _loadProfileAndExpireStale());

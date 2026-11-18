@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'canteen_menu_screen.dart';
 import 'cart_screen.dart';
-import 'models/user_profile.dart';
+import 'customer_home_screen.dart';
 import 'services/cart_service.dart';
 import 'services/supabase_service.dart';
 import 'widgets/responsive_shell.dart';
@@ -9,11 +9,15 @@ import 'widgets/responsive_shell.dart';
 class CanteenCategoryScreen extends StatefulWidget {
   final String canteenName;
   final String? userName;
+  final String? idPhotoUrl;
+  final ValueChanged<int>? onNavigateToTab;
 
   const CanteenCategoryScreen({
     super.key,
     required this.canteenName,
     this.userName,
+    this.idPhotoUrl,
+    this.onNavigateToTab,
   });
 
   @override
@@ -23,22 +27,48 @@ class CanteenCategoryScreen extends StatefulWidget {
 class _CanteenCategoryScreenState extends State<CanteenCategoryScreen> {
   static const Color primaryMaroon = DDartTheme.deepMaroon;
   String _displayName = 'Student';
+  String? _idPhotoUrl;
 
   @override
   void initState() {
     super.initState();
+    _idPhotoUrl = widget.idPhotoUrl;
     if (widget.userName != null && widget.userName!.isNotEmpty) {
       _displayName = widget.userName!;
-    } else {
-      _loadUserName();
+    }
+    if (widget.userName == null || widget.userName!.isEmpty || _idPhotoUrl == null) {
+      _loadUserProfile();
     }
   }
 
-  Future<void> _loadUserName() async {
+  Future<void> _loadUserProfile() async {
     final profile = await SupabaseService().fetchUserProfileModel();
-    if (profile != null && mounted) {
-      setState(() => _displayName = profile.firstName);
+    String? idUrl = _idPhotoUrl;
+    if (idUrl == null &&
+        profile?.idDocumentPath != null &&
+        profile!.idDocumentPath!.isNotEmpty) {
+      idUrl = await SupabaseService().getSignedDocumentUrl(profile.idDocumentPath!);
     }
+    if (mounted) {
+      setState(() {
+        if (profile != null && profile.firstName.isNotEmpty) {
+          _displayName = profile.firstName;
+        }
+        _idPhotoUrl = idUrl;
+      });
+    }
+  }
+
+  void _navigateToTab(int tabIndex) {
+    if (widget.onNavigateToTab != null) {
+      widget.onNavigateToTab!(tabIndex);
+      return;
+    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => CustomerHomeScreen(initialTabIndex: tabIndex),
+      ),
+    );
   }
 
   void _openCategory(String category) {
@@ -49,6 +79,25 @@ class _CanteenCategoryScreenState extends State<CanteenCategoryScreen> {
           canteenName: widget.canteenName,
           categoryName: category,
           userName: _displayName,
+          idPhotoUrl: _idPhotoUrl,
+          onNavigateToTab: widget.onNavigateToTab,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderAvatarFallback() {
+    final initial =
+        _displayName.isNotEmpty ? _displayName.substring(0, 1).toUpperCase() : 'W';
+    return CircleAvatar(
+      radius: 15,
+      backgroundColor: DDartTheme.brightGold.withValues(alpha: 0.25),
+      child: Text(
+        initial,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
         ),
       ),
     );
@@ -77,15 +126,36 @@ class _CanteenCategoryScreenState extends State<CanteenCategoryScreen> {
           ),
           actions: [
             IconButton(
+              tooltip: 'Notifications & Orders',
               icon: const Icon(Icons.notifications_outlined, color: Colors.white),
-              onPressed: () {},
+              onPressed: () => _navigateToTab(2),
             ),
             Padding(
               padding: const EdgeInsets.only(right: 14),
-              child: CircleAvatar(
-                radius: 16,
-                backgroundColor: Colors.white.withValues(alpha: 0.2),
-                child: const Icon(Icons.person, color: Colors.white, size: 20),
+              child: Tooltip(
+                message: 'Profile',
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => _navigateToTab(3),
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    child: ClipOval(
+                      child: _idPhotoUrl != null
+                          ? Image.network(
+                              _idPhotoUrl!,
+                              fit: BoxFit.cover,
+                              alignment: const Alignment(-0.55, -0.35),
+                              errorBuilder: (_, _, _) => _buildHeaderAvatarFallback(),
+                            )
+                          : _buildHeaderAvatarFallback(),
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
