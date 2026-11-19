@@ -1,0 +1,8 @@
+.dart_tool
+android
+windows
+test
+build/*
+!build/web
+*.apk
+.widget_preview
