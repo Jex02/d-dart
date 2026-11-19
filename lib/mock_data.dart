@@ -4,6 +4,7 @@ import 'dart:math';
 List<Map<String, dynamic>> mockDeliveryRequests = [
   {
     'id': 'ORD-101',
+    'customer_id': 'cust-demo-1',
     'pickup_location': 'Main Canteen',
     'dropoff_location': 'ALLIED Building - 3rd Floor Lab',
     'description': '2 orders Pork Siomai with rice, 1 C2 Apple',

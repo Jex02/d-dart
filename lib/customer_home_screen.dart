@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'canteen_category_screen.dart';
 import 'cart_screen.dart';
@@ -34,6 +35,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   String? _idPhotoUrl;
   final _searchController = TextEditingController();
   late Stream<List<Map<String, dynamic>>> _customerOrdersStream;
+  StreamSubscription? _runnerOrdersSub;
+  bool _hasActiveRunnerOrders = false;
 
   static const Color primaryMaroon = DDartTheme.deepMaroon;
   static const Color accentGold = DDartTheme.brightGold;
@@ -44,11 +47,22 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     _selectedIndex = widget.initialTabIndex.clamp(0, 3);
     _customerOrdersStream =
         SupabaseService().streamCustomerOrders().asBroadcastStream();
+    _runnerOrdersSub = SupabaseService().streamRunnerAssignedOrders().listen((orders) {
+      if (!mounted) return;
+      final hasActive = orders.any((raw) {
+        final status = (raw['status'] ?? '').toString();
+        return status != 'completed' && status != 'cancelled' && status != 'expired';
+      });
+      if (_hasActiveRunnerOrders != hasActive) {
+        setState(() => _hasActiveRunnerOrders = hasActive);
+      }
+    });
     _loadProfileAndExpireStale();
   }
 
   @override
   void dispose() {
+    _runnerOrdersSub?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -241,7 +255,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     if (canSwitchToRunner)
                       IconButton(
                         tooltip: 'Switch Mode',
-                        icon: const Icon(Icons.swap_horiz, color: Colors.white),
+                        icon: Badge(
+                          isLabelVisible: _hasActiveRunnerOrders,
+                          backgroundColor: Colors.redAccent,
+                          smallSize: 8,
+                          child: const Icon(Icons.swap_horiz, color: Colors.white),
+                        ),
                         onPressed: _switchMode,
                       )
                     else
@@ -1262,7 +1281,29 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     ),
                     child: Icon(Icons.swap_horiz, color: accent, size: 20),
                   ),
-                  title: Text('Switch Mode (Customer / Runner)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: textPrimary)),
+                  title: Row(
+                    children: [
+                      Text('Switch Mode (Customer / Runner)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: textPrimary)),
+                      if (_hasActiveRunnerOrders) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.circle, color: Colors.white, size: 6),
+                              SizedBox(width: 4),
+                              Text('ACTIVE GIG', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                   subtitle: Text('Accept gigs and deliver for peers on campus', style: TextStyle(fontSize: 11.5, color: textSecondary)),
                   trailing: Icon(Icons.arrow_forward_ios, size: 14, color: textSecondary),
                   onTap: _switchMode,

@@ -425,6 +425,7 @@ class _CartScreenState extends State<CartScreen> {
       );
     } catch (_) {
       final fallback = addPabiliRequest(
+        customerId: SupabaseService().currentUser?.id ?? 'cust-demo-1',
         pickup: pickup,
         dropoff: _selectedDropoff,
         description: description,

@@ -1,7 +1,10 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sd2/mock_data.dart';
+import 'package:sd2/models/delivery_order.dart';
 import 'package:sd2/models/order_message.dart';
 import 'package:sd2/services/supabase_service.dart';
+import 'package:sd2/widgets/order_chat_sheet.dart';
 
 void main() {
   setUp(() {
@@ -159,6 +162,123 @@ void main() {
         senderRole: 'customer',
       );
       expect(sentEmpty, isFalse);
+    });
+  });
+
+  group('Order 5-minute chat grace period tests', () {
+    test('non-completed orders allow chatting indefinitely', () {
+      final order = DeliveryOrder(
+        id: 'ORD-ACTIVE',
+        pickupLocation: 'Main Canteen',
+        dropoffLocation: 'Allied',
+        description: 'Snacks',
+        estimatedPrice: 50,
+        status: 'en_route',
+        verificationCode: '1234',
+      );
+      expect(order.isCompleted, isFalse);
+      expect(order.isChatClosed, isFalse);
+      expect(order.remainingChatGracePeriod(), isNull);
+    });
+
+    test('order completed within 5 minutes has active grace period', () {
+      final now = DateTime.now().toUtc();
+      final order = DeliveryOrder(
+        id: 'ORD-JUST-COMPLETED',
+        pickupLocation: 'Main Canteen',
+        dropoffLocation: 'Allied',
+        description: 'Snacks',
+        estimatedPrice: 50,
+        status: 'completed',
+        verificationCode: '1234',
+        completedAt: now.subtract(const Duration(minutes: 2)),
+      );
+      expect(order.isCompleted, isTrue);
+      expect(order.isChatClosed, isFalse);
+      final remaining = order.remainingChatGracePeriod()!;
+      expect(remaining.inMinutes, lessThanOrEqualTo(3));
+      expect(remaining.inMinutes, greaterThanOrEqualTo(2));
+      expect(order.formatRemainingChatGracePeriod(), contains('m '));
+    });
+
+    test('order completed over 5 minutes ago is fully closed for chat', () {
+      final now = DateTime.now().toUtc();
+      final order = DeliveryOrder(
+        id: 'ORD-EXPIRED-CHAT',
+        pickupLocation: 'Main Canteen',
+        dropoffLocation: 'Allied',
+        description: 'Snacks',
+        estimatedPrice: 50,
+        status: 'completed',
+        verificationCode: '1234',
+        completedAt: now.subtract(const Duration(minutes: 5, seconds: 30)),
+      );
+      expect(order.isCompleted, isTrue);
+      expect(order.isChatClosed, isTrue);
+      expect(order.remainingChatGracePeriod(), Duration.zero);
+    });
+
+    testWidgets('OrderChatSheet displays closed banner when 5 mins pass', (tester) async {
+      final now = DateTime.now().toUtc();
+      final closedOrder = DeliveryOrder(
+        id: 'ORD-CLOSED-WIDGET',
+        pickupLocation: 'Main Canteen',
+        dropoffLocation: 'Allied',
+        description: 'Snacks',
+        estimatedPrice: 50,
+        status: 'completed',
+        verificationCode: '1234',
+        completedAt: now.subtract(const Duration(minutes: 6)),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrderChatSheet(
+              order: closedOrder,
+              isRunner: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Chat is fully closed'), findsOneWidget);
+      expect(find.textContaining('5-minute delivery grace period ended'), findsOneWidget);
+      // Input bar should NOT be rendered when chat is fully closed
+      expect(find.byType(TextField), findsNothing);
+      expect(find.byIcon(Icons.send), findsNothing);
+    });
+
+    testWidgets('OrderChatSheet displays grace countdown when within 5 mins', (tester) async {
+      final now = DateTime.now().toUtc();
+      final activeGraceOrder = DeliveryOrder(
+        id: 'ORD-GRACE-WIDGET',
+        pickupLocation: 'Main Canteen',
+        dropoffLocation: 'Allied',
+        description: 'Snacks',
+        estimatedPrice: 50,
+        status: 'completed',
+        verificationCode: '1234',
+        completedAt: now.subtract(const Duration(minutes: 1)),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrderChatSheet(
+              order: activeGraceOrder,
+              isRunner: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Delivery completed • Chat closes in'), findsOneWidget);
+      // Input bar is still active during grace period
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.byIcon(Icons.send), findsOneWidget);
     });
   });
 }

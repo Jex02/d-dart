@@ -502,13 +502,17 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       const ThemeToggleButton(iconColor: Colors.white, iconSize: 21),
                       if (!isTerminated)
                         IconButton(
-                          tooltip: widget.isRunner ? 'Chat with Customer' : 'Chat with Runner',
+                          tooltip: order.isChatClosed
+                              ? 'Chat History (Closed)'
+                              : (widget.isRunner ? 'Chat with Customer' : 'Chat with Runner'),
                           icon: Badge(
                             isLabelVisible: unreadCount > 0,
                             backgroundColor: Colors.redAccent,
                             textColor: Colors.white,
                             label: Text(unreadCount > 9 ? '9+' : '$unreadCount'),
-                            child: const Icon(Icons.chat_bubble_outline),
+                            child: Icon(order.isChatClosed
+                                ? Icons.mark_chat_read_outlined
+                                : Icons.chat_bubble_outline),
                           ),
                           onPressed: effectiveStatus == 'pending'
                               ? () {
@@ -803,14 +807,18 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        latestIncoming != null
-                                            ? 'New: ${latestIncoming.message}'
-                                            : (_counterpart?.idPhotoUrl != null &&
-                                                    _counterpart!.idPhotoUrl!.isNotEmpty
-                                                ? 'Tap photo to view ID • Tap Chat to message'
-                                                : (widget.isRunner
-                                                    ? 'Coordinate item substitutions & arrival.'
-                                                    : 'Send instructions or check in with runner.')),
+                                        order.isChatClosed
+                                            ? 'Chat ended • 5-min post-delivery window expired'
+                                            : (order.isCompleted
+                                                ? 'Delivery completed • Chat closes in ${order.formatRemainingChatGracePeriod()}'
+                                                : (latestIncoming != null
+                                                    ? 'New: ${latestIncoming.message}'
+                                                    : (_counterpart?.idPhotoUrl != null &&
+                                                            _counterpart!.idPhotoUrl!.isNotEmpty
+                                                        ? 'Tap photo to view ID • Tap Chat to message'
+                                                        : (widget.isRunner
+                                                            ? 'Coordinate item substitutions & arrival.'
+                                                            : 'Send instructions or check in with runner.')))),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
@@ -818,9 +826,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                           fontWeight: latestIncoming != null
                                               ? FontWeight.w600
                                               : FontWeight.normal,
-                                          color: latestIncoming != null
-                                              ? DDartTheme.accentText(context)
-                                              : DDartTheme.textSecondary(context),
+                                          color: order.isChatClosed
+                                              ? DDartTheme.textMuted(context)
+                                              : (order.isCompleted
+                                                  ? Colors.amber.shade800
+                                                  : (latestIncoming != null
+                                                      ? DDartTheme.accentText(context)
+                                                      : DDartTheme.textSecondary(context))),
                                         ),
                                       ),
                                     ],
@@ -835,10 +847,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                   offset: const Offset(-2, -4),
                                   child: ElevatedButton.icon(
                                     onPressed: () => _openChat(order, messages),
-                                    icon: const Icon(Icons.chat, size: 14),
-                                    label: const Text('Chat'),
+                                    icon: Icon(order.isChatClosed ? Icons.history : Icons.chat, size: 14),
+                                    label: Text(order.isChatClosed ? 'History' : 'Chat'),
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: primaryMaroon,
+                                      backgroundColor: order.isChatClosed
+                                          ? (DDartTheme.isDark(context) ? const Color(0xFF33333E) : Colors.grey.shade400)
+                                          : primaryMaroon,
                                       foregroundColor: Colors.white,
                                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                       textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),

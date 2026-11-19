@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'admin_dashboard_screen.dart';
 import 'canteen_menu_manager_screen.dart';
@@ -25,11 +26,29 @@ class _MainDashboardState extends State<MainDashboard> {
   String? selectedRole;
   UserProfile? _profile;
   bool _isSyncing = true;
+  StreamSubscription? _runnerOrdersSub;
+  bool _hasActiveRunnerOrders = false;
 
   @override
   void initState() {
     super.initState();
     _syncAccountState();
+    _runnerOrdersSub = SupabaseService().streamRunnerAssignedOrders().listen((orders) {
+      if (!mounted) return;
+      final hasActive = orders.any((raw) {
+        final status = (raw['status'] ?? '').toString();
+        return status != 'completed' && status != 'cancelled' && status != 'expired';
+      });
+      if (_hasActiveRunnerOrders != hasActive) {
+        setState(() => _hasActiveRunnerOrders = hasActive);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _runnerOrdersSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _syncAccountState() async {
@@ -348,6 +367,7 @@ class _MainDashboardState extends State<MainDashboard> {
                             'Accept delivery requests during vacant hours ($completedToday/$dailyLimit today).',
                         icon: Icons.directions_run,
                         selected: selectedRole == 'Runner',
+                        hasBadge: _hasActiveRunnerOrders,
                         onTap: () => setState(() => selectedRole = 'Runner'),
                       ),
                     ],
@@ -434,6 +454,7 @@ class _RoleCard extends StatelessWidget {
     required this.icon,
     required this.selected,
     required this.onTap,
+    this.hasBadge = false,
   });
 
   final String title;
@@ -441,6 +462,7 @@ class _RoleCard extends StatelessWidget {
   final IconData icon;
   final bool selected;
   final VoidCallback onTap;
+  final bool hasBadge;
 
   static const Color darkRed = DDartTheme.panelMaroon;
   static const Color gold = DDartTheme.gold;
@@ -490,13 +512,42 @@ class _RoleCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: selected ? accent : DDartTheme.textPrimary(context),
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: selected ? accent : DDartTheme.textPrimary(context),
+                        ),
+                      ),
+                      if (hasBadge) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.circle, color: Colors.white, size: 6),
+                              SizedBox(width: 4),
+                              Text(
+                                'ACTIVE',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 3),
                   Text(

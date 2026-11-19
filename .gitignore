@@ -52,4 +52,6 @@ app.*.map.json
 .vercel
 .vercel
 .env*
+build/web/*.apk
 *.apk
+!d-dart-release.apk

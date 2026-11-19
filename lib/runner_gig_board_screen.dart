@@ -290,132 +290,255 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
 
     final isDark = DDartTheme.isDark(context);
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        backgroundColor: DDartTheme.surface(context),
-        appBar: AppBar(
-          title: const Text(
-            'Runner Gig Board',
-            style: TextStyle(color: Colors.white, fontSize: 18),
-          ),
-          backgroundColor: primaryMaroon,
-          iconTheme: const IconThemeData(color: Colors.white),
-          actions: [
-            const ThemeToggleButton(iconColor: Colors.white, iconSize: 21),
-            IconButton(
-              tooltip: 'Report a Problem / Support',
-              icon: const Icon(Icons.report_problem_outlined),
-              onPressed: _openRunnerReportDialog,
-            ),
-            IconButton(
-              tooltip: 'Refresh eligibility',
-              icon: const Icon(Icons.refresh),
-              onPressed: _refreshEligibility,
-            ),
-          ],
-          bottom: const TabBar(
-            indicatorColor: Color(0xFFD4AF37),
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            tabs: [
-              Tab(text: 'Available Gigs'),
-              Tab(text: 'My Active Deliveries'),
-            ],
-          ),
-        ),
-        body: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Column(
-              children: [
-                // Duty Lock & Go Online/Offline Status Toggle (SDD 6.3.7)
-                Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isLocked
-                        ? (isDark ? Colors.red.withValues(alpha: 0.16) : Colors.red.shade50)
-                        : _isOnline
-                            ? (isDark ? Colors.green.withValues(alpha: 0.16) : Colors.green.shade50)
-                            : DDartTheme.cardSubtle(context),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isLocked
-                          ? Colors.red.shade300
-                          : _isOnline
-                              ? Colors.green.shade300
-                              : DDartTheme.border(context),
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: _runnerAssignedOrdersStream,
+      builder: (context, assignedSnapshot) {
+        final assignedOrders = (assignedSnapshot.data ?? []).map(DeliveryOrder.fromJson).toList();
+        final activeOrders = assignedOrders.where((o) =>
+          !const ['completed', 'cancelled', 'expired'].contains(o.effectiveStatus())
+        ).toList();
+        final hasActive = activeOrders.isNotEmpty;
+        final activeCount = activeOrders.length;
+
+        return DefaultTabController(
+          length: 2,
+          child: Scaffold(
+            backgroundColor: DDartTheme.surface(context),
+            appBar: AppBar(
+              title: const Text(
+                'Runner Gig Board',
+                style: TextStyle(color: Colors.white, fontSize: 18),
+              ),
+              backgroundColor: primaryMaroon,
+              iconTheme: const IconThemeData(color: Colors.white),
+              actions: [
+                const ThemeToggleButton(iconColor: Colors.white, iconSize: 21),
+                IconButton(
+                  tooltip: 'Report a Problem / Support',
+                  icon: const Icon(Icons.report_problem_outlined),
+                  onPressed: _openRunnerReportDialog,
+                ),
+                IconButton(
+                  tooltip: 'Refresh eligibility',
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _refreshEligibility,
+                ),
+              ],
+              bottom: TabBar(
+                indicatorColor: const Color(0xFFD4AF37),
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white70,
+                tabs: [
+                  const Tab(text: 'Available Gigs'),
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('My Active Deliveries'),
+                        if (hasActive) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            width: 9,
+                            height: 9,
+                            decoration: const BoxDecoration(
+                              color: Colors.redAccent,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black38,
+                                  blurRadius: 3,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        isLocked
-                            ? Icons.lock_clock
-                            : _isOnline
-                                ? Icons.check_circle_outline
-                                : Icons.pause_circle_outline,
+                ],
+              ),
+            ),
+            body: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: Column(
+                  children: [
+                    // Duty Lock & Go Online/Offline Status Toggle (SDD 6.3.7)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
                         color: isLocked
-                            ? Colors.red.shade700
+                            ? (isDark ? Colors.red.withValues(alpha: 0.16) : Colors.red.shade50)
                             : _isOnline
-                                ? Colors.green.shade700
-                                : DDartTheme.textSecondary(context),
+                                ? (isDark ? Colors.green.withValues(alpha: 0.16) : Colors.green.shade50)
+                                : DDartTheme.cardSubtle(context),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isLocked
+                              ? Colors.red.shade300
+                              : _isOnline
+                                  ? Colors.green.shade300
+                                  : DDartTheme.border(context),
+                        ),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
+                        children: [
+                          Icon(
+                            isLocked
+                                ? Icons.lock_clock
+                                : _isOnline
+                                    ? Icons.check_circle_outline
+                                    : Icons.pause_circle_outline,
+                            color: isLocked
+                                ? Colors.red.shade700
+                                : _isOnline
+                                    ? Colors.green.shade700
+                                    : DDartTheme.textSecondary(context),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isLocked
+                                      ? 'Duty Lock Active'
+                                      : _isOnline
+                                          ? 'Online · Ready for Gigs'
+                                          : 'Offline',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: DDartTheme.textPrimary(context),
+                                  ),
+                                ),
+                                Text(
+                                  isLocked
+                                      ? (dutyStatus['reason']?.toString() ?? '')
+                                      : 'Completed today: $completed / $limit deliveries',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: DDartTheme.textSecondary(context),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: !isLocked && _isOnline,
+                            activeThumbColor: Colors.green,
+                            onChanged: isLocked
+                                ? null
+                                : (val) => setState(() => _isOnline = val),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Active delivery banner with red dot notification
+                    if (hasActive)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.redAccent.withValues(alpha: 0.5),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Row(
                           children: [
-                            Text(
-                              isLocked
-                                  ? 'Duty Lock Active'
-                                  : _isOnline
-                                      ? 'Online · Ready for Gigs'
-                                      : 'Offline',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                                color: DDartTheme.textPrimary(context),
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: const BoxDecoration(
+                                color: Colors.redAccent,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.redAccent,
+                                    blurRadius: 4,
+                                    spreadRadius: 1,
+                                  ),
+                                ],
                               ),
                             ),
-                            Text(
-                              isLocked
-                                  ? (dutyStatus['reason']?.toString() ?? '')
-                                  : 'Completed today: $completed / $limit deliveries',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: DDartTheme.textSecondary(context),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'ACTIVE DELIVERY IN PROGRESS ($activeCount)',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.redAccent,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${activeOrders.first.pickupLocation} → ${activeOrders.first.dropoffLocation}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: DDartTheme.textPrimary(context),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => OrderTrackingScreen(
+                                      orderId: activeOrders.first.id,
+                                      isRunner: true,
+                                    ),
+                                  ),
+                                ).then((_) => _refreshEligibility());
+                              },
+                              icon: const Icon(Icons.near_me, size: 13),
+                              label: const Text('Track', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryMaroon,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                visualDensity: VisualDensity.compact,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      Switch(
-                        value: !isLocked && _isOnline,
-                        activeThumbColor: Colors.green,
-                        onChanged: isLocked
-                            ? null
-                            : (val) => setState(() => _isOnline = val),
-                      ),
-                    ],
-                  ),
-                ),
 
-                Expanded(
-                  child: TabBarView(
-                    children: [
-                      _buildAvailableFeed(canClaimNow),
-                      _buildMyDeliveriesFeed(),
-                    ],
-                  ),
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          _buildAvailableFeed(canClaimNow),
+                          _buildMyDeliveriesFeed(assignedOrders),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -560,67 +683,85 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
     );
   }
 
-  Widget _buildMyDeliveriesFeed() {
+  Widget _buildMyDeliveriesFeed([List<DeliveryOrder>? preloadedOrders]) {
+    Widget buildList(List<DeliveryOrder> orders) {
+      if (orders.isEmpty) {
+        return const Center(
+          child: Text(
+            'You have no claimed deliveries yet.',
+            style: TextStyle(color: Colors.grey, fontSize: 14),
+          ),
+        );
+      }
+
+      return ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: orders.length,
+        itemBuilder: (context, index) {
+          final order = orders[index];
+          final isDone = order.effectiveStatus() == 'completed';
+
+          return Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: ListTile(
+              title: Text(
+                order.description,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                '${order.pickupLocation} → ${order.dropoffLocation}\nStatus: ${order.effectiveStatus().toUpperCase()}',
+              ),
+              isThreeLine: true,
+              trailing: Chip(
+                avatar: isDone
+                    ? null
+                    : Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.redAccent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                label: Text(
+                  isDone ? 'DONE' : 'ACTIVE',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: isDone ? Colors.green.shade800 : Colors.redAccent,
+                  ),
+                ),
+                backgroundColor: isDone
+                    ? Colors.green.shade50
+                    : Colors.redAccent.withValues(alpha: 0.12),
+              ),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => OrderTrackingScreen(
+                      orderId: order.id,
+                      isRunner: true,
+                    ),
+                  ),
+                ).then((_) => _refreshEligibility());
+              },
+            ),
+          );
+        },
+      );
+    }
+
+    if (preloadedOrders != null) {
+      return buildList(preloadedOrders);
+    }
+
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: _runnerAssignedOrdersStream,
       builder: (context, snapshot) {
         final orders = (snapshot.data ?? []).map(DeliveryOrder.fromJson).toList();
-        if (orders.isEmpty) {
-          return const Center(
-            child: Text(
-              'You have no claimed deliveries yet.',
-              style: TextStyle(color: Colors.grey, fontSize: 14),
-            ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: orders.length,
-          itemBuilder: (context, index) {
-            final order = orders[index];
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                title: Text(
-                  order.description,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text(
-                  '${order.pickupLocation} → ${order.dropoffLocation}\nStatus: ${order.effectiveStatus().toUpperCase()}',
-                ),
-                isThreeLine: true,
-                trailing: Chip(
-                  label: Text(
-                    order.effectiveStatus() == 'completed' ? 'DONE' : 'ACTIVE',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: order.effectiveStatus() == 'completed'
-                          ? Colors.green.shade800
-                          : primaryMaroon,
-                    ),
-                  ),
-                  backgroundColor: order.effectiveStatus() == 'completed'
-                      ? Colors.green.shade50
-                      : primaryMaroon.withValues(alpha: 0.1),
-                ),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => OrderTrackingScreen(
-                        orderId: order.id,
-                        isRunner: true,
-                      ),
-                    ),
-                  ).then((_) => _refreshEligibility());
-                },
-              ),
-            );
-          },
-        );
+        return buildList(orders);
       },
     );
   }

@@ -149,6 +149,7 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
       }
     } catch (e) {
       final fallback = addPabiliRequest(
+        customerId: SupabaseService().currentUser?.id ?? 'cust-demo-1',
         pickup: _selectedPickup,
         dropoff: _selectedDropoff,
         description: description,

@@ -576,6 +576,11 @@ class SupabaseService {
   }
 
   Stream<List<Map<String, dynamic>>> streamAvailableOrders() {
+    if (!isAuthenticated) {
+      return Stream.value(
+        mockDeliveryRequests.where((r) => r['status'] == 'pending').toList(),
+      );
+    }
     return client
         .from('delivery_requests')
         .stream(primaryKey: ['id'])
@@ -585,7 +590,7 @@ class SupabaseService {
 
   Stream<List<Map<String, dynamic>>> streamCustomerOrders() {
     final userId = currentUser?.id;
-    if (userId == null) {
+    if (userId == null || !isAuthenticated) {
       return Stream.value(mockDeliveryRequests);
     }
     return client
@@ -597,7 +602,7 @@ class SupabaseService {
 
   Stream<List<Map<String, dynamic>>> streamRunnerAssignedOrders() {
     final userId = currentUser?.id;
-    if (userId == null) {
+    if (userId == null || !isAuthenticated) {
       return Stream.value(
         mockDeliveryRequests.where((r) => r['status'] != 'pending').toList(),
       );
@@ -610,6 +615,9 @@ class SupabaseService {
   }
 
   Stream<List<Map<String, dynamic>>> streamAllDeliveries() {
+    if (!isAuthenticated) {
+      return Stream.value(mockDeliveryRequests);
+    }
     return client
         .from('delivery_requests')
         .stream(primaryKey: ['id'])
@@ -792,6 +800,9 @@ class SupabaseService {
   }
 
   Stream<List<Map<String, dynamic>>> streamProblemReports() {
+    if (!isAuthenticated) {
+      return const Stream.empty();
+    }
     return client
         .from('problem_reports')
         .stream(primaryKey: ['id'])

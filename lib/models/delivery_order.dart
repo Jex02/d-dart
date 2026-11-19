@@ -52,6 +52,39 @@ class DeliveryOrder {
   String effectiveStatus([DateTime? reference]) =>
       isExpiredAt(reference) ? 'expired' : status;
 
+  bool get isCompleted => effectiveStatus() == 'completed';
+
+  DateTime? get completionTime => completedAt ?? updatedAt;
+
+  /// Returns true if the order is completed and more than 5 minutes have elapsed.
+  bool isChatClosedAt([DateTime? reference]) {
+    if (!isCompleted) return false;
+    final time = completionTime;
+    if (time == null) return false;
+    final now = reference ?? DateTime.now().toUtc();
+    return now.difference(time.toUtc()) > const Duration(minutes: 5);
+  }
+
+  bool get isChatClosed => isChatClosedAt();
+
+  /// Remaining duration before the post-delivery chat grace period closes.
+  Duration? remainingChatGracePeriod([DateTime? reference]) {
+    if (!isCompleted) return null;
+    final time = completionTime;
+    if (time == null) return const Duration(minutes: 5);
+    final now = reference ?? DateTime.now().toUtc();
+    final remaining = const Duration(minutes: 5) - now.difference(time.toUtc());
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
+
+  /// Human-readable remaining grace period (e.g. "4m 12s" or "0m 00s").
+  String formatRemainingChatGracePeriod([DateTime? reference]) {
+    final remaining = remainingChatGracePeriod(reference) ?? Duration.zero;
+    final mins = remaining.inMinutes;
+    final secs = (remaining.inSeconds % 60).toString().padLeft(2, '0');
+    return '${mins}m ${secs}s';
+  }
+
   factory DeliveryOrder.fromJson(Map<String, dynamic> json) {
     return DeliveryOrder(
       id: json['id']?.toString() ?? '',

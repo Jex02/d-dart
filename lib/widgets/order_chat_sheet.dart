@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/delivery_order.dart';
 import '../models/order_message.dart';
@@ -49,6 +50,7 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
   OrderCounterpartInfo? _counterpart;
   bool _isSending = false;
   int _lastMessageCount = 0;
+  Timer? _gracePeriodTimer;
 
   @override
   void initState() {
@@ -57,6 +59,15 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
     _messagesStream = SupabaseService().streamOrderMessages(widget.order.id);
     if (_counterpart == null) {
       _loadCounterpart();
+    }
+    if (widget.order.isCompleted && !widget.order.isChatClosed) {
+      _gracePeriodTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) return;
+        setState(() {});
+        if (widget.order.isChatClosed) {
+          _gracePeriodTimer?.cancel();
+        }
+      });
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ChatReadTracker.instance.markRead(
@@ -168,6 +179,7 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
 
   @override
   void dispose() {
+    _gracePeriodTimer?.cancel();
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -186,6 +198,20 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
   }
 
   Future<void> _sendMessage([String? prefilledText]) async {
+    if (widget.order.isChatClosed) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text(
+              'Chat closed: The 5-minute grace period after delivery has ended.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
     final text = (prefilledText ?? _textController.text).trim();
     if (text.isEmpty || _isSending) return;
 
@@ -377,18 +403,33 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
                           Container(
                             width: 7,
                             height: 7,
-                            decoration: const BoxDecoration(
-                              color: Colors.green,
+                            decoration: BoxDecoration(
+                              color: widget.order.isChatClosed
+                                  ? Colors.grey
+                                  : (widget.order.isCompleted
+                                      ? Colors.amber.shade700
+                                      : Colors.green),
                               shape: BoxShape.circle,
                             ),
                           ),
                           const SizedBox(width: 5),
-                          Text(
-                            '${otherRoleLabel.toUpperCase()}  •  ${widget.order.status.toUpperCase()}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: DDartTheme.textSecondary(context),
+                          Flexible(
+                            child: Text(
+                              widget.order.isChatClosed
+                                  ? '${otherRoleLabel.toUpperCase()}  •  CHAT CLOSED'
+                                  : (widget.order.isCompleted
+                                      ? '${otherRoleLabel.toUpperCase()}  •  CLOSING IN ${widget.order.formatRemainingChatGracePeriod()}'
+                                      : '${otherRoleLabel.toUpperCase()}  •  ${widget.order.status.toUpperCase()}'),
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: widget.order.isChatClosed
+                                    ? DDartTheme.textMuted(context)
+                                    : (widget.order.isCompleted
+                                        ? Colors.amber.shade800
+                                        : DDartTheme.textSecondary(context)),
+                              ),
                             ),
                           ),
                         ],
@@ -574,93 +615,152 @@ class _OrderChatSheetState extends State<OrderChatSheet> {
             ),
           ),
 
-          // Quick Preset Chips
-          Container(
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _quickChips.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (context, i) {
-                final chip = _quickChips[i];
-                return ActionChip(
-                  label: Text(
-                    chip,
-                    style: TextStyle(fontSize: 11.5, color: DDartTheme.accentText(context)),
-                  ),
-                  backgroundColor: DDartTheme.maroonTint(context),
-                  side: BorderSide(color: DDartTheme.accentText(context).withValues(alpha: 0.25)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  onPressed: () => _sendMessage(chip),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          // Text Input Bar
-          Container(
-            padding: EdgeInsets.only(
-              left: 12,
-              right: 12,
-              top: 8,
-              bottom: media.viewInsets.bottom + 10,
-            ),
-            decoration: BoxDecoration(
-              color: DDartTheme.card(context),
-              border: Border(top: BorderSide(color: DDartTheme.border(context))),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: DDartTheme.cardSubtle(context),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: DDartTheme.border(context)),
-                    ),
-                    child: TextField(
-                      controller: _textController,
-                      textCapitalization: TextCapitalization.sentences,
-                      minLines: 1,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        hintText: 'Type a message...',
-                        hintStyle: TextStyle(fontSize: 13.5),
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(vertical: 10),
+          // Grace period active notice banner
+          if (widget.order.isCompleted && !widget.order.isChatClosed)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              color: Colors.amber.shade700.withValues(alpha: 0.12),
+              child: Row(
+                children: [
+                  Icon(Icons.timer_outlined, size: 15, color: Colors.amber.shade800),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Delivery completed • Chat closes in ${widget.order.formatRemainingChatGracePeriod()}',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.amber.shade900,
                       ),
-                      onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: primaryMaroon,
-                  child: IconButton(
-                    icon: _isSending
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.send, color: Colors.white, size: 18),
-                    onPressed: _isSending ? null : () => _sendMessage(),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+
+          if (widget.order.isChatClosed)
+            // Closed chat banner (unavailable to continue chatting)
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 14,
+                bottom: media.viewInsets.bottom + 16,
+              ),
+              decoration: BoxDecoration(
+                color: DDartTheme.card(context),
+                border: Border(top: BorderSide(color: DDartTheme.border(context))),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.lock_clock_outlined, size: 20, color: DDartTheme.textMuted(context)),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      'Chat is fully closed • 5-minute delivery grace period ended.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: DDartTheme.textSecondary(context),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else ...[
+            // Quick Preset Chips
+            Container(
+              height: 38,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _quickChips.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (context, i) {
+                  final chip = _quickChips[i];
+                  return ActionChip(
+                    label: Text(
+                      chip,
+                      style: TextStyle(fontSize: 11.5, color: DDartTheme.accentText(context)),
+                    ),
+                    backgroundColor: DDartTheme.maroonTint(context),
+                    side: BorderSide(color: DDartTheme.accentText(context).withValues(alpha: 0.25)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    onPressed: () => _sendMessage(chip),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Text Input Bar
+            Container(
+              padding: EdgeInsets.only(
+                left: 12,
+                right: 12,
+                top: 8,
+                bottom: media.viewInsets.bottom + 10,
+              ),
+              decoration: BoxDecoration(
+                color: DDartTheme.card(context),
+                border: Border(top: BorderSide(color: DDartTheme.border(context))),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: DDartTheme.cardSubtle(context),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: DDartTheme.border(context)),
+                      ),
+                      child: TextField(
+                        controller: _textController,
+                        textCapitalization: TextCapitalization.sentences,
+                        minLines: 1,
+                        maxLines: 4,
+                        decoration: const InputDecoration(
+                          hintText: 'Type a message...',
+                          hintStyle: TextStyle(fontSize: 13.5),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        onSubmitted: (_) => _sendMessage(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: primaryMaroon,
+                    child: IconButton(
+                      icon: _isSending
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.send, color: Colors.white, size: 18),
+                      onPressed: _isSending ? null : () => _sendMessage(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

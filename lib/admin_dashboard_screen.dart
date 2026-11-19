@@ -29,6 +29,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   String _userFilter = 'pending';
   String _monitorFilter = 'all';
+  final _monitorSearchCtrl = TextEditingController();
+  final Map<String, String> _userDisplayNameCache = {
+    'cust-demo-1': 'Samantha Lee',
+    'runner-demo': 'Mark Villanueva',
+  };
+  final Set<String> _pendingUserFetch = {};
 
   // Report filtering and search states
   String _reportRoleFilter = 'all'; // 'all', 'customer', 'runner'
@@ -70,6 +76,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   void dispose() {
     _reportsRealtimeSub?.cancel();
     _reportSearchCtrl.dispose();
+    _monitorSearchCtrl.dispose();
     _bufferCtrl.dispose();
     _dailyLimitCtrl.dispose();
     _expirationCtrl.dispose();
@@ -1001,6 +1008,68 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   // TAB 2: DELIVERY ACTIVITY MONITORING (WBS 7.6)
   // ==========================================
 
+  String _getCustomerName(DeliveryOrder order) {
+    if (order.customerId == null || order.customerId!.isEmpty) {
+      if (order.id == 'ORD-101') return 'Samantha Lee (Demo Customer)';
+      return 'Guest Customer';
+    }
+    final profile = _findProfile(order.customerId);
+    if (profile != null && profile.fullName.trim().isNotEmpty) {
+      final tag = profile.studentId.isNotEmpty ? ' (${profile.studentId})' : '';
+      return '${profile.fullName.trim()}$tag';
+    }
+    if (_userDisplayNameCache.containsKey(order.customerId)) {
+      return _userDisplayNameCache[order.customerId]!;
+    }
+    _fetchUserNameIfNeeded(order.customerId!);
+    return 'Customer (${order.customerId!.length > 8 ? order.customerId!.substring(0, 8) : order.customerId})';
+  }
+
+  String _getRunnerName(DeliveryOrder order) {
+    if (order.runnerId == null || order.runnerId!.isEmpty) {
+      return order.effectiveStatus() == 'pending'
+          ? 'Pending Claim (No Runner)'
+          : 'Unassigned';
+    }
+    if (order.runnerId == 'runner-demo') return 'Mark Villanueva (Demo Runner)';
+    final profile = _findProfile(order.runnerId);
+    if (profile != null && profile.fullName.trim().isNotEmpty) {
+      final tag = profile.studentId.isNotEmpty ? ' (${profile.studentId})' : '';
+      return '${profile.fullName.trim()}$tag';
+    }
+    if (_userDisplayNameCache.containsKey(order.runnerId)) {
+      return _userDisplayNameCache[order.runnerId]!;
+    }
+    _fetchUserNameIfNeeded(order.runnerId!);
+    return 'Runner (${order.runnerId!.length > 8 ? order.runnerId!.substring(0, 8) : order.runnerId})';
+  }
+
+  UserProfile? _findProfile(String? id) {
+    if (id == null || id.isEmpty) return null;
+    for (final p in _profiles) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
+
+  Future<void> _fetchUserNameIfNeeded(String userId) async {
+    if (userId.isEmpty || _pendingUserFetch.contains(userId) || _userDisplayNameCache.containsKey(userId)) return;
+    _pendingUserFetch.add(userId);
+    try {
+      final res = await _service.client.from('profiles').select('full_name, student_id').eq('id', userId).maybeSingle();
+      if (res != null && mounted) {
+        final name = (res['full_name'] ?? '').toString().trim();
+        final studentId = (res['student_id'] ?? '').toString().trim();
+        final label = name.isNotEmpty
+            ? (studentId.isNotEmpty ? '$name ($studentId)' : name)
+            : userId;
+        setState(() {
+          _userDisplayNameCache[userId] = label;
+        });
+      }
+    } catch (_) {}
+  }
+
   Widget _buildMonitorTab() {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: _allDeliveriesStream,
@@ -1013,14 +1082,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         final completedCount =
             allOrders.where((o) => o.effectiveStatus() == 'completed').length;
 
+        final query = _monitorSearchCtrl.text.trim().toLowerCase();
         final filtered = allOrders.where((o) {
           final status = o.effectiveStatus();
           if (_monitorFilter == 'active') {
-            return !const ['completed', 'cancelled', 'expired'].contains(status);
+            if (const ['completed', 'cancelled', 'expired'].contains(status)) return false;
+          } else if (_monitorFilter == 'completed') {
+            if (status != 'completed') return false;
+          } else if (_monitorFilter == 'closed') {
+            if (status != 'cancelled' && status != 'expired') return false;
           }
-          if (_monitorFilter == 'completed') return status == 'completed';
-          if (_monitorFilter == 'closed') {
-            return status == 'cancelled' || status == 'expired';
+
+          if (query.isNotEmpty) {
+            final idMatch = o.id.toLowerCase().contains(query);
+            final custName = _getCustomerName(o).toLowerCase();
+            final runName = _getRunnerName(o).toLowerCase();
+            final pickupMatch = o.pickupLocation.toLowerCase().contains(query);
+            final dropMatch = o.dropoffLocation.toLowerCase().contains(query);
+            final descMatch = o.description.toLowerCase().contains(query);
+            if (!idMatch &&
+                !custName.contains(query) &&
+                !runName.contains(query) &&
+                !pickupMatch &&
+                !dropMatch &&
+                !descMatch) {
+              return false;
+            }
           }
           return true;
         }).toList();
@@ -1039,8 +1126,35 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ],
               ),
             ),
+
+            // Search Field by Order ID, Customer, Runner
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: TextField(
+                controller: _monitorSearchCtrl,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: 'Search by Order ID (e.g. ORD-101), Customer, Runner...',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: _monitorSearchCtrl.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            _monitorSearchCtrl.clear();
+                            setState(() {});
+                          },
+                        )
+                      : null,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  filled: true,
+                  fillColor: DDartTheme.cardSubtle(context),
+                ),
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Wrap(
                 spacing: 8,
                 children: ['all', 'active', 'completed', 'closed'].map((f) {
@@ -1054,9 +1168,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
             Expanded(
               child: filtered.isEmpty
-                  ? const Center(
-                      child: Text('No delivery activity matching filter.',
-                          style: TextStyle(color: Colors.black54)),
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          query.isNotEmpty
+                              ? 'No orders found matching "$query".'
+                              : 'No delivery activity matching filter.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.black54),
+                        ),
+                      ),
                     )
                   : ListView.builder(
                       padding: const EdgeInsets.all(16),
@@ -1064,19 +1186,184 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       itemBuilder: (context, index) {
                         final o = filtered[index];
                         final status = o.effectiveStatus();
+                        final customerName = _getCustomerName(o);
+                        final runnerName = _getRunnerName(o);
+                        final shortId = o.id.length > 8 ? o.id.substring(0, 8) : o.id;
+
+                        Color statusColor;
+                        Color statusBg;
+                        if (status == 'completed') {
+                          statusColor = Colors.green.shade800;
+                          statusBg = Colors.green.shade50;
+                        } else if (status == 'pending') {
+                          statusColor = Colors.orange.shade800;
+                          statusBg = Colors.orange.shade50;
+                        } else if (status == 'cancelled' || status == 'expired') {
+                          statusColor = Colors.red.shade800;
+                          statusBg = Colors.red.shade50;
+                        } else {
+                          statusColor = DDartTheme.primaryMaroon;
+                          statusBg = DDartTheme.primaryMaroon.withValues(alpha: 0.1);
+                        }
+
                         return Card(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          child: ListTile(
-                            title: Text(
-                              o.description,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            subtitle: Text(
-                              '${o.pickupLocation} → ${o.dropoffLocation}\nStatus: ${status.toUpperCase()}  •  Fee: ₱${o.deliveryFee.toStringAsFixed(2)}',
-                            ),
-                            isThreeLine: true,
-                            trailing: const Icon(Icons.history),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 1.5,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
                             onTap: () => _showOrderStatusLogs(o),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Top row: Order ID tag + Status Badge + Fee
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: DDartTheme.maroonTint(context),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          '#$shortId',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            color: DDartTheme.accentText(context),
+                                          ),
+                                        ),
+                                      ),
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: statusBg,
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              status.toUpperCase(),
+                                              style: TextStyle(
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.bold,
+                                                color: statusColor,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Fee: ₱${o.deliveryFee.toStringAsFixed(2)}',
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+
+                                  // Customer Name
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.person, size: 16, color: DDartTheme.primaryMaroon),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Customer: ',
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: DDartTheme.textSecondary(context),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          customerName,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: DDartTheme.textPrimary(context),
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 5),
+
+                                  // Runner Name
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.directions_run, size: 16, color: Color(0xFFD4AF37)),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Runner: ',
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: DDartTheme.textSecondary(context),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          runnerName,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: o.runnerId != null
+                                                ? DDartTheme.textPrimary(context)
+                                                : Colors.orange.shade800,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const Divider(height: 16),
+
+                                  // Route & Description
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(Icons.near_me_outlined, size: 14, color: DDartTheme.textMuted(context)),
+                                      const SizedBox(width: 5),
+                                      Expanded(
+                                        child: Text(
+                                          '${o.pickupLocation} → ${o.dropoffLocation}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: DDartTheme.textSecondary(context),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(Icons.shopping_basket_outlined, size: 14, color: DDartTheme.textMuted(context)),
+                                      const SizedBox(width: 5),
+                                      Expanded(
+                                        child: Text(
+                                          o.description,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                            color: DDartTheme.textPrimary(context),
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         );
                       },
@@ -1110,27 +1397,135 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     } catch (_) {}
 
     if (!mounted) return;
+    final customerName = _getCustomerName(order);
+    final runnerName = _getRunnerName(order);
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Delivery Timeline (${order.id.substring(0, order.id.length > 8 ? 8 : order.id.length)})'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.history, color: DDartTheme.primaryMaroon, size: 22),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Order Details #${order.id.length > 8 ? order.id.substring(0, 8) : order.id}',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
         content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420, maxHeight: 380),
-          child: logs.isEmpty
-              ? const Text('No status log entries yet.')
-              : ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: logs.length,
-                  itemBuilder: (_, i) {
-                    final log = logs[i];
-                    return ListTile(
-                      dense: true,
-                      leading: const Icon(Icons.circle, size: 10, color: DDartTheme.primaryMaroon),
-                      title: Text((log['status'] ?? '').toString().toUpperCase()),
-                      subtitle: Text('${log['remarks'] ?? ''}\n${log['created_at'] ?? ''}'),
-                    );
-                  },
+          constraints: const BoxConstraints(maxWidth: 440, maxHeight: 440),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Info Summary Card
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: DDartTheme.cardSubtle(ctx),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: DDartTheme.border(ctx)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.person, size: 15, color: DDartTheme.primaryMaroon),
+                          const SizedBox(width: 6),
+                          Text('Customer: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: DDartTheme.textSecondary(ctx))),
+                          Expanded(child: Text(customerName, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600))),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.directions_run, size: 15, color: Color(0xFFD4AF37)),
+                          const SizedBox(width: 6),
+                          Text('Runner: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: DDartTheme.textSecondary(ctx))),
+                          Expanded(child: Text(runnerName, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600))),
+                        ],
+                      ),
+                      const Divider(height: 12),
+                      Text(
+                        'Route: ${order.pickupLocation} → ${order.dropoffLocation}',
+                        style: TextStyle(fontSize: 11.5, color: DDartTheme.textSecondary(ctx)),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Items: ${order.description}',
+                        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Status: ${order.effectiveStatus().toUpperCase()}  •  Fee: ₱${order.deliveryFee.toStringAsFixed(2)}',
+                        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: DDartTheme.primaryMaroon),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Timeline & Status Logs:',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                if (logs.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: Text(
+                        'No status log entries recorded yet.',
+                        style: TextStyle(fontSize: 12, color: DDartTheme.textMuted(ctx)),
+                      ),
+                    ),
+                  )
+                else
+                  ...logs.map((log) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(top: 4),
+                            child: Icon(Icons.circle, size: 8, color: DDartTheme.primaryMaroon),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  (log['status'] ?? '').toString().toUpperCase(),
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                ),
+                                if ((log['remarks'] ?? '').toString().isNotEmpty)
+                                  Text(
+                                    log['remarks'].toString(),
+                                    style: TextStyle(fontSize: 11.5, color: DDartTheme.textSecondary(ctx)),
+                                  ),
+                                if ((log['created_at'] ?? '').toString().isNotEmpty)
+                                  Text(
+                                    log['created_at'].toString(),
+                                    style: TextStyle(fontSize: 10, color: DDartTheme.textMuted(ctx)),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+              ],
+            ),
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
