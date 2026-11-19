@@ -732,11 +732,16 @@ class SupabaseService {
     String? requestId,
     required String category,
     required String description,
+    String? reporterRole,
+    String? reportedUserId,
   }) async {
     final uid = currentUser?.id;
+    final role = reporterRole ?? (cachedProfile?.role ?? 'customer');
     await client.from('problem_reports').insert({
       'request_id': ?requestId,
       'reporter_id': ?uid,
+      'reporter_role': role,
+      'reported_user_id': ?reportedUserId,
       'category': category,
       'description': description.trim(),
       'status': 'open',
@@ -745,13 +750,52 @@ class SupabaseService {
   }
 
   Future<List<ProblemReport>> fetchProblemReports() async {
-    final rows = await client
+    try {
+      final res = await client.rpc('fetch_admin_problem_reports');
+      if (res is List) {
+        return res
+            .map((e) => ProblemReport.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+      }
+    } catch (_) {
+      // Fallback to table query with nested relations if RPC is unavailable
+    }
+
+    try {
+      final rows = await client
+          .from('problem_reports')
+          .select('''
+            *,
+            reporter:reporter_id (
+              id, full_name, email, phone_number, student_id, role, account_type
+            ),
+            reported_user:reported_user_id (
+              id, full_name, email, phone_number, student_id, role, account_type
+            ),
+            order:request_id (
+              id, pickup_location, dropoff_location, description, status, estimated_price, delivery_fee
+            )
+          ''')
+          .order('created_at', ascending: false);
+      return (rows as List)
+          .map((e) => ProblemReport.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } catch (_) {
+      final rows = await client
+          .from('problem_reports')
+          .select()
+          .order('created_at', ascending: false);
+      return (rows as List)
+          .map((e) => ProblemReport.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+  }
+
+  Stream<List<Map<String, dynamic>>> streamProblemReports() {
+    return client
         .from('problem_reports')
-        .select()
+        .stream(primaryKey: ['id'])
         .order('created_at', ascending: false);
-    return (rows as List)
-        .map((e) => ProblemReport.fromJson(Map<String, dynamic>.from(e as Map)))
-        .toList();
   }
 
   Future<void> updateProblemReportStatus(
@@ -765,6 +809,10 @@ class SupabaseService {
       'reviewed_by': currentUser?.id,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', reportId);
+  }
+
+  Future<void> deleteProblemReport(String reportId) async {
+    await client.from('problem_reports').delete().eq('id', reportId);
   }
 
   Future<List<UserProfile>> fetchAllProfiles() async {

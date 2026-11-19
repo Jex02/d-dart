@@ -38,6 +38,14 @@ class CampusLocation {
     canteenMini,
   ];
 
+  static String getCanteenImage(String canteenName) {
+    final lower = canteenName.toLowerCase();
+    if (lower.contains('main')) return 'assets/main_canteen.jpg';
+    if (lower.contains('high') || lower.contains('hs')) return 'assets/highschool_canteen.jpg';
+    if (lower.contains('mini')) return 'assets/mini_canteen.jpg';
+    return 'assets/main_canteen.jpg';
+  }
+
   static const List<CampusLocation> defaultPickups = [
     CampusLocation(
       id: 'pk-main',

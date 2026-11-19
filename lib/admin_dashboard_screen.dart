@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'canteen_menu_manager_screen.dart';
 import 'login.dart';
@@ -29,6 +30,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   String _userFilter = 'pending';
   String _monitorFilter = 'all';
 
+  // Report filtering and search states
+  String _reportRoleFilter = 'all'; // 'all', 'customer', 'runner'
+  String _reportStatusFilter = 'all'; // 'all', 'open', 'reviewing', 'resolved', 'dismissed'
+  final _reportSearchCtrl = TextEditingController();
+  StreamSubscription? _reportsRealtimeSub;
+
   List<UserProfile> _profiles = [];
   List<ProblemReport> _reports = [];
   List<CampusLocation> _locations = [];
@@ -53,11 +60,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   void initState() {
     super.initState();
     _allDeliveriesStream = _service.streamAllDeliveries();
+    _reportsRealtimeSub = _service.streamProblemReports().listen((_) {
+      _loadReports(silent: true);
+    });
     _loadAllAdminData();
   }
 
   @override
   void dispose() {
+    _reportsRealtimeSub?.cancel();
+    _reportSearchCtrl.dispose();
     _bufferCtrl.dispose();
     _dailyLimitCtrl.dispose();
     _expirationCtrl.dispose();
@@ -97,9 +109,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
-  Future<void> _loadReports() async {
+  Future<void> _loadReports({bool silent = false}) async {
     if (!mounted) return;
-    setState(() => _loadingReports = true);
+    if (!silent) setState(() => _loadingReports = true);
     try {
       final list = await _service.fetchProblemReports();
       if (mounted) {
@@ -1133,80 +1145,881 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _buildReportsTab() {
     if (_loadingReports) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_reports.isEmpty) {
-      return const Center(
-        child: Text('No reported problems yet.', style: TextStyle(color: Colors.black54)),
-      );
+      return const Center(child: CircularProgressIndicator(color: DDartTheme.primaryMaroon));
     }
 
+    final textPrimary = DDartTheme.textPrimary(context);
+    final textSecondary = DDartTheme.textSecondary(context);
+
+    // Summary counts
+    final totalCount = _reports.length;
+    final openCount = _reports.where((r) => r.status == 'open').length;
+    final reviewingCount = _reports.where((r) => r.status == 'reviewing').length;
+    final customerCount = _reports.where((r) => r.isCustomerReport).length;
+    final runnerCount = _reports.where((r) => r.isRunnerReport).length;
+    final resolvedCount =
+        _reports.where((r) => r.status == 'resolved' || r.status == 'dismissed').length;
+
+    // Filter logic
+    final query = _reportSearchCtrl.text.trim().toLowerCase();
+    final filtered = _reports.where((r) {
+      if (_reportRoleFilter == 'customer' && !r.isCustomerReport) return false;
+      if (_reportRoleFilter == 'runner' && !r.isRunnerReport) return false;
+      if (_reportStatusFilter != 'all' && r.status != _reportStatusFilter) return false;
+
+      if (query.isNotEmpty) {
+        final matches = (r.reporterName?.toLowerCase().contains(query) ?? false) ||
+            (r.reporterEmail?.toLowerCase().contains(query) ?? false) ||
+            (r.reporterStudentId?.toLowerCase().contains(query) ?? false) ||
+            (r.reportedUserName?.toLowerCase().contains(query) ?? false) ||
+            (r.reportedUserEmail?.toLowerCase().contains(query) ?? false) ||
+            (r.requestId?.toLowerCase().contains(query) ?? false) ||
+            r.categoryLabel.toLowerCase().contains(query) ||
+            r.description.toLowerCase().contains(query) ||
+            r.adminNotes.toLowerCase().contains(query) ||
+            (r.orderPickupLocation?.toLowerCase().contains(query) ?? false) ||
+            (r.orderDropoffLocation?.toLowerCase().contains(query) ?? false);
+        if (!matches) return false;
+      }
+      return true;
+    }).toList();
+
     return RefreshIndicator(
-      onRefresh: _loadReports,
-      child: ListView.builder(
+      onRefresh: () => _loadReports(),
+      color: DDartTheme.primaryMaroon,
+      child: ListView(
         padding: const EdgeInsets.all(16),
-        itemCount: _reports.length,
-        itemBuilder: (context, index) {
-          final report = _reports[index];
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
+        children: [
+          // Header title & Full Super Admin Live Badge
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        report.categoryLabel,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                  Text(
+                    'Dispute & Problem Reports',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Customer & Runner issues (Full Super Admin Console)',
+                    style: TextStyle(fontSize: 12, color: textSecondary),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.green.shade400, width: 0.9),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.bolt, size: 14, color: Colors.green),
+                    SizedBox(width: 4),
+                    Text(
+                      'LIVE SYNC',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                        letterSpacing: 0.8,
                       ),
-                      Chip(
-                        label: Text(
-                          report.status.toUpperCase(),
-                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Metric Stat Cards Row
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildReportStatCard(
+                  title: 'Total Reports',
+                  count: totalCount,
+                  icon: Icons.assignment_outlined,
+                  color: Colors.blueGrey,
+                  isSelected: _reportRoleFilter == 'all' && _reportStatusFilter == 'all',
+                  onTap: () {
+                    setState(() {
+                      _reportRoleFilter = 'all';
+                      _reportStatusFilter = 'all';
+                    });
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildReportStatCard(
+                  title: 'Open Issues',
+                  count: openCount,
+                  icon: Icons.error_outline,
+                  color: Colors.redAccent,
+                  isSelected: _reportStatusFilter == 'open',
+                  onTap: () {
+                    setState(() => _reportStatusFilter = 'open');
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildReportStatCard(
+                  title: 'Under Review',
+                  count: reviewingCount,
+                  icon: Icons.hourglass_top,
+                  color: Colors.orange,
+                  isSelected: _reportStatusFilter == 'reviewing',
+                  onTap: () {
+                    setState(() => _reportStatusFilter = 'reviewing');
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildReportStatCard(
+                  title: 'Customer Reports',
+                  count: customerCount,
+                  icon: Icons.person_outline,
+                  color: Colors.blue,
+                  isSelected: _reportRoleFilter == 'customer',
+                  onTap: () {
+                    setState(() => _reportRoleFilter = 'customer');
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildReportStatCard(
+                  title: 'Runner Reports',
+                  count: runnerCount,
+                  icon: Icons.directions_run_outlined,
+                  color: Colors.amber.shade800,
+                  isSelected: _reportRoleFilter == 'runner',
+                  onTap: () {
+                    setState(() => _reportRoleFilter = 'runner');
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildReportStatCard(
+                  title: 'Resolved / Closed',
+                  count: resolvedCount,
+                  icon: Icons.check_circle_outline,
+                  color: Colors.green,
+                  isSelected: _reportStatusFilter == 'resolved',
+                  onTap: () {
+                    setState(() => _reportStatusFilter = 'resolved');
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Search Field
+          TextField(
+            controller: _reportSearchCtrl,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: 'Search by reporter, order ID, conduct issue, or keyword...',
+              prefixIcon: const Icon(Icons.search, size: 20),
+              suffixIcon: _reportSearchCtrl.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 18),
+                      onPressed: () {
+                        _reportSearchCtrl.clear();
+                        setState(() {});
+                      },
+                    )
+                  : null,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              filled: true,
+              fillColor: DDartTheme.cardSubtle(context),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Role Filter Chips
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              ChoiceChip(
+                label: Text('All ($totalCount)'),
+                selected: _reportRoleFilter == 'all',
+                onSelected: (val) {
+                  if (val) setState(() => _reportRoleFilter = 'all');
+                },
+              ),
+              ChoiceChip(
+                avatar: const Icon(Icons.person, size: 16, color: Colors.blue),
+                label: Text('Customer Reports ($customerCount)'),
+                selected: _reportRoleFilter == 'customer',
+                selectedColor: Colors.blue.withValues(alpha: 0.22),
+                onSelected: (val) {
+                  if (val) setState(() => _reportRoleFilter = 'customer');
+                },
+              ),
+              ChoiceChip(
+                avatar: Icon(Icons.directions_run, size: 16, color: Colors.amber.shade900),
+                label: Text('Runner Reports ($runnerCount)'),
+                selected: _reportRoleFilter == 'runner',
+                selectedColor: Colors.amber.withValues(alpha: 0.22),
+                onSelected: (val) {
+                  if (val) setState(() => _reportRoleFilter = 'runner');
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Status Filter Chips
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              FilterChip(
+                label: const Text('All Statuses'),
+                selected: _reportStatusFilter == 'all',
+                onSelected: (val) {
+                  if (val) setState(() => _reportStatusFilter = 'all');
+                },
+              ),
+              FilterChip(
+                label: Text('Open ($openCount)'),
+                selected: _reportStatusFilter == 'open',
+                selectedColor: Colors.red.withValues(alpha: 0.18),
+                onSelected: (val) => setState(() => _reportStatusFilter = val ? 'open' : 'all'),
+              ),
+              FilterChip(
+                label: Text('Reviewing ($reviewingCount)'),
+                selected: _reportStatusFilter == 'reviewing',
+                selectedColor: Colors.orange.withValues(alpha: 0.18),
+                onSelected: (val) =>
+                    setState(() => _reportStatusFilter = val ? 'reviewing' : 'all'),
+              ),
+              FilterChip(
+                label: Text('Resolved (${_reports.where((r) => r.status == 'resolved').length})'),
+                selected: _reportStatusFilter == 'resolved',
+                selectedColor: Colors.green.withValues(alpha: 0.18),
+                onSelected: (val) =>
+                    setState(() => _reportStatusFilter = val ? 'resolved' : 'all'),
+              ),
+              FilterChip(
+                label: Text('Dismissed (${_reports.where((r) => r.status == 'dismissed').length})'),
+                selected: _reportStatusFilter == 'dismissed',
+                onSelected: (val) =>
+                    setState(() => _reportStatusFilter = val ? 'dismissed' : 'all'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Reports List or Empty State
+          if (filtered.isEmpty) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+              alignment: Alignment.center,
+              child: Column(
+                children: [
+                  Icon(Icons.inbox_outlined, size: 54, color: textSecondary.withValues(alpha: 0.45)),
+                  const SizedBox(height: 12),
+                  Text(
+                    _reports.isEmpty
+                        ? 'No problem reports submitted yet.'
+                        : 'No reports match your filters.',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _reports.isEmpty
+                        ? 'Reports filed by customers or runners will appear here.'
+                        : 'Try adjusting your search keywords or filter options.',
+                    style: TextStyle(fontSize: 12, color: textSecondary.withValues(alpha: 0.8)),
+                  ),
+                  if (_reports.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('Reset Filters'),
+                      onPressed: () {
+                        setState(() {
+                          _reportRoleFilter = 'all';
+                          _reportStatusFilter = 'all';
+                          _reportSearchCtrl.clear();
+                        });
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ] else ...[
+            Text(
+              'Showing ${filtered.length} of $totalCount reports',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary),
+            ),
+            const SizedBox(height: 8),
+            ...filtered.map((report) => _buildReportDetailCard(report)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReportStatCard({
+    required String title,
+    required int count,
+    required IconData icon,
+    required Color color,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final isDark = DDartTheme.isDark(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? color.withValues(alpha: isDark ? 0.25 : 0.15)
+              : DDartTheme.card(context),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? color : DDartTheme.outlineBorder(context),
+            width: isSelected ? 1.8 : 0.9,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 14,
+              backgroundColor: color.withValues(alpha: 0.16),
+              child: Icon(icon, size: 15, color: color),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  count.toString(),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: isSelected ? color : DDartTheme.textPrimary(context),
+                  ),
+                ),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: DDartTheme.textSecondary(context),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReportDetailCard(ProblemReport report) {
+    final isDark = DDartTheme.isDark(context);
+    final textPrimary = DDartTheme.textPrimary(context);
+    final textSecondary = DDartTheme.textSecondary(context);
+
+    // Status colors
+    Color statusBg;
+    Color statusFg;
+    switch (report.status.toLowerCase()) {
+      case 'open':
+        statusBg = Colors.red.withValues(alpha: 0.14);
+        statusFg = Colors.red.shade700;
+        break;
+      case 'reviewing':
+        statusBg = Colors.orange.withValues(alpha: 0.16);
+        statusFg = Colors.orange.shade800;
+        break;
+      case 'resolved':
+        statusBg = Colors.green.withValues(alpha: 0.14);
+        statusFg = Colors.green.shade700;
+        break;
+      case 'dismissed':
+      default:
+        statusBg = Colors.grey.withValues(alpha: 0.18);
+        statusFg = Colors.grey.shade700;
+        break;
+    }
+
+    final isCustomer = report.isCustomerReport;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 14),
+      elevation: 0,
+      color: DDartTheme.card(context),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: report.status == 'open'
+              ? Colors.red.shade300
+              : DDartTheme.outlineBorder(context),
+          width: report.status == 'open' ? 1.4 : 0.9,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(15),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Row: Role Badge + Category + Status Chip
+            Row(
+              children: [
+                // Role Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: isCustomer
+                        ? Colors.blue.withValues(alpha: 0.14)
+                        : Colors.amber.withValues(alpha: 0.20),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isCustomer ? Icons.person : Icons.directions_run,
+                        size: 13,
+                        color: isCustomer ? Colors.blue.shade700 : Colors.amber.shade900,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isCustomer ? 'CUSTOMER REPORT' : 'RUNNER REPORT',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          color: isCustomer ? Colors.blue.shade700 : Colors.amber.shade900,
+                          letterSpacing: 0.5,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  Text(report.description),
-                  if (report.requestId != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        'Order ID: ${report.requestId}',
-                        style: const TextStyle(fontSize: 11, color: Colors.black54),
-                      ),
+                ),
+                const SizedBox(width: 8),
+
+                // Category pill
+                Expanded(
+                  child: Text(
+                    report.categoryLabel,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.bold,
+                      color: textPrimary,
                     ),
-                  if (report.adminNotes.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        'Admin Notes: ${report.adminNotes}',
-                        style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
-                      ),
+                  ),
+                ),
+
+                // Status chip
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusBg,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    report.status.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.bold,
+                      color: statusFg,
+                      letterSpacing: 0.6,
                     ),
-                  const SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: DDartTheme.primaryMaroon,
-                        foregroundColor: Colors.white,
-                      ),
-                      onPressed: () => _reviewProblemReport(report),
-                      child: const Text('Update Review Status'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            // Time & Date
+            Text(
+              _formatReportDate(report.createdAt),
+              style: TextStyle(fontSize: 11.5, color: textSecondary),
+            ),
+            const Divider(height: 16),
+
+            // Reporter details section
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: DDartTheme.cardSubtle(context),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: isCustomer
+                        ? Colors.blue.withValues(alpha: 0.18)
+                        : Colors.amber.withValues(alpha: 0.22),
+                    child: Icon(
+                      isCustomer ? Icons.person_outline : Icons.directions_run,
+                      size: 18,
+                      color: isCustomer ? Colors.blue.shade800 : Colors.amber.shade900,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                report.reporterName ?? 'Unknown Reporter',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            if (report.reporterStudentId != null &&
+                                report.reporterStudentId!.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.withValues(alpha: 0.18),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'ID: ${report.reporterStudentId}',
+                                  style: TextStyle(fontSize: 10.5, color: textSecondary),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${report.reporterEmail ?? 'No email'} ${report.reporterPhone != null ? '• ${report.reporterPhone}' : ''}',
+                          style: TextStyle(fontSize: 11.5, color: textSecondary),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-          );
-        },
+
+            // Reported Party (if applicable)
+            if (report.hasReportedUser) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: isDark ? 0.15 : 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, size: 18, color: Colors.redAccent),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Report Filed Against: ${report.reportedUserName} (${(report.reportedUserRole ?? 'User').toUpperCase()})',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.red.shade200 : Colors.red.shade900,
+                            ),
+                          ),
+                          if (report.reportedUserEmail != null)
+                            Text(
+                              report.reportedUserEmail!,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark ? Colors.red.shade300 : Colors.red.shade700,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Associated Order Details Box (if linked to order)
+            if (report.hasOrder) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: DDartTheme.primaryMaroon.withValues(alpha: isDark ? 0.18 : 0.06),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: DDartTheme.primaryMaroon.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.receipt_long_outlined,
+                            size: 15, color: DDartTheme.primaryMaroon),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Order ID: ${report.requestId!.length > 8 ? report.requestId!.substring(0, 8) : report.requestId}',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                            color: DDartTheme.primaryMaroon,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (report.orderStatus != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: DDartTheme.primaryMaroon.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              report.orderStatus!.toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.bold,
+                                color: DDartTheme.primaryMaroon,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Route: ${report.orderPickupLocation ?? 'Canteen'} ➔ ${report.orderDropoffLocation ?? 'Campus Drop-off'}',
+                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: textPrimary),
+                    ),
+                    if (report.orderDescription != null &&
+                        report.orderDescription!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Items: ${report.orderDescription}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11, color: textSecondary),
+                      ),
+                    ],
+                    if (report.orderEstimatedPrice != null || report.orderDeliveryFee != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Total: ₱${(report.orderEstimatedPrice ?? 0).toStringAsFixed(2)} + ₱${(report.orderDeliveryFee ?? 20).toStringAsFixed(2)} delivery fee',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: textPrimary),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 10),
+
+            // Problem Description Box
+            Text(
+              'Reported Issue Details:',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.bold,
+                color: textSecondary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(11),
+              decoration: BoxDecoration(
+                color: DDartTheme.cardSubtle(context),
+                borderRadius: BorderRadius.circular(8),
+                border: Border(
+                  left: BorderSide(
+                    color: isCustomer ? Colors.blue.shade600 : Colors.amber.shade700,
+                    width: 3.5,
+                  ),
+                ),
+              ),
+              child: Text(
+                report.description,
+                style: TextStyle(fontSize: 12.5, height: 1.35, color: textPrimary),
+              ),
+            ),
+
+            // Admin Notes / Resolution (if already provided)
+            if (report.adminNotes.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: isDark ? 0.15 : 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.admin_panel_settings, size: 14, color: Colors.green),
+                        const SizedBox(width: 5),
+                        Text(
+                          'Admin Resolution Notes:',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.green.shade300 : Colors.green.shade800,
+                          ),
+                        ),
+                        if (report.reviewerName != null) ...[
+                          const Spacer(),
+                          Text(
+                            'By: ${report.reviewerName}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontStyle: FontStyle.italic,
+                              color: textSecondary,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      report.adminNotes,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.green.shade100 : Colors.green.shade900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 14),
+
+            // Actions Row
+            Row(
+              children: [
+                // Delete button
+                IconButton(
+                  tooltip: 'Delete Report',
+                  icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
+                  onPressed: () => _confirmDeleteReport(report),
+                ),
+
+                const Spacer(),
+
+                // Update Status & Review Button
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: DDartTheme.primaryMaroon,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.rate_review_outlined, size: 16),
+                  label: const Text(
+                    'Review & Update Status',
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () => _reviewProblemReport(report),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  String _formatReportDate(DateTime? dt) {
+    if (dt == null) return '';
+    final local = dt.toLocal();
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
+    final month = months[local.month - 1];
+    final day = local.day;
+    final year = local.year;
+    final hour = local.hour > 12 ? local.hour - 12 : (local.hour == 0 ? 12 : local.hour);
+    final min = local.minute.toString().padLeft(2, '0');
+    final ampm = local.hour >= 12 ? 'PM' : 'AM';
+    return '$month $day, $year • $hour:$min $ampm';
+  }
+
+  Future<void> _confirmDeleteReport(ProblemReport report) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Report'),
+        content: Text(
+          'Are you sure you want to permanently delete this ${report.isCustomerReport ? 'Customer' : 'Runner'} report (${report.categoryLabel})?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      try {
+        await _service.deleteProblemReport(report.id);
+        await _loadReports();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Report deleted successfully.')),
+          );
+        }
+      } catch (e) {
+        if (mounted) _showAdminError('Failed to delete report: $e');
+      }
+    }
   }
 
   Future<void> _reviewProblemReport(ProblemReport report) async {
@@ -1217,37 +2030,75 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: Text('Review: ${report.categoryLabel}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
+          title: Row(
             children: [
-              DropdownButtonFormField<String>(
-                initialValue: selectedStatus,
-                decoration: const InputDecoration(
-                  labelText: 'Status',
-                  border: OutlineInputBorder(),
-                ),
-                items: ProblemReport.statuses
-                    .map((s) => DropdownMenuItem(value: s, child: Text(s.toUpperCase())))
-                    .toList(),
-                onChanged: (v) {
-                  if (v != null) setDialogState(() => selectedStatus = v);
-                },
+              Icon(
+                report.isCustomerReport ? Icons.person : Icons.directions_run,
+                color: DDartTheme.primaryMaroon,
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesCtrl,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Resolution / Admin Notes',
-                  border: OutlineInputBorder(),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Review ${report.isCustomerReport ? 'Customer' : 'Runner'} Report',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
           ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Category: ${report.categoryLabel}',
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+                if (report.reporterName != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Reporter: ${report.reporterName} (${report.reporterRole})',
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedStatus,
+                  decoration: const InputDecoration(
+                    labelText: 'Resolution Status',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: ProblemReport.statuses
+                      .map((s) => DropdownMenuItem(value: s, child: Text(s.toUpperCase())))
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) setDialogState(() => selectedStatus = v);
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: notesCtrl,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Admin Resolution / Internal Notes',
+                    hintText: 'Enter resolution details, corrective actions, or refund remarks...',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: DDartTheme.primaryMaroon,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Save Resolution'),
+            ),
           ],
         ),
       ),
@@ -1263,6 +2114,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         adminNotes: notes,
       );
       await _loadReports();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.green,
+            content: Text('Report marked as ${selectedStatus.toUpperCase()}.'),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) _showAdminError('Failed to update report: $e');
     }

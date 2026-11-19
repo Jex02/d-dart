@@ -314,15 +314,20 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
   }
 
-  Future<void> _openReportProblemDialog() async {
-    String category = 'late_delivery';
+  Future<void> _openReportProblemDialog([DeliveryOrder? activeOrder]) async {
+    final availableCategories = widget.isRunner
+        ? ProblemReport.runnerCategories
+        : ProblemReport.customerCategories;
+    String category = widget.isRunner ? 'unresponsive_user' : 'late_delivery';
     final descCtrl = TextEditingController();
 
     final submit = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Report a Delivery Problem'),
+          title: Text(widget.isRunner
+              ? 'Report a Delivery / Customer Problem'
+              : 'Report a Delivery Problem'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -332,8 +337,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   labelText: 'Issue Category',
                   border: OutlineInputBorder(),
                 ),
-                items: ProblemReport.categoryLabels.entries
-                    .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                items: availableCategories
+                    .map((key) => DropdownMenuItem(
+                          value: key,
+                          child: Text(ProblemReport.categoryLabels[key] ?? key),
+                        ))
                     .toList(),
                 onChanged: (v) {
                   if (v != null) setDialogState(() => category = v);
@@ -342,11 +350,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: descCtrl,
-                maxLines: 3,
-                decoration: const InputDecoration(
+                maxLines: 4,
+                decoration: InputDecoration(
                   labelText: 'Details',
-                  hintText: 'Explain what happened so an admin can review it.',
-                  border: OutlineInputBorder(),
+                  hintText: widget.isRunner
+                      ? 'Describe customer unresponsiveness, delivery dispute, or issues...'
+                      : 'Explain what happened with your delivery so an admin can resolve it.',
+                  border: const OutlineInputBorder(),
                 ),
               ),
             ],
@@ -370,14 +380,20 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
     if (submit == true && description.isNotEmpty) {
       try {
+        final order = activeOrder ?? DeliveryOrder.fromJson(_fallbackOrder);
+        final reportedUserId = widget.isRunner ? order.customerId : order.runnerId;
         await SupabaseService().submitProblemReport(
           requestId: widget.orderId.startsWith('ORD-') ? null : widget.orderId,
           category: category,
           description: description,
+          reporterRole: widget.isRunner ? 'runner' : 'customer',
+          reportedUserId: (reportedUserId != null && reportedUserId.isNotEmpty)
+              ? reportedUserId
+              : null,
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Problem reported for Administrator review.')),
+            const SnackBar(content: Text('Problem reported for Super Administrator review.')),
           );
         }
       } catch (e) {
@@ -509,7 +525,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       IconButton(
                         tooltip: 'Report a problem',
                         icon: const Icon(Icons.report_problem_outlined),
-                        onPressed: _openReportProblemDialog,
+                        onPressed: () => _openReportProblemDialog(order),
                       ),
                     ],
                   ),
@@ -983,7 +999,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       const SizedBox(height: 16),
                       Center(
                         child: TextButton.icon(
-                          onPressed: _openReportProblemDialog,
+                          onPressed: () => _openReportProblemDialog(order),
                           icon: Icon(Icons.flag_outlined,
                               size: 16, color: DDartTheme.textSecondary(context)),
                           label: Text(

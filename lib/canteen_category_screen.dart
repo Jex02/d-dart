@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'canteen_menu_screen.dart';
 import 'cart_screen.dart';
 import 'customer_home_screen.dart';
+import 'models/campus_location.dart';
 import 'services/cart_service.dart';
 import 'services/supabase_service.dart';
 import 'widgets/responsive_shell.dart';
@@ -194,16 +195,90 @@ class _CanteenCategoryScreenState extends State<CanteenCategoryScreen> {
                           color: accent,
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 18),
 
-                      // Canteen Name Header (e.g. MAIN CANTEEN)
-                      Text(
-                        widget.canteenName.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2,
-                          color: textPrimary,
+                      // Canteen Banner & Name Header
+                      Container(
+                        width: double.infinity,
+                        height: 140,
+                        margin: const EdgeInsets.only(bottom: 20),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: DDartTheme.outlineBorder(context),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(15),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Image.asset(
+                                CampusLocation.getCanteenImage(widget.canteenName),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => Container(
+                                  color: DDartTheme.primaryMaroon,
+                                  child: const Icon(Icons.storefront, color: Colors.white, size: 40),
+                                ),
+                              ),
+                              Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.transparent,
+                                      Colors.black.withValues(alpha: 0.75),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                left: 16,
+                                right: 16,
+                                bottom: 12,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.storefront, color: DDartTheme.gold, size: 16),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'OFFICIAL CANTEEN',
+                                          style: TextStyle(
+                                            color: DDartTheme.gold,
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.bold,
+                                            letterSpacing: 1.1,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      widget.canteenName.toUpperCase(),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 19,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 18),

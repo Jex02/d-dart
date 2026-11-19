@@ -216,7 +216,9 @@ create table if not exists public.problem_reports (
   id uuid primary key default gen_random_uuid(),
   request_id uuid references public.delivery_requests(id) on delete set null,
   reporter_id uuid references public.profiles(id) on delete set null,
-  category text not null check (category in ('wrong_item', 'late_delivery', 'payment_issue', 'runner_behavior', 'app_issue', 'other')),
+  reporter_role text check (reporter_role in ('customer', 'runner', 'admin')),
+  reported_user_id uuid references public.profiles(id) on delete set null,
+  category text not null check (category in ('wrong_item', 'late_delivery', 'payment_issue', 'runner_behavior', 'customer_behavior', 'unresponsive_user', 'wrong_location', 'canteen_issue', 'app_issue', 'other')),
   description text not null,
   status text not null default 'open' check (status in ('open', 'reviewing', 'resolved', 'dismissed')),
   admin_notes text default '',
@@ -1115,5 +1117,83 @@ begin
   ) then
     alter publication supabase_realtime add table public.order_messages;
   end if;
+  if not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'problem_reports'
+  ) then
+    alter publication supabase_realtime add table public.problem_reports;
+  end if;
 end $$;
+
+-- 25. Secure Admin Problem Reports RPC with Enriched Context
+create or replace function public.fetch_admin_problem_reports()
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_is_super_admin boolean;
+  v_result jsonb;
+begin
+  select exists (
+    select 1
+    from public.profiles
+    where id = (select auth.uid())
+      and (account_type = 'admin' or role = 'admin')
+      and assigned_canteen is null
+  ) into v_is_super_admin;
+
+  if not v_is_super_admin then
+    raise exception 'Access denied: Super Admin privilege required';
+  end if;
+
+  select coalesce(jsonb_agg(row_to_json(r)), '[]'::jsonb)
+  into v_result
+  from (
+    select 
+      pr.id,
+      pr.request_id,
+      pr.reporter_id,
+      coalesce(pr.reporter_role, rep.role, 'customer') as reporter_role,
+      pr.reported_user_id,
+      pr.category,
+      pr.description,
+      pr.status,
+      coalesce(pr.admin_notes, '') as admin_notes,
+      pr.reviewed_by,
+      pr.created_at,
+      pr.updated_at,
+      rep.full_name as reporter_name,
+      rep.email as reporter_email,
+      rep.phone_number as reporter_phone,
+      rep.student_id as reporter_student_id,
+      target.full_name as reported_user_name,
+      target.email as reported_user_email,
+      target.role as reported_user_role,
+      dr.pickup_location,
+      dr.dropoff_location,
+      dr.description as order_description,
+      dr.status as order_status,
+      dr.estimated_price as order_estimated_price,
+      dr.delivery_fee as order_delivery_fee,
+      admin_prof.full_name as reviewer_name
+    from public.problem_reports pr
+    left join public.profiles rep on pr.reporter_id = rep.id
+    left join public.profiles target on pr.reported_user_id = target.id
+    left join public.delivery_requests dr on pr.request_id = dr.id
+    left join public.profiles admin_prof on pr.reviewed_by = admin_prof.id
+    order by pr.created_at desc
+  ) r;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.fetch_admin_problem_reports() from public, anon;
+grant execute on function public.fetch_admin_problem_reports() to authenticated;
+
 

@@ -148,18 +148,21 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Report a Problem'),
+          title: const Text('Report a Problem / Support'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<String>(
                 initialValue: category,
                 decoration: const InputDecoration(
-                  labelText: 'Category',
+                  labelText: 'Issue Category',
                   border: OutlineInputBorder(),
                 ),
-                items: ProblemReport.categoryLabels.entries
-                    .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                items: ProblemReport.customerCategories
+                    .map((key) => DropdownMenuItem(
+                          value: key,
+                          child: Text(ProblemReport.categoryLabels[key] ?? key),
+                        ))
                     .toList(),
                 onChanged: (v) {
                   if (v != null) setDialogState(() => category = v);
@@ -168,9 +171,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: descCtrl,
-                maxLines: 3,
+                maxLines: 4,
                 decoration: const InputDecoration(
-                  labelText: 'Describe the issue',
+                  labelText: 'Describe the issue in detail',
+                  hintText: 'Provide details so the Super Admin can review and resolve it...',
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -184,7 +188,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 foregroundColor: Colors.white,
               ),
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Submit'),
+              child: const Text('Submit Report'),
             ),
           ],
         ),
@@ -197,10 +201,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         await SupabaseService().submitProblemReport(
           category: category,
           description: text,
+          reporterRole: 'customer',
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Problem report submitted to Administrators.')),
+            const SnackBar(content: Text('Problem report submitted to Super Administrators.')),
           );
         }
       } catch (e) {
@@ -540,7 +545,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   label: 'Main Canteen',
                   onTap: () => _openCanteenCategory('Main Canteen'),
                   child: Image.asset(
-                    'assets/lrac.jpg',
+                    'assets/main_canteen.jpg',
                     fit: BoxFit.cover,
                     errorBuilder: (_, _, _) => Container(
                       color: DDartTheme.cardSubtle(context),
@@ -554,9 +559,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 child: _buildCanteenCard(
                   label: 'Highschool\nCanteen',
                   onTap: () => _openCanteenCategory('Highschool Canteen'),
-                  child: Container(
-                    color: DDartTheme.cardSubtle(context),
-                    child: Icon(Icons.fastfood_outlined, color: accent),
+                  child: Image.asset(
+                    'assets/highschool_canteen.jpg',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      color: DDartTheme.cardSubtle(context),
+                      child: Icon(Icons.fastfood_outlined, color: accent),
+                    ),
                   ),
                 ),
               ),
@@ -565,9 +574,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 child: _buildCanteenCard(
                   label: 'Mini Canteen',
                   onTap: () => _openCanteenCategory('Mini Canteen'),
-                  child: Container(
-                    color: DDartTheme.cardSubtle(context),
-                    child: Icon(Icons.storefront_outlined, color: accent),
+                  child: Image.asset(
+                    'assets/mini_canteen.jpg',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      color: DDartTheme.cardSubtle(context),
+                      child: Icon(Icons.storefront_outlined, color: accent),
+                    ),
                   ),
                 ),
               ),

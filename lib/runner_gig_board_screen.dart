@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'models/campus_location.dart';
 import 'models/delivery_order.dart';
+import 'models/problem_report.dart';
 import 'models/user_profile.dart';
 import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
@@ -36,6 +37,92 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
     final profile = await SupabaseService().fetchUserProfileModel();
     if (mounted) {
       setState(() => _profile = profile);
+    }
+  }
+
+  Future<void> _openRunnerReportDialog() async {
+    String category = 'unresponsive_user';
+    final descCtrl = TextEditingController();
+
+    final submit = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Runner Support & Issue Report'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: category,
+                decoration: const InputDecoration(
+                  labelText: 'Issue Category',
+                  border: OutlineInputBorder(),
+                ),
+                items: ProblemReport.runnerCategories
+                    .map((key) => DropdownMenuItem(
+                          value: key,
+                          child: Text(ProblemReport.categoryLabels[key] ?? key),
+                        ))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) setDialogState(() => category = v);
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: descCtrl,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Describe the issue in detail',
+                  hintText: 'Provide details so the Super Admin can review and resolve it...',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryMaroon,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Submit Report'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final text = descCtrl.text.trim();
+    descCtrl.dispose();
+    if (submit == true && text.isNotEmpty) {
+      try {
+        await SupabaseService().submitProblemReport(
+          category: category,
+          description: text,
+          reporterRole: 'runner',
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Problem report submitted to Super Administrators.'),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.redAccent,
+              content: Text('Could not submit report: $e'),
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -216,6 +303,11 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
           iconTheme: const IconThemeData(color: Colors.white),
           actions: [
             const ThemeToggleButton(iconColor: Colors.white, iconSize: 21),
+            IconButton(
+              tooltip: 'Report a Problem / Support',
+              icon: const Icon(Icons.report_problem_outlined),
+              onPressed: _openRunnerReportDialog,
+            ),
             IconButton(
               tooltip: 'Refresh eligibility',
               icon: const Icon(Icons.refresh),
