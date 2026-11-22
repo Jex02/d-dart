@@ -569,6 +569,7 @@ declare
   v_current_day text;
   v_current_minutes integer;
   v_blocked_subject text;
+  v_is_demo_runner boolean := false;
 begin
   if v_uid is null then
     raise exception 'Authentication required to claim a delivery request.';
@@ -588,10 +589,18 @@ begin
     from public.profiles
     where id = v_uid;
 
-  if v_account_type is distinct from 'student'
-     or v_verification_status is distinct from 'verified'
-     or v_cor_verified is not true then
-    raise exception 'Only verified student runners with a confirmed COR schedule can claim requests.';
+  v_is_demo_runner := (v_uid = 'd8d46232-4eaa-4c44-8508-46207f0ea9d5'::uuid);
+
+  if not v_is_demo_runner then
+    if v_account_type is distinct from 'student'
+       or v_verification_status is distinct from 'verified'
+       or v_cor_verified is not true then
+      raise exception 'Only verified student runners with a confirmed COR schedule can claim requests.';
+    end if;
+  else
+    if v_verification_status is distinct from 'verified' then
+      raise exception 'Demonstration runner account must have verified profile status.';
+    end if;
   end if;
 
   select coalesce(nullif(config_value, '')::integer, 5)
@@ -600,46 +609,50 @@ begin
     where config_key = 'daily_delivery_limit';
   v_daily_limit := coalesce(v_daily_limit, 5);
 
-  select coalesce(nullif(config_value, '')::integer, 15)
-    into v_buffer_minutes
-    from public.system_configurations
-    where config_key = 'pre_class_buffer_minutes';
-  v_buffer_minutes := coalesce(v_buffer_minutes, 15);
+  if not v_is_demo_runner then
+    select coalesce(nullif(config_value, '')::integer, 15)
+      into v_buffer_minutes
+      from public.system_configurations
+      where config_key = 'pre_class_buffer_minutes';
+    v_buffer_minutes := coalesce(v_buffer_minutes, 15);
 
-  select count(*)
-    into v_schedule_count
-    from public.runner_schedules
-    where user_id = v_uid;
+    select count(*)
+      into v_schedule_count
+      from public.runner_schedules
+      where user_id = v_uid;
 
-  if v_schedule_count = 0 then
-    raise exception 'Academic Duty Lock active: no verified COR schedule found.';
-  end if;
+    if v_schedule_count = 0 then
+      raise exception 'Academic Duty Lock active: no verified COR schedule found.';
+    end if;
 
-  v_manila_now := timezone('Asia/Manila', now());
-  v_current_day := lower(trim(to_char(v_manila_now, 'FMDay')));
-  v_current_minutes := extract(hour from v_manila_now)::integer * 60
-                     + extract(minute from v_manila_now)::integer;
+    v_manila_now := timezone('Asia/Manila', now());
+    v_current_day := lower(trim(to_char(v_manila_now, 'FMDay')));
+    v_current_minutes := extract(hour from v_manila_now)::integer * 60
+                       + extract(minute from v_manila_now)::integer;
 
-  select rs.subject
-    into v_blocked_subject
-    from public.runner_schedules rs
-    where rs.user_id = v_uid
-      and lower(trim(rs.day)) = v_current_day
-      and rs.start_time ~ '^\d{1,2}:\d{2}$'
-      and rs.end_time ~ '^\d{1,2}:\d{2}$'
-      and v_current_minutes >= (
-        split_part(rs.start_time, ':', 1)::integer * 60
-        + split_part(rs.start_time, ':', 2)::integer
-        - v_buffer_minutes
-      )
-      and v_current_minutes <= (
-        split_part(rs.end_time, ':', 1)::integer * 60
-        + split_part(rs.end_time, ':', 2)::integer
-      )
-    limit 1;
+    select rs.subject
+      into v_blocked_subject
+      from public.runner_schedules rs
+      where rs.user_id = v_uid
+        and lower(trim(rs.day)) = v_current_day
+        and rs.start_time ~ '^\d{1,2}:\d{2}$'
+        and rs.end_time ~ '^\d{1,2}:\d{2}$'
+        and v_current_minutes >= (
+          split_part(rs.start_time, ':', 1)::integer * 60
+          + split_part(rs.start_time, ':', 2)::integer
+          - v_buffer_minutes
+        )
+        and v_current_minutes <= (
+          split_part(rs.end_time, ':', 1)::integer * 60
+          + split_part(rs.end_time, ':', 2)::integer
+        )
+      limit 1;
 
-  if v_blocked_subject is not null then
-    raise exception 'Academic Duty Lock active for % (%-minute pre-class buffer).', v_blocked_subject, v_buffer_minutes;
+    if v_blocked_subject is not null then
+      raise exception 'Academic Duty Lock active for % (%-minute pre-class buffer).', v_blocked_subject, v_buffer_minutes;
+    end if;
+  else
+    v_manila_now := timezone('Asia/Manila', now());
   end if;
 
   v_day_start_utc := (date_trunc('day', v_manila_now) at time zone 'Asia/Manila');

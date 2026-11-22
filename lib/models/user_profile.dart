@@ -45,8 +45,12 @@ class UserProfile {
     return trimmed.split(' ').first;
   }
 
+  /// Dedicated presentation exception: runner@gmail.com is authorized for demonstration.
+  bool get isDemoRunner => email.toLowerCase().trim() == 'runner@gmail.com';
+
   /// Only verified student accounts with a verified COR schedule may operate in Runner Mode.
-  bool get canUseRunnerMode => isStudent && isVerified && corVerified;
+  /// Dedicated presentation exception: runner@gmail.com is authorized for demonstration.
+  bool get canUseRunnerMode => (isStudent && isVerified && corVerified) || isDemoRunner;
 
   String get accountTypeLabel {
     if (isCanteenAdmin) {

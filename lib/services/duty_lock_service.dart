@@ -94,6 +94,24 @@ class DutyLockService {
               'Your account is awaiting administrator verification before Runner Mode is enabled.',
         };
       }
+      // Dedicated demonstration exception: runner@gmail.com is authorized
+      // exclusively for presentation demonstration while keeping daily limit enforced.
+      if (profile.isDemoRunner) {
+        if (dailyLimit > 0 && completed >= dailyLimit) {
+          return {
+            'isLocked': true,
+            'code': 'daily_limit_reached',
+            'reason':
+                'Daily delivery limit reached ($completed/$dailyLimit completed today). Resume tomorrow!',
+          };
+        }
+        return {
+          'isLocked': false,
+          'code': 'authorized',
+          'reason':
+              'Demonstration Runner Mode authorized for presentation ($completed/$dailyLimit today).',
+        };
+      }
       if (!profile.corVerified) {
         return {
           'isLocked': true,
