@@ -1283,8 +1283,8 @@ grant all on public.customer_carts to authenticated;
 create table if not exists public.runner_reviews (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null unique references public.delivery_requests(id) on delete cascade,
-  runner_id uuid not null references auth.users(id) on delete cascade,
-  customer_id uuid not null references auth.users(id) on delete cascade,
+  runner_id uuid not null references public.profiles(id) on delete cascade,
+  customer_id uuid not null references public.profiles(id) on delete cascade,
   rating integer not null check (rating >= 1 and rating <= 5),
   review_text text check (review_text is null or length(trim(review_text)) <= 1000),
   created_at timestamptz not null default now(),
