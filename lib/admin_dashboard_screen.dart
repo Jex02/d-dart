@@ -12,6 +12,7 @@ import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
 import 'utils/validators.dart';
 import 'widgets/responsive_shell.dart';
+import 'widgets/runner_performance_view.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -180,7 +181,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 6,
+      length: 7,
       child: Scaffold(
         backgroundColor: DDartTheme.scaffoldBg(context),
         appBar: AppBar(
@@ -224,6 +225,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               Tab(icon: Icon(Icons.admin_panel_settings_outlined, size: 18), text: 'Admins'),
               Tab(icon: Icon(Icons.restaurant_menu_outlined, size: 18), text: 'Menu'),
               Tab(icon: Icon(Icons.local_shipping_outlined, size: 18), text: 'Monitor'),
+              Tab(icon: Icon(Icons.star_rate_outlined, size: 18), text: 'Runner Performance'),
               Tab(icon: Icon(Icons.report_problem_outlined, size: 18), text: 'Reports'),
               Tab(icon: Icon(Icons.tune_outlined, size: 18), text: 'Settings & Locations'),
             ],
@@ -238,6 +240,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 _buildCoAdminsTab(),
                 const CanteenMenuManagerBody(),
                 _buildMonitorTab(),
+                const RunnerPerformanceView(),
                 _buildReportsTab(),
                 _buildSettingsAndLocationsTab(),
               ],

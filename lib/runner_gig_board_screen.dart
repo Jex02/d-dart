@@ -7,6 +7,7 @@ import 'models/user_profile.dart';
 import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
 import 'order_tracking_screen.dart';
+import 'runner_profile_screen.dart';
 import 'widgets/responsive_shell.dart';
 import 'widgets/runner_order_items.dart';
 
@@ -428,9 +429,12 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
         ).toList();
         final hasActive = activeOrders.isNotEmpty;
         final activeCount = activeOrders.length;
+        final completedOrdersCount = assignedOrders
+            .where((o) => o.effectiveStatus() == 'completed')
+            .length;
 
         return DefaultTabController(
-          length: 2,
+          length: 3,
           child: Scaffold(
             backgroundColor: DDartTheme.surface(context),
             appBar: AppBar(
@@ -448,12 +452,21 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
                   onPressed: _openRunnerReportDialog,
                 ),
                 IconButton(
-                  tooltip: 'Refresh eligibility',
-                  icon: const Icon(Icons.refresh),
-                  onPressed: _refreshEligibility,
+                  tooltip: 'Runner Profile',
+                  icon: const Icon(Icons.account_circle_outlined),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const RunnerProfileScreen(),
+                      ),
+                    );
+                  },
                 ),
               ],
               bottom: TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
                 indicatorColor: const Color(0xFFD4AF37),
                 labelColor: Colors.white,
                 unselectedLabelColor: Colors.white70,
@@ -479,6 +492,35 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
                                   spreadRadius: 1,
                                 ),
                               ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Completed Orders'),
+                        if (completedOrdersCount > 0) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 1.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade700,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '$completedOrdersCount',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],
@@ -658,6 +700,7 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
                         children: [
                           _buildAvailableFeed(canClaimNow),
                           _buildMyDeliveriesFeed(assignedOrders),
+                          _buildCompletedDeliveriesFeed(assignedOrders),
                         ],
                       ),
                     ),
@@ -1364,6 +1407,89 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
               else
                 ...pastOrders.map((o) => _buildPastOrderCard(o, isDark)),
             ],
+          ],
+        ),
+      );
+    }
+
+    if (preloadedOrders != null) {
+      return buildList(preloadedOrders);
+    }
+
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: _runnerAssignedOrdersStream,
+      builder: (context, snapshot) {
+        final orders = (snapshot.data ?? []).map(DeliveryOrder.fromJson).toList();
+        return buildList(orders);
+      },
+    );
+  }
+
+  Widget _buildCompletedDeliveriesFeed([List<DeliveryOrder>? preloadedOrders]) {
+    Widget buildList(List<DeliveryOrder> orders) {
+      final completedOrders = orders
+          .where((o) => o.effectiveStatus() == 'completed')
+          .toList();
+
+      final isDark = DDartTheme.isDark(context);
+
+      if (completedOrders.isEmpty) {
+        return RefreshIndicator(
+          color: primaryMaroon,
+          onRefresh: _refreshEligibility,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+            children: [
+              const SizedBox(height: 80),
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline,
+                      size: 54,
+                      color: Colors.green.shade400,
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'No completed deliveries yet.',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: DDartTheme.textPrimary(context),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Deliveries you complete will appear here\nwith item details, earnings, and ratings.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: DDartTheme.textSecondary(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      return RefreshIndicator(
+        color: primaryMaroon,
+        onRefresh: _refreshEligibility,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            _buildSectionHeader(
+              'Completed Orders (${completedOrders.length})',
+              Icons.check_circle_rounded,
+              Colors.green.shade700,
+            ),
+            ...completedOrders.map((o) => _buildPastOrderCard(o, isDark)),
           ],
         ),
       );

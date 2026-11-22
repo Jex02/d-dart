@@ -8,6 +8,8 @@ import '../models/order_message.dart';
 import '../models/problem_report.dart';
 import '../models/system_config.dart';
 import '../models/user_profile.dart';
+import '../models/runner_review.dart';
+import '../models/runner_performance.dart';
 import '../mock_data.dart';
 import '../data/campus_menu_catalog.dart';
 import '../models/cart_item.dart';
@@ -1295,5 +1297,260 @@ class SupabaseService {
       'message': trimmed,
     });
     return true;
+  }
+
+  // =========================================================================
+  // RUNNER RATINGS, REVIEWS & PERFORMANCE (Tasks 8-11)
+  // =========================================================================
+
+  /// Submits a customer review for a completed order.
+  Future<bool> submitRunnerReview({
+    required String orderId,
+    required int rating,
+    String? reviewText,
+    String? runnerId,
+    String? customerId,
+    String? customerName,
+  }) async {
+    final effectiveCustomerId = customerId ?? currentUser?.id ?? 'cust-current';
+    final trimmedReview = reviewText?.trim();
+
+    if (orderId.startsWith('ORD-') || !isAuthenticated) {
+      submitMockReview(
+        orderId: orderId,
+        runnerId: runnerId ?? 'runner-demo',
+        customerId: effectiveCustomerId,
+        rating: rating,
+        reviewText: trimmedReview,
+        customerName: customerName ??
+            currentUser?.userMetadata?['full_name']?.toString() ??
+            'Customer',
+      );
+      return true;
+    }
+
+    try {
+      await client.rpc('submit_runner_review', params: {
+        'p_order_id': orderId,
+        'p_rating': rating,
+        'p_review_text':
+            trimmedReview != null && trimmedReview.isNotEmpty ? trimmedReview : null,
+      });
+      return true;
+    } catch (e) {
+      debugPrint('submitRunnerReview error: $e');
+      rethrow;
+    }
+  }
+
+  /// Fetches the review submitted for a specific order (if any).
+  Future<RunnerReview?> fetchOrderReview(String orderId) async {
+    if (orderId.startsWith('ORD-') || !isAuthenticated) {
+      final matches =
+          mockRunnerReviews.where((r) => r['order_id'].toString() == orderId);
+      if (matches.isNotEmpty) {
+        return RunnerReview.fromJson(matches.first);
+      }
+      return null;
+    }
+
+    try {
+      final res = await client
+          .from('runner_reviews')
+          .select('*, customer:customer_id(full_name), runner:runner_id(full_name)')
+          .eq('order_id', orderId)
+          .maybeSingle();
+
+      if (res != null) {
+        final row = Map<String, dynamic>.from(res);
+        if (row['customer'] is Map && row['customer']['full_name'] != null) {
+          row['customer_name'] = row['customer']['full_name'];
+        }
+        if (row['runner'] is Map && row['runner']['full_name'] != null) {
+          row['runner_name'] = row['runner']['full_name'];
+        }
+        return RunnerReview.fromJson(row);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('fetchOrderReview error: $e');
+      return null;
+    }
+  }
+
+  /// Fetches all customer reviews received by a specific runner.
+  Future<List<RunnerReview>> fetchRunnerReviews(String runnerId) async {
+    if (!isAuthenticated ||
+        runnerId.startsWith('mock-') ||
+        runnerId.startsWith('runner-')) {
+      return getMockReviewsForRunner(runnerId)
+          .map((r) => RunnerReview.fromJson(r))
+          .toList();
+    }
+
+    try {
+      final res = await client
+          .from('runner_reviews')
+          .select('*, customer:customer_id(full_name), runner:runner_id(full_name)')
+          .eq('runner_id', runnerId)
+          .order('created_at', ascending: false);
+
+      final list = (res as List).map((raw) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        if (row['customer'] is Map && row['customer']['full_name'] != null) {
+          row['customer_name'] = row['customer']['full_name'];
+        }
+        if (row['runner'] is Map && row['runner']['full_name'] != null) {
+          row['runner_name'] = row['runner']['full_name'];
+        }
+        return RunnerReview.fromJson(row);
+      }).toList();
+
+      return list;
+    } catch (e) {
+      debugPrint('fetchRunnerReviews error: $e');
+      return [];
+    }
+  }
+
+  /// Fetches aggregate performance stats for a single runner.
+  Future<RunnerPerformance> fetchRunnerPerformance(
+    String runnerId, {
+    String? runnerName,
+    String? studentId,
+    String? photoUrl,
+  }) async {
+    if (!isAuthenticated ||
+        runnerId.startsWith('mock-') ||
+        runnerId.startsWith('runner-')) {
+      final reviews = getMockReviewsForRunner(runnerId);
+      final completed = mockDeliveryRequests
+          .where((r) =>
+              r['runner_id']?.toString() == runnerId &&
+              (r['status'] == 'completed' || r['completed_at'] != null))
+          .length;
+      final totalReviews = reviews.length;
+      final sumRating = reviews.fold<int>(
+          0, (acc, r) => acc + ((r['rating'] as num?)?.toInt() ?? 0));
+      final avg = totalReviews > 0 ? sumRating / totalReviews : null;
+
+      return RunnerPerformance(
+        runnerId: runnerId,
+        fullName: runnerName ?? 'Runner',
+        studentId: studentId ?? '',
+        photoUrl: photoUrl,
+        completedDeliveries: completed,
+        totalReviews: totalReviews,
+        averageRating: avg,
+      );
+    }
+
+    try {
+      final row = await client
+          .from('runner_performance_stats')
+          .select()
+          .eq('runner_id', runnerId)
+          .maybeSingle();
+
+      if (row != null) {
+        final parsed =
+            RunnerPerformance.fromJson(Map<String, dynamic>.from(row));
+        String? resolvedUrl = parsed.photoUrl;
+        if (resolvedUrl != null && !resolvedUrl.startsWith('http')) {
+          resolvedUrl = await getSignedDocumentUrl(resolvedUrl);
+        }
+        return parsed.copyWith(photoUrl: resolvedUrl);
+      }
+
+      // If not yet in view (e.g. brand new profile)
+      String? profileName = runnerName;
+      String? profileStudentId = studentId;
+      String? signedPhoto;
+
+      if (!runnerId.startsWith('mock-')) {
+        final res = await client
+            .from('profiles')
+            .select()
+            .eq('id', runnerId)
+            .maybeSingle();
+        if (res != null) {
+          final pMap = Map<String, dynamic>.from(res);
+          profileName = pMap['full_name']?.toString() ?? profileName;
+          profileStudentId = pMap['student_id']?.toString() ?? profileStudentId;
+          final idDoc = pMap['id_document_path']?.toString();
+          if (idDoc != null && idDoc.isNotEmpty) {
+            signedPhoto = await getSignedDocumentUrl(idDoc);
+          }
+        }
+      }
+
+      return RunnerPerformance(
+        runnerId: runnerId,
+        fullName: profileName ?? 'Runner',
+        studentId: profileStudentId ?? '',
+        photoUrl: signedPhoto ?? photoUrl,
+        completedDeliveries: 0,
+        totalReviews: 0,
+        averageRating: null,
+      );
+    } catch (e) {
+      debugPrint('fetchRunnerPerformance error: $e');
+      return RunnerPerformance(
+        runnerId: runnerId,
+        fullName: runnerName ?? 'Runner',
+        studentId: studentId ?? '',
+        photoUrl: photoUrl,
+        completedDeliveries: 0,
+        totalReviews: 0,
+      );
+    }
+  }
+
+  /// Fetches aggregate performance stats for all registered runners (for Admin console).
+  Future<List<RunnerPerformance>> fetchAllRunnerPerformances() async {
+    if (!isAuthenticated) {
+      final runnerIds = <String>{'runner-demo', 'runner-alpha', 'mock-user'};
+      for (final r in mockDeliveryRequests) {
+        if (r['runner_id'] != null) runnerIds.add(r['runner_id'].toString());
+      }
+      for (final rev in mockRunnerReviews) {
+        if (rev['runner_id'] != null) runnerIds.add(rev['runner_id'].toString());
+      }
+
+      final list = <RunnerPerformance>[];
+      for (final id in runnerIds) {
+        final perf = await fetchRunnerPerformance(
+          id,
+          runnerName: id == 'runner-demo'
+              ? 'Mark (Student Runner)'
+              : (id == 'runner-alpha' ? 'Alex Runner' : 'Runner ($id)'),
+        );
+        list.add(perf);
+      }
+      list.sort((a, b) => (b.averageRating ?? 0).compareTo(a.averageRating ?? 0));
+      return list;
+    }
+
+    try {
+      final res = await client
+          .from('runner_performance_stats')
+          .select()
+          .order('avg_rating', ascending: false);
+
+      final list = <RunnerPerformance>[];
+      for (final raw in (res as List)) {
+        final parsed =
+            RunnerPerformance.fromJson(Map<String, dynamic>.from(raw as Map));
+        String? resolvedUrl = parsed.photoUrl;
+        if (resolvedUrl != null && !resolvedUrl.startsWith('http')) {
+          resolvedUrl = await getSignedDocumentUrl(resolvedUrl);
+        }
+        list.add(parsed.copyWith(photoUrl: resolvedUrl));
+      }
+      return list;
+    } catch (e) {
+      debugPrint('fetchAllRunnerPerformances error: $e');
+      return [];
+    }
   }
 }

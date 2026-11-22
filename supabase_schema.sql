@@ -1264,4 +1264,153 @@ create policy "Allow users manage own cart"
 
 grant all on public.customer_carts to authenticated;
 
+-- ============================================================
+-- 27. Runner Reviews & Rating System (Tasks 8-10)
+-- ============================================================
+create table if not exists public.runner_reviews (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null unique references public.delivery_requests(id) on delete cascade,
+  runner_id uuid not null references auth.users(id) on delete cascade,
+  customer_id uuid not null references auth.users(id) on delete cascade,
+  rating integer not null check (rating >= 1 and rating <= 5),
+  review_text text check (review_text is null or length(trim(review_text)) <= 1000),
+  created_at timestamptz not null default now(),
+  constraint runner_reviews_no_self_review check (customer_id <> runner_id)
+);
+
+create index if not exists idx_runner_reviews_runner_id on public.runner_reviews(runner_id);
+create index if not exists idx_runner_reviews_customer_id on public.runner_reviews(customer_id);
+create index if not exists idx_runner_reviews_order_id on public.runner_reviews(order_id);
+
+alter table public.runner_reviews enable row level security;
+
+create policy "Allow authenticated users to read runner reviews"
+  on public.runner_reviews for select
+  to authenticated
+  using (true);
+
+create policy "Allow order customer to insert review for completed order"
+  on public.runner_reviews for insert
+  to authenticated
+  with check (
+    auth.uid() = customer_id
+    and customer_id <> runner_id
+    and exists (
+      select 1 from public.delivery_requests dr
+      where dr.id = order_id
+        and dr.customer_id = auth.uid()
+        and dr.runner_id = runner_id
+        and dr.status = 'completed'
+    )
+  );
+
+create or replace function public.submit_runner_review(
+  p_order_id uuid,
+  p_rating int,
+  p_review_text text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_uid uuid;
+  v_order record;
+  v_review_id uuid;
+begin
+  v_uid := auth.uid();
+  if v_uid is null then
+    raise exception 'Unauthorized: Please log in to submit a review';
+  end if;
+
+  if p_rating < 1 or p_rating > 5 then
+    raise exception 'Rating must be between 1 and 5 stars';
+  end if;
+
+  select * into v_order from public.delivery_requests where id = p_order_id;
+  if not found then
+    raise exception 'Delivery order not found';
+  end if;
+
+  if v_order.customer_id <> v_uid then
+    raise exception 'Only the customer who placed this order can rate the runner';
+  end if;
+
+  if v_order.status <> 'completed' then
+    raise exception 'Reviews can only be submitted for completed orders';
+  end if;
+
+  if v_order.runner_id is null then
+    raise exception 'No runner is assigned to this order';
+  end if;
+
+  if v_order.runner_id = v_uid then
+    raise exception 'You cannot review your own account';
+  end if;
+
+  if exists (select 1 from public.runner_reviews where order_id = p_order_id) then
+    raise exception 'A review has already been submitted for this order';
+  end if;
+
+  insert into public.runner_reviews (
+    order_id,
+    runner_id,
+    customer_id,
+    rating,
+    review_text,
+    created_at
+  ) values (
+    p_order_id,
+    v_order.runner_id,
+    v_uid,
+    p_rating,
+    nullif(trim(p_review_text), ''),
+    now()
+  )
+  returning id into v_review_id;
+
+  return jsonb_build_object(
+    'success', true,
+    'review_id', v_review_id,
+    'rating', p_rating,
+    'message', 'Review submitted successfully'
+  );
+end;
+$$;
+
+create or replace view public.runner_performance_stats as
+select 
+  p.id as runner_id,
+  p.full_name,
+  p.email,
+  p.student_id,
+  p.id_document_path,
+  p.role,
+  p.account_type,
+  p.verification_status,
+  coalesce(del.completed_count, 0) as completed_deliveries,
+  coalesce(rev.review_count, 0) as total_reviews,
+  rev.avg_rating
+from public.profiles p
+left join (
+  select runner_id, count(*)::int as completed_count
+  from public.delivery_requests
+  where status = 'completed' and runner_id is not null
+  group by runner_id
+) del on del.runner_id = p.id
+left join (
+  select 
+    runner_id, 
+    count(*)::int as review_count, 
+    round(avg(rating)::numeric, 1)::float as avg_rating
+  from public.runner_reviews
+  group by runner_id
+) rev on rev.runner_id = p.id
+where p.role = 'runner' or p.account_type = 'student' or coalesce(del.completed_count, 0) > 0;
+
+grant select on public.runner_performance_stats to authenticated;
+grant execute on function public.submit_runner_review to authenticated;
+
+
 

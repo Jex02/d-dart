@@ -166,3 +166,52 @@ Map<String, dynamic> addMockOrderMessage({
   return msg;
 }
 
+// In-memory reviews store for completed deliveries (offline/demo testing)
+List<Map<String, dynamic>> mockRunnerReviews = [
+  {
+    'id': 'rev-init-1',
+    'order_id': 'ORD-INIT-REVIEW-1',
+    'runner_id': 'runner-demo',
+    'customer_id': 'cust-demo-1',
+    'rating': 5,
+    'review_text': 'Fast and friendly delivery! Handed over right at Room 204.',
+    'created_at': DateTime.now().toUtc().subtract(const Duration(hours: 3)).toIso8601String(),
+    'customer_name': 'Sarah K.',
+  },
+];
+
+Map<String, dynamic> submitMockReview({
+  required String orderId,
+  required String runnerId,
+  required String customerId,
+  required int rating,
+  String? reviewText,
+  String? customerName,
+}) {
+  final now = DateTime.now().toUtc();
+  final review = <String, dynamic>{
+    'id': 'rev-${Random().nextInt(90000) + 10000}',
+    'order_id': orderId,
+    'runner_id': runnerId,
+    'customer_id': customerId,
+    'rating': rating.clamp(1, 5),
+    'review_text': reviewText?.trim(),
+    'created_at': now.toIso8601String(),
+    'customer_name': customerName ?? 'Customer',
+  };
+  mockRunnerReviews.insert(0, review);
+  return review;
+}
+
+List<Map<String, dynamic>> getMockReviewsForRunner(String runnerId) {
+  return mockRunnerReviews
+      .where((r) => r['runner_id'].toString() == runnerId)
+      .toList()
+    ..sort((a, b) {
+      final aTime = DateTime.tryParse(a['created_at'].toString()) ?? DateTime.now();
+      final bTime = DateTime.tryParse(b['created_at'].toString()) ?? DateTime.now();
+      return bTime.compareTo(aTime);
+    });
+}
+
+

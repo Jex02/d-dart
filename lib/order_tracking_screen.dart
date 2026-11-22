@@ -3,6 +3,7 @@ import 'models/campus_location.dart';
 import 'models/delivery_order.dart';
 import 'models/order_message.dart';
 import 'models/problem_report.dart';
+import 'models/runner_review.dart';
 import 'services/chat_read_tracker.dart';
 import 'services/supabase_service.dart';
 import 'mock_data.dart';
@@ -43,6 +44,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   bool _isBusy = false;
   OrderCounterpartInfo? _counterpart;
   String? _loadedCounterpartKey;
+  RunnerReview? _existingReview;
+  bool _isLoadingReview = false;
+  bool _isSubmittingReview = false;
+  int _selectedRating = 0;
+  final _reviewTextController = TextEditingController();
+  bool _hasCheckedReview = false;
 
   @override
   void initState() {
@@ -177,7 +184,89 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   @override
   void dispose() {
     _otpInputController.dispose();
+    _reviewTextController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadExistingReview(String orderId) async {
+    if (_isLoadingReview || _hasCheckedReview) return;
+    _isLoadingReview = true;
+    try {
+      final review = await SupabaseService().fetchOrderReview(orderId);
+      if (mounted) {
+        setState(() {
+          _existingReview = review;
+          _hasCheckedReview = true;
+          _isLoadingReview = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _hasCheckedReview = true;
+          _isLoadingReview = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _submitReview(DeliveryOrder order) async {
+    if (_selectedRating < 1 || _selectedRating > 5) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a star rating (1 to 5 stars).'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSubmittingReview = true);
+    try {
+      final success = await SupabaseService().submitRunnerReview(
+        orderId: order.id,
+        rating: _selectedRating,
+        reviewText: _reviewTextController.text.trim(),
+        runnerId: order.runnerId,
+        customerId: order.customerId,
+      );
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text('Thank you! Your rating and review have been submitted.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        final review = await SupabaseService().fetchOrderReview(order.id);
+        if (mounted) {
+          setState(() {
+            _existingReview = review ??
+                RunnerReview(
+                  id: 'rev-${DateTime.now().millisecondsSinceEpoch}',
+                  orderId: order.id,
+                  runnerId: order.runnerId ?? '',
+                  customerId: order.customerId ?? '',
+                  rating: _selectedRating,
+                  reviewText: _reviewTextController.text.trim(),
+                  createdAt: DateTime.now().toUtc(),
+                );
+            _isSubmittingReview = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSubmittingReview = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to submit review: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _syncMockStatus(String status) {
@@ -517,6 +606,15 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             effectiveStatus == 'cancelled' || effectiveStatus == 'expired';
         final currentStepIndex = _flowSteps.indexOf(effectiveStatus);
         final isArrived = effectiveStatus == 'arrived';
+
+        if (!widget.isRunner &&
+            isCompleted &&
+            !_hasCheckedReview &&
+            !_isLoadingReview) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _loadExistingReview(order.id);
+          });
+        }
 
         return StreamBuilder<List<OrderMessage>>(
           stream: _messagesStream,
@@ -1103,6 +1201,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         ],
                       ],
 
+                      if (!widget.isRunner && isCompleted) ...[
+                        _buildCustomerRatingCard(order),
+                        const SizedBox(height: 14),
+                      ],
+
                       const SizedBox(height: 16),
                       Center(
                         child: TextButton.icon(
@@ -1161,6 +1264,259 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCustomerRatingCard(DeliveryOrder order) {
+    final isDark = DDartTheme.isDark(context);
+    final primaryColor = DDartTheme.accentText(context);
+    const goldColor = Color(0xFFD4AF37);
+
+    if (_isLoadingReview) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: DDartTheme.card(context),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: DDartTheme.border(context)),
+        ),
+        alignment: Alignment.center,
+        child: const SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2, color: primaryMaroon),
+        ),
+      );
+    }
+
+    if (_existingReview != null) {
+      final rev = _existingReview!;
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1B281B) : const Color(0xFFF1F8F1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark ? const Color(0xFF2E7D32) : const Color(0xFFA5D6A7),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green.shade600, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Your Rating & Review for Runner',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: isDark ? Colors.white : Colors.green.shade900,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${rev.rating}.0 ★',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      color: isDark ? Colors.green.shade300 : Colors.green.shade800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: List.generate(5, (index) {
+                final isFilled = index < rev.rating;
+                return Icon(
+                  isFilled ? Icons.star_rounded : Icons.star_outline_rounded,
+                  color: isFilled ? goldColor : Colors.grey,
+                  size: 24,
+                );
+              }),
+            ),
+            if (rev.reviewText != null && rev.reviewText!.trim().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.black.withValues(alpha: 0.25)
+                      : Colors.white.withValues(alpha: 0.7),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isDark ? Colors.white12 : Colors.black12,
+                  ),
+                ),
+                child: Text(
+                  '"${rev.reviewText}"',
+                  style: TextStyle(
+                    fontStyle: FontStyle.italic,
+                    fontSize: 13,
+                    color: DDartTheme.textPrimary(context),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            Text(
+              'Submitted on ${rev.formattedDate}',
+              style: TextStyle(
+                fontSize: 11,
+                color: DDartTheme.textSecondary(context),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Unreviewed - Interactive Form
+    final runnerName = _counterpart?.displayName ?? 'your runner';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: DDartTheme.card(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: goldColor.withValues(alpha: 0.5),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.star_rate_rounded, color: goldColor, size: 24),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Rate Your Runner',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: DDartTheme.textPrimary(context),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'How was your delivery service with $runnerName?',
+            style: TextStyle(
+              fontSize: 12.5,
+              color: DDartTheme.textSecondary(context),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Interactive 5 stars
+          Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(5, (index) {
+                final starNum = index + 1;
+                final isSelected = starNum <= _selectedRating;
+                return IconButton(
+                  iconSize: 34,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  visualDensity: VisualDensity.compact,
+                  tooltip: '$starNum Star${starNum > 1 ? "s" : ""}',
+                  icon: Icon(
+                    isSelected ? Icons.star_rounded : Icons.star_outline_rounded,
+                    color: isSelected ? goldColor : Colors.grey.shade400,
+                  ),
+                  onPressed: () {
+                    setState(() => _selectedRating = starNum);
+                  },
+                );
+              }),
+            ),
+          ),
+          Center(
+            child: Text(
+              _selectedRating == 0
+                  ? 'Tap a star to rate (1 to 5)'
+                  : '$_selectedRating of 5 Stars',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: _selectedRating == 0
+                    ? DDartTheme.textMuted(context)
+                    : primaryColor,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _reviewTextController,
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText:
+                  'Write a review (optional): delivery speed, communication, packaging...',
+              hintStyle: TextStyle(
+                fontSize: 12,
+                color: DDartTheme.textMuted(context),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              contentPadding: const EdgeInsets.all(12),
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: ElevatedButton.icon(
+              onPressed:
+                  _isSubmittingReview ? null : () => _submitReview(order),
+              icon: _isSubmittingReview
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.send_rounded, size: 18),
+              label: Text(
+                _isSubmittingReview ? 'Submitting...' : 'Submit Review',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryMaroon,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

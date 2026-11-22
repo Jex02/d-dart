@@ -954,26 +954,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isActive
-                                    ? accent.withValues(alpha: 0.16)
-                                    : DDartTheme.cardSubtle(context),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                status.toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.bold,
-                                  color: isActive ? accent : textSecondary,
-                                ),
-                              ),
-                            ),
+                            _buildCustomerOrderStatusBadge(context, status),
                             Text(
                               'Total ₱${order.totalAmount.toStringAsFixed(2)}',
                               style: TextStyle(
@@ -1002,16 +983,19 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                status == 'arrived'
-                                    ? 'OTP Code: ${order.verificationCode}'
-                                    : 'OTP unlocks on arrival',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: accent,
-                                  fontSize: 11.5,
+                              Expanded(
+                                child: Text(
+                                  status == 'arrived'
+                                      ? 'OTP Code: ${order.verificationCode}'
+                                      : 'OTP unlocks on arrival',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: accent,
+                                    fontSize: 11.5,
+                                  ),
                                 ),
                               ),
+                              const SizedBox(width: 8),
                               Text(
                                 'Tap to Track →',
                                 style: TextStyle(fontSize: 11, color: textSecondary),
@@ -1028,6 +1012,78 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildCustomerOrderStatusBadge(BuildContext context, String status) {
+    final isDark = DDartTheme.isDark(context);
+    final accent = DDartTheme.accentText(context);
+
+    Color bgColor;
+    Color borderColor;
+    Color textColor;
+    IconData icon;
+
+    switch (status.toLowerCase()) {
+      case 'completed':
+        bgColor = isDark ? const Color(0xFF1B382B) : const Color(0xFFE8F5E9);
+        borderColor = isDark ? const Color(0xFF2E7D32) : const Color(0xFFA5D6A7);
+        textColor = isDark ? const Color(0xFF81C784) : const Color(0xFF1B5E20);
+        icon = Icons.check_circle_outline;
+        break;
+      case 'claimed':
+      case 'purchasing':
+      case 'en_route':
+      case 'arrived':
+        bgColor = isDark ? const Color(0xFF3E2700) : const Color(0xFFFFF8E1);
+        borderColor = isDark ? const Color(0xFFB78103) : const Color(0xFFFFE082);
+        textColor = isDark ? const Color(0xFFFFD54F) : const Color(0xFFE65100);
+        icon = Icons.delivery_dining;
+        break;
+      case 'pending':
+        bgColor = accent.withValues(alpha: 0.15);
+        borderColor = accent.withValues(alpha: 0.4);
+        textColor = accent;
+        icon = Icons.hourglass_top_rounded;
+        break;
+      case 'cancelled':
+        bgColor = isDark ? const Color(0xFF381414) : const Color(0xFFFFEBEE);
+        borderColor = isDark ? const Color(0xFF7F0000) : const Color(0xFFFFCDD2);
+        textColor = isDark ? const Color(0xFFE57373) : const Color(0xFFC62828);
+        icon = Icons.cancel_outlined;
+        break;
+      case 'expired':
+      default:
+        bgColor = isDark ? const Color(0xFF262626) : const Color(0xFFEEEEEE);
+        borderColor = isDark ? const Color(0xFF424242) : const Color(0xFFE0E0E0);
+        textColor = isDark ? Colors.grey.shade400 : Colors.grey.shade700;
+        icon = Icons.timer_off_outlined;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: borderColor, width: 0.9),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: textColor),
+          const SizedBox(width: 4),
+          Text(
+            status.toUpperCase(),
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1389,9 +1445,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               ),
             ],
           ),
-          child: Column(
-            children: [
-              ValueListenableBuilder<ThemeMode>(
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            child: Column(
+              children: [
+                ValueListenableBuilder<ThemeMode>(
                 valueListenable: ThemeService.instance.themeModeNotifier,
                 builder: (context, mode, _) {
                   final darkEnabled = mode == ThemeMode.dark;
@@ -1531,7 +1590,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             ],
           ),
         ),
-      ],
+      ),
+    ],
     );
   }
 
