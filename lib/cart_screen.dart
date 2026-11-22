@@ -34,6 +34,7 @@ class _CartScreenState extends State<CartScreen> {
   @override
   void initState() {
     super.initState();
+    CartService.instance.loadCart();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();

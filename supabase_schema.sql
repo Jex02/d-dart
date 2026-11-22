@@ -189,6 +189,13 @@ alter table public.delivery_requests drop constraint if exists delivery_requests
 alter table public.delivery_requests add constraint delivery_requests_status_check
   check (status in ('pending', 'claimed', 'purchasing', 'en_route', 'arrived', 'completed', 'cancelled', 'expired'));
 
+-- Enforce that a customer can never claim their own order at the table constraint level (Task 3)
+alter table public.delivery_requests drop constraint if exists delivery_requests_runner_not_customer;
+alter table public.delivery_requests add constraint delivery_requests_runner_not_customer
+  check (runner_id is null or customer_id is null or customer_id is distinct from runner_id);
+
+alter table public.delivery_requests replica identity full;
+
 -- 5. Delivery Status Logs (Audit Trail per SDD 4.3)
 create table if not exists public.delivery_status_logs (
   id uuid primary key default gen_random_uuid(),
@@ -549,6 +556,7 @@ set search_path = ''
 as $$
 declare
   v_uid uuid := (select auth.uid());
+  v_customer_id uuid;
   v_account_type text;
   v_verification_status text;
   v_cor_verified boolean;
@@ -564,6 +572,15 @@ declare
 begin
   if v_uid is null then
     raise exception 'Authentication required to claim a delivery request.';
+  end if;
+
+  select customer_id
+    into v_customer_id
+    from public.delivery_requests
+   where id = p_order_id;
+
+  if v_customer_id is not null and v_customer_id = v_uid then
+    raise exception 'You cannot claim your own delivery order.';
   end if;
 
   select account_type, verification_status, cor_verified
@@ -647,12 +664,43 @@ begin
    where id = p_order_id
      and status = 'pending'
      and (expires_at is null or expires_at > timezone('utc'::text, now()))
+     and (customer_id is null or customer_id <> v_uid)
    returning *;
 end;
 $$;
 
 revoke all on function public.claim_delivery_request(uuid) from public, anon;
 grant execute on function public.claim_delivery_request(uuid) to authenticated;
+
+-- Release mistakenly claimed order by runner (Task 5)
+create or replace function public.release_claimed_order(p_order_id uuid)
+returns setof public.delivery_requests
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := (select auth.uid());
+begin
+  if v_uid is null then
+    raise exception 'Authentication required to release an order.';
+  end if;
+
+  return query
+  update public.delivery_requests
+     set status = 'pending',
+         runner_id = null,
+         claimed_at = null,
+         updated_at = timezone('utc'::text, now())
+   where id = p_order_id
+     and runner_id = v_uid
+     and status = 'claimed'
+   returning *;
+end;
+$$;
+
+revoke all on function public.release_claimed_order(uuid) from public, anon;
+grant execute on function public.release_claimed_order(uuid) to authenticated;
 
 create or replace function public.cancel_delivery_request(p_order_id uuid)
 returns setof public.delivery_requests
@@ -1195,5 +1243,25 @@ $$;
 
 revoke all on function public.fetch_admin_problem_reports() from public, anon;
 grant execute on function public.fetch_admin_problem_reports() to authenticated;
+
+-- ============================================================
+-- 26. Persistent Customer Carts (Task 2)
+-- ============================================================
+create table if not exists public.customer_carts (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  items jsonb not null default '[]'::jsonb,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.customer_carts enable row level security;
+
+drop policy if exists "Allow users manage own cart" on public.customer_carts;
+create policy "Allow users manage own cart"
+  on public.customer_carts for all
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+grant all on public.customer_carts to authenticated;
 
 

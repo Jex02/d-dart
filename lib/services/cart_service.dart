@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/campus_location.dart';
 import '../models/cart_item.dart';
 import '../models/system_config.dart';
 import 'duty_lock_service.dart';
+import 'supabase_service.dart';
 
 class CartService extends ChangeNotifier {
   static final CartService _instance = CartService._internal();
@@ -12,7 +15,9 @@ class CartService extends ChangeNotifier {
   CartService._internal();
 
   final List<CartItem> _items = [];
+  bool _isInitialized = false;
 
+  bool get isInitialized => _isInitialized;
   List<CartItem> get items => List.unmodifiable(_items);
 
   bool get isEmpty => _items.isEmpty;
@@ -134,6 +139,117 @@ class CartService extends ChangeNotifier {
     return _items[index].quantity;
   }
 
+  // =========================================================================
+  // PERSISTENCE & MULTI-PLATFORM SYNCHRONIZATION (Task 2)
+  // =========================================================================
+
+  String _storageKey([String? userId]) {
+    final uid = userId ?? SupabaseService().currentUser?.id;
+    return uid != null ? 'ddart_cart_user_$uid' : 'ddart_cart_local';
+  }
+
+  /// Restores cart from persistent local storage (SharedPreferences) and Supabase database.
+  Future<void> loadCart() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final currentUserId = SupabaseService().currentUser?.id;
+      final key = _storageKey(currentUserId);
+
+      // 1. Try local storage first for fast response
+      final localJson = prefs.getString(key);
+      List<CartItem> restoredItems = [];
+
+      if (localJson != null && localJson.isNotEmpty) {
+        try {
+          final List decoded = jsonDecode(localJson);
+          restoredItems = decoded
+              .map((e) => CartItem.fromJson(Map<String, dynamic>.from(e as Map)))
+              .toList();
+        } catch (e) {
+          debugPrint('Error decoding local cart: $e');
+        }
+      }
+
+      // If user is authenticated, sync with remote Supabase database
+      if (currentUserId != null && SupabaseService().isAuthenticated) {
+        try {
+          final client = SupabaseService().client;
+          final response = await client
+              .from('customer_carts')
+              .select('items, updated_at')
+              .eq('user_id', currentUserId)
+              .maybeSingle();
+
+          if (response != null && response['items'] != null) {
+            final List remoteItemsJson = response['items'] as List;
+            final remoteItems = remoteItemsJson
+                .map((e) => CartItem.fromJson(Map<String, dynamic>.from(e as Map)))
+                .toList();
+
+            // If remote has saved cart items, adopt them
+            if (remoteItems.isNotEmpty) {
+              restoredItems = remoteItems;
+              await prefs.setString(key, jsonEncode(serializeItemsFrom(restoredItems)));
+            } else if (restoredItems.isNotEmpty) {
+              // Remote is empty but local has items: sync local up to Supabase
+              await client.from('customer_carts').upsert({
+                'user_id': currentUserId,
+                'items': serializeItemsFrom(restoredItems),
+                'updated_at': DateTime.now().toUtc().toIso8601String(),
+              });
+            }
+          } else if (restoredItems.isNotEmpty) {
+            // No row exists in customer_carts yet: create it with local items
+            await client.from('customer_carts').upsert({
+              'user_id': currentUserId,
+              'items': serializeItemsFrom(restoredItems),
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            });
+          }
+        } catch (e) {
+          debugPrint('Supabase cart sync error: $e');
+        }
+      }
+
+      _items.clear();
+      _items.addAll(restoredItems);
+      _isInitialized = true;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Failed to load persisted cart: $e');
+    }
+  }
+
+  /// Automatically persists current cart to SharedPreferences and Supabase.
+  Future<void> _saveCart() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final currentUserId = SupabaseService().currentUser?.id;
+      final key = _storageKey(currentUserId);
+      final serialized = serializeItems();
+
+      // Always save locally (works on web and mobile)
+      await prefs.setString(key, jsonEncode(serialized));
+
+      // If user is authenticated, sync to Supabase customer_carts table
+      if (currentUserId != null && SupabaseService().isAuthenticated) {
+        try {
+          await SupabaseService().client.from('customer_carts').upsert({
+            'user_id': currentUserId,
+            'items': serialized,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          });
+        } catch (e) {
+          debugPrint('Could not persist cart to Supabase: $e');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode && !e.toString().contains('Binding has not yet been initialized')) {
+        debugPrint('Error saving cart: $e');
+      }
+    }
+  }
+
   void addItem(CanteenMenuItem item, {int quantity = 1}) {
     if (quantity <= 0) return;
     final index = _items.indexWhere((ci) => ci.item.id == item.id);
@@ -144,6 +260,7 @@ class CartService extends ChangeNotifier {
       _items.add(CartItem(item: item, quantity: quantity));
     }
     notifyListeners();
+    _saveCart();
   }
 
   void updateQuantity(String itemId, int newQuantity) {
@@ -156,6 +273,7 @@ class CartService extends ChangeNotifier {
       _items[index] = _items[index].copyWith(quantity: newQuantity);
     }
     notifyListeners();
+    _saveCart();
   }
 
   void incrementQuantity(String itemId) {
@@ -163,6 +281,7 @@ class CartService extends ChangeNotifier {
     if (index != -1) {
       _items[index] = _items[index].copyWith(quantity: _items[index].quantity + 1);
       notifyListeners();
+      _saveCart();
     }
   }
 
@@ -176,17 +295,28 @@ class CartService extends ChangeNotifier {
         _items[index] = _items[index].copyWith(quantity: current - 1);
       }
       notifyListeners();
+      _saveCart();
     }
   }
 
   void removeItem(String itemId) {
     _items.removeWhere((ci) => ci.item.id == itemId);
     notifyListeners();
+    _saveCart();
   }
 
-  void clearCart() {
+  /// Clears cart. If [isSignOut] is true, only clears memory so user's remote cart
+  /// is restored when they log back into their account.
+  void clearCart({bool isSignOut = false}) {
     _items.clear();
     notifyListeners();
+
+    if (isSignOut) {
+      // Don't erase their remote saved cart on sign out
+      return;
+    }
+
+    _saveCart();
   }
 
   /// Formats human-readable order summary for the runner gig board and Supabase
@@ -197,6 +327,10 @@ class CartService extends ChangeNotifier {
 
   /// Serialized cart items payload for storage
   List<Map<String, dynamic>> serializeItems() {
-    return _items.map((ci) => ci.toJson()).toList();
+    return serializeItemsFrom(_items);
+  }
+
+  static List<Map<String, dynamic>> serializeItemsFrom(List<CartItem> items) {
+    return items.map((ci) => ci.toJson()).toList();
   }
 }

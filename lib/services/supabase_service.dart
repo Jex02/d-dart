@@ -19,6 +19,7 @@ import 'remember_me_service.dart';
 enum ClaimOrderStatus {
   claimed,
   alreadyClaimed,
+  cannotClaimOwnOrder,
   ineligible,
   dailyLimitReached,
   expired,
@@ -631,6 +632,18 @@ class SupabaseService {
         .eq('id', orderId);
   }
 
+  Future<List<Map<String, dynamic>>> fetchAvailableOrders() async {
+    if (!isAuthenticated) {
+      return mockDeliveryRequests.where((r) => r['status'] == 'pending').toList();
+    }
+    final data = await client
+        .from('delivery_requests')
+        .select()
+        .eq('status', 'pending')
+        .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(data);
+  }
+
   Future<ClaimOrderResult> claimOrder(String orderId) async {
     final runnerId = currentUser?.id;
     if (runnerId == null || orderId.startsWith('ORD-')) {
@@ -642,7 +655,7 @@ class SupabaseService {
       }
       return const ClaimOrderResult(
         ClaimOrderStatus.alreadyClaimed,
-        'This request has already been claimed or expired.',
+        'This request has already been claimed or expired, or cannot be claimed.',
       );
     }
 
@@ -663,6 +676,13 @@ class SupabaseService {
       );
     } on PostgrestException catch (e) {
       final msg = e.message.toLowerCase();
+      if (msg.contains('cannot claim your own') ||
+          msg.contains('runner_not_customer')) {
+        return const ClaimOrderResult(
+          ClaimOrderStatus.cannotClaimOwnOrder,
+          'You cannot claim your own delivery order.',
+        );
+      }
       if (msg.contains('daily delivery limit reached')) {
         return ClaimOrderResult(ClaimOrderStatus.dailyLimitReached, e.message);
       }
@@ -677,6 +697,24 @@ class SupabaseService {
         ClaimOrderStatus.failed,
         'Could not claim this request. Please check your connection and try again.',
       );
+    }
+  }
+
+  Future<bool> releaseClaimedOrder(String orderId) async {
+    final runnerId = currentUser?.id;
+    if (!isAuthenticated || orderId.startsWith('ORD-')) {
+      return releaseMockOrder(orderId, runnerId: runnerId);
+    }
+
+    try {
+      final res = await client.rpc(
+        'release_claimed_order',
+        params: {'p_order_id': orderId},
+      );
+      return res is List && res.isNotEmpty;
+    } catch (e) {
+      debugPrint('Failed to release order: $e');
+      return false;
     }
   }
 

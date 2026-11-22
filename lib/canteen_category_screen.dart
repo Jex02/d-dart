@@ -3,6 +3,7 @@ import 'canteen_menu_screen.dart';
 import 'cart_screen.dart';
 import 'customer_home_screen.dart';
 import 'models/campus_location.dart';
+import 'pabili_request_screen.dart';
 import 'services/cart_service.dart';
 import 'services/supabase_service.dart';
 import 'widgets/responsive_shell.dart';
@@ -334,6 +335,59 @@ class _CanteenCategoryScreenState extends State<CanteenCategoryScreen> {
                             iconColor: const Color(0xFFC0392B),
                             circleBg: const Color(0xFFFADBD8),
                             onTap: () => _openCategory('Desserts'),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Custom Ordering banner
+                      InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PabiliRequestScreen(initialPickup: widget.canteenName),
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: DDartTheme.maroonTint(context),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: DDartTheme.accentText(context).withValues(alpha: 0.35),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit_note, color: DDartTheme.accentText(context), size: 22),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Can\'t find what you need?',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        color: DDartTheme.textPrimary(context),
+                                      ),
+                                    ),
+                                    Text(
+                                      'Place a custom order from ${widget.canteenName}',
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: DDartTheme.textSecondary(context),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(Icons.arrow_forward_ios, size: 14, color: DDartTheme.accentText(context)),
+                            ],
                           ),
                         ),
                       ),

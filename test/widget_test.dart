@@ -58,16 +58,16 @@ void main() {
       (WidgetTester tester) async {
     await tester.pumpWidget(const MaterialApp(home: PabiliRequestScreen()));
 
-    expect(find.text('New Pabili Request'), findsOneWidget);
+    expect(find.text('Custom Order (Pabili)'), findsOneWidget);
     expect(find.text('Standard Campus Delivery Fee'), findsOneWidget);
-    expect(find.text('Post Delivery Request'), findsOneWidget);
+    expect(find.text('Submit Custom Order'), findsOneWidget);
 
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'e.g., Pork Siomai w/ rice, Mountain Dew'),
+      find.byType(TextFormField).first,
       '2 orders Pork Siomai',
     );
     await tester.enterText(
-      find.widgetWithText(TextFormField, '85.00'),
+      find.byType(TextFormField).at(2),
       '85',
     );
     await tester.pump();

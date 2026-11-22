@@ -5,6 +5,7 @@ import 'customer_home_screen.dart';
 import 'data/campus_menu_catalog.dart';
 import 'models/campus_location.dart';
 import 'models/cart_item.dart';
+import 'pabili_request_screen.dart';
 import 'services/cart_service.dart';
 import 'services/supabase_service.dart';
 import 'widgets/responsive_shell.dart';
@@ -444,8 +445,27 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
                     ? _buildEmptyState()
                     : ListView.builder(
                         padding: const EdgeInsets.fromLTRB(16, 14, 16, 80),
-                        itemCount: _filteredItems.length,
+                        itemCount: _filteredItems.length + 1,
                         itemBuilder: (context, index) {
+                          if (index == _filteredItems.length) {
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              child: Center(
+                                child: TextButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => const PabiliRequestScreen(),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.add_shopping_cart, size: 16),
+                                  label: const Text('Can\'t find what you need? Place a Custom Order'),
+                                ),
+                              ),
+                            );
+                          }
                           final item = _filteredItems[index];
                           return _buildItemCard(item);
                         },
@@ -528,26 +548,57 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen> {
   }
 
   Widget _buildEmptyState() {
+    final query = _searchController.text.trim();
+
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.shade400),
-          const SizedBox(height: 12),
-          Text(
-            'No items found',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey.shade700,
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.shade400),
+            const SizedBox(height: 12),
+            Text(
+              'No items found',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey.shade700,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Try adjusting your search query or canteen filter.',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-          ),
-        ],
+            const SizedBox(height: 6),
+            Text(
+              'Looking for something specific not listed on the campus menus?',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PabiliRequestScreen(
+                      initialPickup: _selectedCanteenFilter != 'All' ? _selectedCanteenFilter : null,
+                      initialHint: query.isNotEmpty ? query : null,
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.add_shopping_cart, size: 16),
+              label: Text(
+                query.isNotEmpty
+                    ? 'Request "$query" via Custom Order'
+                    : 'Place Custom Order (Pabili)',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryMaroon,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

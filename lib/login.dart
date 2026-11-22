@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'reset_password_page.dart';
 import 'services/app_router.dart';
+import 'services/cart_service.dart';
 import 'services/remember_me_service.dart';
 import 'services/supabase_service.dart';
 import 'signup.dart';
@@ -81,6 +82,7 @@ class _LoginPageState extends State<LoginPage> {
     try {
       await SupabaseService().signIn(email: email, password: password);
       await RememberMeService.saveOnLogin(email: email, rememberMe: _rememberMe);
+      await CartService.instance.loadCart();
       TextInput.finishAutofillContext(shouldSave: _rememberMe);
       final targetScreen = await AppRouter.resolveHomeForProfile();
 

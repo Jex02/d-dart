@@ -8,6 +8,7 @@ import 'services/supabase_service.dart';
 import 'mock_data.dart';
 import 'widgets/order_chat_sheet.dart';
 import 'widgets/responsive_shell.dart';
+import 'widgets/runner_order_items.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
   final String orderId;
@@ -308,6 +309,55 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           const SnackBar(
             backgroundColor: Colors.orange,
             content: Text('Could not cancel — request may already be claimed or expired.'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleReleaseOrder(DeliveryOrder order) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Release Claimed Order?'),
+        content: const Text(
+          'Did you claim this order by mistake? Releasing it will clear your runner claim and return the order to the available gigs board for another runner to claim.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep Order'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade800,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, Release Order'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
+    setState(() => _isBusy = true);
+    final released = await SupabaseService().releaseClaimedOrder(order.id);
+    if (mounted) {
+      setState(() => _isBusy = false);
+      if (released) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: primaryMaroon,
+            content: Text('Order released! Returned to available gigs board.'),
+          ),
+        );
+        Navigator.pop(context, true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Could not release order. Please try again.'),
           ),
         );
       }
@@ -634,7 +684,29 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                               ),
                             ],
                             const SizedBox(height: 6),
-                            _detailRow('Items', order.description),
+                            if (widget.isRunner) ...[
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(
+                                    width: 130,
+                                    child: Text(
+                                      'Items',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: DDartTheme.textSecondary(context),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: RunnerOrderItemsList(description: order.description),
+                                  ),
+                                ],
+                              ),
+                            ] else ...[
+                              _detailRow('Items', order.description),
+                            ],
                             if (order.specialInstructions.isNotEmpty) ...[
                               const SizedBox(height: 6),
                               _detailRow('Notes', order.specialInstructions),
@@ -977,6 +1049,27 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                     ),
                             ),
                           ),
+                        if (effectiveStatus == 'claimed') ...[
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 44,
+                            child: OutlinedButton.icon(
+                              onPressed: _isBusy ? null : () => _handleReleaseOrder(order),
+                              icon: const Icon(Icons.undo, color: Colors.orange, size: 18),
+                              label: const Text(
+                                'Mistakenly Claimed? Release Order',
+                                style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w600),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.orange),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                         if (isArrived) ...[
                           const Text(
                             'Enter Customer 4-Digit Code:',

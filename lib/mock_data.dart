@@ -58,9 +58,30 @@ bool claimMockOrder(String orderId, {String? runnerId, DateTime? now}) {
   if (index == -1) return false;
   final current = mockDeliveryRequests[index];
   if (current['status'] != 'pending') return false;
+  // A customer cannot claim their own order
+  if (runnerId != null && current['customer_id'] != null && current['customer_id'].toString() == runnerId) {
+    return false;
+  }
   current['status'] = 'claimed';
   if (runnerId != null) current['runner_id'] = runnerId;
   current['claimed_at'] = (now ?? DateTime.now().toUtc()).toIso8601String();
+  return true;
+}
+
+bool releaseMockOrder(String orderId, {String? runnerId, DateTime? now}) {
+  expireStaleMockOrders(now: now);
+  final index =
+      mockDeliveryRequests.indexWhere((r) => r['id'].toString() == orderId);
+  if (index == -1) return false;
+  final current = mockDeliveryRequests[index];
+  if (current['status'] != 'claimed') return false;
+  if (runnerId != null && current['runner_id'] != null && current['runner_id'].toString() != runnerId) {
+    return false;
+  }
+  current['status'] = 'pending';
+  current['runner_id'] = null;
+  current['claimed_at'] = null;
+  current['updated_at'] = (now ?? DateTime.now().toUtc()).toIso8601String();
   return true;
 }
 

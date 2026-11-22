@@ -82,6 +82,7 @@ Future<void> main() async {
     await RememberMeService.enforceSessionOnStartup(
       skipIfRecovery: hasAuthCallback || _isPasswordRecoveryActive,
     );
+    await CartService.instance.loadCart();
   } catch (e) {
     debugPrint('Supabase initialization error: $e');
   }
@@ -121,9 +122,11 @@ class _DDartAppState extends State<DDartApp> {
           if (data.event == AuthChangeEvent.signedOut) {
             _isPasswordRecoveryActive = false;
             SupabaseService().cachedProfile = null;
-            CartService.instance.clearCart();
+            CartService.instance.clearCart(isSignOut: true);
             DutyLockService.reset();
             ChatReadTracker.instance.clear();
+          } else if (data.event == AuthChangeEvent.signedIn) {
+            CartService.instance.loadCart();
           } else if (data.event == AuthChangeEvent.passwordRecovery) {
             _isPasswordRecoveryActive = true;
             RememberMeService.clearEphemeralFlag();
@@ -221,6 +224,7 @@ class _SessionBootstrapScreenState extends State<_SessionBootstrapScreen> {
   Future<void> _routeUser() async {
     Widget next;
     try {
+      await CartService.instance.loadCart();
       next = await AppRouter.resolveHomeForProfile();
     } catch (e) {
       debugPrint('Session bootstrap error: $e');

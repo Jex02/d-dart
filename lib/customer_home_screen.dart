@@ -10,6 +10,7 @@ import 'models/delivery_order.dart';
 import 'models/problem_report.dart';
 import 'models/user_profile.dart';
 import 'order_tracking_screen.dart';
+import 'pabili_request_screen.dart';
 import 'services/cart_service.dart';
 import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
@@ -88,6 +89,18 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => OrderTrackingScreen(orderId: orderId, isRunner: false),
+      ),
+    ).then((_) => _loadProfileAndExpireStale());
+  }
+
+  void _openCustomOrder({String? pickup, String? hint}) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PabiliRequestScreen(
+          initialPickup: pickup,
+          initialHint: hint,
+        ),
       ),
     ).then((_) => _loadProfileAndExpireStale());
   }
@@ -633,6 +646,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       onTap: () => _openCategoryBrowse('Campus Canteen Menu'),
                       child: _buildQuickActionButton('Browse Campus\nCanteen Menu'),
                     ),
+                    const SizedBox(height: 10),
+                    InkWell(
+                      onTap: () => _openCustomOrder(),
+                      child: _buildQuickActionButton('Custom Order\n(Pabili Request)'),
+                    ),
                   ],
                 ),
               ),
@@ -642,6 +660,84 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 child: _buildLiveRunnerUpdateCard(),
               ),
             ],
+          ),
+          const SizedBox(height: 18),
+          _buildCustomOrderPromoCard(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomOrderPromoCard() {
+    final isDark = DDartTheme.isDark(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [const Color(0xFF4A100B), const Color(0xFF2A0A07)]
+              : [const Color(0xFF8F1F0D), const Color(0xFF6B150A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Custom Ordering (Pabili)',
+                  style: TextStyle(
+                    color: Color(0xFFD4AF37),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Need snacks, drinks, or items not on the regular canteen menu? Place a custom order and a student runner will buy them for you!',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    height: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: () => _openCustomOrder(),
+                  icon: const Icon(Icons.add_shopping_cart, size: 16),
+                  label: const Text('Place Custom Order'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD4AF37),
+                    foregroundColor: const Color(0xFF4A100B),
+                    visualDensity: VisualDensity.compact,
+                    textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.receipt_long, color: Color(0xFFD4AF37), size: 36),
           ),
         ],
       ),
@@ -755,11 +851,32 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       builder: (context, snapshot) {
         final orders = (snapshot.data ?? []).map(DeliveryOrder.fromJson).toList();
         if (orders.isEmpty) {
-          return const Center(
-            child: Text(
-              'You have not placed any campus delivery orders yet.\nBrowse a canteen on Home to get started!',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey, fontSize: 14),
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.receipt_long_outlined, size: 54, color: Colors.grey),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'You have not placed any campus delivery orders yet.\nBrowse a canteen on Home or place a custom order!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () => _openCustomOrder(),
+                    icon: const Icon(Icons.add_shopping_cart, size: 18),
+                    label: const Text('Place Custom Order (Pabili)'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryMaroon,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         }
@@ -768,9 +885,49 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           onRefresh: _loadProfileAndExpireStale,
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-            itemCount: orders.length,
+            itemCount: orders.length + 1,
             itemBuilder: (context, index) {
-              final order = orders[index];
+              if (index == 0) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: DDartTheme.maroonTint(context),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: DDartTheme.accentText(context).withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit_note, color: DDartTheme.accentText(context), size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Need items not listed on menus?',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: DDartTheme.textPrimary(context),
+                          ),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _openCustomOrder(),
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Custom Order', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        style: TextButton.styleFrom(
+                          foregroundColor: DDartTheme.accentText(context),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              final order = orders[index - 1];
               final status = order.effectiveStatus();
               final isActive = status != 'completed' &&
                   status != 'cancelled' &&

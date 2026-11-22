@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'models/campus_location.dart';
 import 'models/delivery_order.dart';
@@ -7,6 +8,7 @@ import 'services/duty_lock_service.dart';
 import 'services/supabase_service.dart';
 import 'order_tracking_screen.dart';
 import 'widgets/responsive_shell.dart';
+import 'widgets/runner_order_items.dart';
 
 class RunnerGigBoardScreen extends StatefulWidget {
   const RunnerGigBoardScreen({super.key});
@@ -20,6 +22,9 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
   bool _isClaiming = false;
   bool _isOnline = true;
   UserProfile? _profile;
+  Timer? _refreshTimer;
+  final Set<String> _locallyClaimedOrderIds = {};
+  String _deliveriesFilter = 'all';
   late Stream<List<Map<String, dynamic>>> _availableOrdersStream;
   late Stream<List<Map<String, dynamic>>> _runnerAssignedOrdersStream;
 
@@ -28,7 +33,16 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
     super.initState();
     _availableOrdersStream = SupabaseService().streamAvailableOrders();
     _runnerAssignedOrdersStream = SupabaseService().streamRunnerAssignedOrders();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) _refreshEligibility();
+    });
     _refreshEligibility();
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _refreshEligibility() async {
@@ -36,7 +50,11 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
     await DutyLockService.syncFromSupabase();
     final profile = await SupabaseService().fetchUserProfileModel();
     if (mounted) {
-      setState(() => _profile = profile);
+      setState(() {
+        _profile = profile;
+        _availableOrdersStream = SupabaseService().streamAvailableOrders();
+        _runnerAssignedOrdersStream = SupabaseService().streamRunnerAssignedOrders();
+      });
     }
   }
 
@@ -138,6 +156,17 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
       return;
     }
 
+    final currentUserId = SupabaseService().currentUser?.id;
+    if (currentUserId != null && order.customerId == currentUserId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text('You cannot claim your own delivery order.'),
+        ),
+      );
+      return;
+    }
+
     await DutyLockService.syncFromSupabase();
     final profile = await SupabaseService().fetchUserProfileModel();
     final dutyStatus = DutyLockService.checkDutyStatus(profile: profile);
@@ -175,13 +204,19 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
     if (!result.isSuccess) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: Colors.orange.shade800,
+          backgroundColor: result.status == ClaimOrderStatus.cannotClaimOwnOrder
+              ? Colors.redAccent
+              : Colors.orange.shade800,
           content: Text(result.message),
         ),
       );
       setState(() {});
       return;
     }
+
+    // Immediately remove from available orders list (Task 4)
+    _locallyClaimedOrderIds.add(order.id);
+    _refreshEligibility();
 
     Navigator.push(
       context,
@@ -194,7 +229,58 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
     ).then((_) => _refreshEligibility());
   }
 
+  Future<void> _confirmAndReleaseOrder(DeliveryOrder order) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Release Claimed Order?'),
+        content: const Text(
+          'Did you claim this order by mistake? Releasing it will clear your claim and return it to the available gigs board so another runner can claim it.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep Order'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade800,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, Release Order'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
+    final released = await SupabaseService().releaseClaimedOrder(order.id);
+    if (!mounted) return;
+    if (released) {
+      _locallyClaimedOrderIds.remove(order.id);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: primaryMaroon,
+          content: Text('Order released! Returned to available gigs.'),
+        ),
+      );
+      _refreshEligibility();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Could not release order. Please try again.'),
+        ),
+      );
+    }
+  }
+
   void _inspectGigDetails(DeliveryOrder order, bool canClaim) {
+    final currentUserId = SupabaseService().currentUser?.id;
+    final isOwnOrder =
+        currentUserId != null && order.customerId == currentUserId;
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -214,6 +300,34 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
                   ?.copyWith(fontWeight: FontWeight.bold, color: primaryMaroon),
             ),
             const Divider(height: 18),
+            if (isOwnOrder) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.block, size: 16, color: Colors.red),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'You created this order. Customers cannot claim their own orders.',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             Text('Pickup: ${order.pickupLocation}',
                 style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
@@ -246,7 +360,16 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
               },
             ),
             const SizedBox(height: 8),
-            Text('Items: ${order.description}'),
+            Text(
+              'Ordered Items:',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: DDartTheme.textSecondary(context),
+              ),
+            ),
+            const SizedBox(height: 4),
+            RunnerOrderItemsList(description: order.description),
             const SizedBox(height: 6),
             Text('Est. Item Budget: ₱${order.estimatedPrice.toStringAsFixed(2)}'),
             Text('Delivery Earnings: ₱${order.deliveryFee.toStringAsFixed(2)}',
@@ -261,7 +384,7 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
               width: double.infinity,
               height: 46,
               child: ElevatedButton(
-                onPressed: canClaim && !_isClaiming
+                onPressed: (canClaim && !isOwnOrder && !_isClaiming)
                     ? () {
                         Navigator.pop(ctx);
                         _handleClaimOrder(order);
@@ -271,7 +394,13 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
                   backgroundColor: primaryMaroon,
                   foregroundColor: Colors.white,
                 ),
-                child: Text(canClaim ? 'Claim This Gig' : 'Unavailable (Duty Lock / Offline)'),
+                child: Text(
+                  isOwnOrder
+                      ? 'Cannot Claim Own Order'
+                      : canClaim
+                          ? 'Claim This Gig'
+                          : 'Unavailable (Duty Lock / Offline)',
+                ),
               ),
             ),
           ],
@@ -543,6 +672,8 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
   }
 
   Widget _buildAvailableFeed(bool canClaimNow) {
+    final currentUserId = SupabaseService().currentUser?.id;
+
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: _availableOrdersStream,
       builder: (context, snapshot) {
@@ -556,167 +687,266 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
 
         final orders = rawOrders
             .map(DeliveryOrder.fromJson)
-            .where((o) => !o.isExpiredAt())
+            .where((o) => !o.isExpiredAt() && !_locallyClaimedOrderIds.contains(o.id))
             .toList();
 
         if (orders.isEmpty) {
-          return const Center(
-            child: Text(
-              'No open deliveries right now.\nCheck back shortly!',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey, fontSize: 15),
+          return RefreshIndicator(
+            color: primaryMaroon,
+            onRefresh: _refreshEligibility,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: const [
+                SizedBox(height: 120),
+                Center(
+                  child: Text(
+                    'No open deliveries right now.\nPull to refresh or check back shortly!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey, fontSize: 15),
+                  ),
+                ),
+              ],
             ),
           );
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: orders.length,
-          itemBuilder: (context, index) {
-            final order = orders[index];
-            return Card(
-              elevation: 2,
-              margin: const EdgeInsets.only(bottom: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: () => _inspectGigDetails(order, canClaimNow),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            order.id.length > 8 ? order.id.substring(0, 8) : order.id,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: primaryMaroon,
+        return RefreshIndicator(
+          color: primaryMaroon,
+          onRefresh: _refreshEligibility,
+          child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            itemCount: orders.length,
+            itemBuilder: (context, index) {
+              final order = orders[index];
+              final isOwnOrder =
+                  currentUserId != null && order.customerId == currentUserId;
+
+              return Card(
+                elevation: 2,
+                margin: const EdgeInsets.only(bottom: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => _inspectGigDetails(order, canClaimNow),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  order.id.length > 8 ? order.id.substring(0, 8) : order.id,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: primaryMaroon,
+                                  ),
+                                ),
+                                if (isOwnOrder) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade100,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: Colors.red.shade300, width: 0.8),
+                                    ),
+                                    child: Text(
+                                      'YOUR ORDER',
+                                      style: TextStyle(
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.red.shade900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
+                            Text(
+                              'Earn ₱${order.deliveryFee.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 16),
+                        Text(
+                          'Pickup: ${order.pickupLocation}',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          'Drop-off: ${order.dropoffLocation}',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Builder(
+                          builder: (context) {
+                            final dist = CampusLocation.getDistanceMeters(
+                              order.pickupLocation,
+                              order.dropoffLocation,
+                            );
+                            if (dist == null) return const SizedBox.shrink();
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                'Distance: ${CampusLocation.formatDistance(dist)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Ordered Items:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: DDartTheme.textSecondary(context),
                           ),
+                        ),
+                        const SizedBox(height: 4),
+                        RunnerOrderItemsList(description: order.description),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Est. Item Budget: ₱${order.estimatedPrice.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: DDartTheme.accentText(context),
+                            fontSize: 12.5,
+                          ),
+                        ),
+                        if (order.specialInstructions.isNotEmpty) ...[
+                          const SizedBox(height: 4),
                           Text(
-                            'Earn ₱${order.deliveryFee.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green,
+                            'Note: ${order.specialInstructions}',
+                            style: TextStyle(
+                              color: DDartTheme.textSecondary(context),
+                              fontStyle: FontStyle.italic,
+                              fontSize: 12,
                             ),
                           ),
                         ],
-                      ),
-                      const Divider(height: 16),
-                      Text(
-                        'Pickup: ${order.pickupLocation}',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      Text(
-                        'Drop-off: ${order.dropoffLocation}',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      Builder(
-                        builder: (context) {
-                          final dist = CampusLocation.getDistanceMeters(
-                            order.pickupLocation,
-                            order.dropoffLocation,
-                          );
-                          if (dist == null) return const SizedBox.shrink();
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              'Distance: ${CampusLocation.formatDistance(dist)}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey.shade700,
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: (!canClaimNow || isOwnOrder || _isClaiming)
+                                ? null
+                                : () => _handleClaimOrder(order),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryMaroon,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
                               ),
                             ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 6),
-                      Text('Items: ${order.description}'),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Est. Item Budget: ₱${order.estimatedPrice.toStringAsFixed(2)}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: DDartTheme.accentText(context),
-                          fontSize: 12.5,
-                        ),
-                      ),
-                      if (order.specialInstructions.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Note: ${order.specialInstructions}',
-                          style: TextStyle(
-                            color: DDartTheme.textSecondary(context),
-                            fontStyle: FontStyle.italic,
-                            fontSize: 12,
+                            child: Text(
+                              isOwnOrder
+                                  ? 'Cannot Claim Own Order'
+                                  : 'Claim This Gig',
+                            ),
                           ),
                         ),
                       ],
-                      const SizedBox(height: 14),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed:
-                              (!canClaimNow || _isClaiming) ? null : () => _handleClaimOrder(order),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryMaroon,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          child: const Text('Claim This Gig'),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         );
       },
     );
   }
 
-  Widget _buildMyDeliveriesFeed([List<DeliveryOrder>? preloadedOrders]) {
-    Widget buildList(List<DeliveryOrder> orders) {
-      if (orders.isEmpty) {
-        return const Center(
-          child: Text(
-            'You have no claimed deliveries yet.',
-            style: TextStyle(color: Colors.grey, fontSize: 14),
+  Widget _buildFilterChip(String label, String value, BuildContext context) {
+    final isSelected = _deliveriesFilter == value;
+    final isDark = DDartTheme.isDark(context);
+    return ChoiceChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11.5,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          color: isSelected
+              ? Colors.white
+              : (isDark ? Colors.white70 : Colors.black87),
+        ),
+      ),
+      selected: isSelected,
+      selectedColor: primaryMaroon,
+      backgroundColor: DDartTheme.cardSubtle(context),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      onSelected: (_) => setState(() => _deliveriesFilter = value),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon, Color iconColor) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: iconColor),
+          const SizedBox(width: 6),
+          Text(
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 13.5,
+              color: DDartTheme.textPrimary(context),
+            ),
           ),
-        );
-      }
+        ],
+      ),
+    );
+  }
 
-      return ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: orders.length,
-        itemBuilder: (context, index) {
-          final order = orders[index];
-          final isDone = order.effectiveStatus() == 'completed';
+  Widget _buildActiveOrderCard(DeliveryOrder order, bool isDark) {
+    final status = order.effectiveStatus();
+    final canRelease = status == 'claimed';
 
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: ListTile(
-              title: Text(
-                order.description,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: DDartTheme.border(context)),
+      ),
+      color: DDartTheme.card(context),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => OrderTrackingScreen(
+                orderId: order.id,
+                isRunner: true,
               ),
-              subtitle: Text(
-                '${order.pickupLocation} → ${order.dropoffLocation}\nStatus: ${order.effectiveStatus().toUpperCase()}',
-              ),
-              isThreeLine: true,
-              trailing: Chip(
-                avatar: isDone
-                    ? null
-                    : Container(
+            ),
+          ).then((_) => _refreshEligibility());
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
                         width: 8,
                         height: 8,
                         decoration: const BoxDecoration(
@@ -724,32 +954,418 @@ class _RunnerGigBoardScreenState extends State<RunnerGigBoardScreen> {
                           shape: BoxShape.circle,
                         ),
                       ),
-                label: Text(
-                  isDone ? 'DONE' : 'ACTIVE',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: isDone ? Colors.green.shade800 : Colors.redAccent,
+                      const SizedBox(width: 8),
+                      Text(
+                        'Order #${order.id.length > 8 ? order.id.substring(0, 8) : order.id}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: primaryMaroon,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                backgroundColor: isDone
-                    ? Colors.green.shade50
-                    : Colors.redAccent.withValues(alpha: 0.12),
-              ),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => OrderTrackingScreen(
-                      orderId: order.id,
-                      isRunner: true,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.redAccent.withValues(alpha: 0.4)),
+                    ),
+                    child: Text(
+                      status.toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.redAccent,
+                      ),
                     ),
                   ),
-                ).then((_) => _refreshEligibility());
-              },
+                ],
+              ),
+              const Divider(height: 16),
+              Text(
+                'Pickup: ${order.pickupLocation}',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5),
+              ),
+              Text(
+                'Drop-off: ${order.dropoffLocation}',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Ordered Items:',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.bold,
+                  color: DDartTheme.textSecondary(context),
+                ),
+              ),
+              const SizedBox(height: 4),
+              RunnerOrderItemsList(description: order.description),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Earnings: ₱${order.deliveryFee.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                  Text(
+                    'Tap to Track →',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: DDartTheme.textSecondary(context),
+                    ),
+                  ),
+                ],
+              ),
+              if (canRelease) ...[
+                const Divider(height: 16),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => _confirmAndReleaseOrder(order),
+                    icon: const Icon(Icons.undo, size: 15, color: Colors.orange),
+                    label: const Text(
+                      'Release Claim / Mistaken Claim',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: Colors.orange,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPastOrderCard(DeliveryOrder order, bool isDark) {
+    final status = order.effectiveStatus();
+    final isCompleted = status == 'completed';
+    final isCancelled = status == 'cancelled';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isCompleted
+              ? (isDark ? Colors.green.shade800.withValues(alpha: 0.6) : Colors.green.shade200)
+              : DDartTheme.border(context),
+        ),
+      ),
+      color: DDartTheme.card(context),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => OrderTrackingScreen(
+                orderId: order.id,
+                isRunner: true,
+              ),
             ),
-          );
+          ).then((_) => _refreshEligibility());
         },
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Order #${order.id.length > 8 ? order.id.substring(0, 8) : order.id}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: DDartTheme.textPrimary(context),
+                    ),
+                  ),
+                  // TASK 6: In runner-side Past Orders section, Completed status displayed using a green-colored badge/indicator
+                  if (isCompleted)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF1B5E20).withValues(alpha: 0.35)
+                            : Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isDark ? Colors.green.shade600 : Colors.green.shade400,
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.check_circle,
+                            size: 14,
+                            color: isDark ? Colors.greenAccent.shade200 : Colors.green.shade700,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            'COMPLETED',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.greenAccent.shade200 : Colors.green.shade800,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (isCancelled)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.red.withValues(alpha: 0.16)
+                            : Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: isDark ? Colors.red.shade700 : Colors.red.shade300,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.cancel,
+                            size: 13,
+                            color: isDark ? Colors.redAccent.shade100 : Colors.red.shade700,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'CANCELLED',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.redAccent.shade100 : Colors.red.shade800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.grey.withValues(alpha: 0.2)
+                            : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: isDark ? Colors.grey.shade700 : Colors.grey.shade400,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.schedule,
+                            size: 13,
+                            color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            status.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+              const Divider(height: 16),
+              Text(
+                'Pickup: ${order.pickupLocation}',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5),
+              ),
+              Text(
+                'Drop-off: ${order.dropoffLocation}',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5),
+              ),
+              const SizedBox(height: 8),
+              // TASK 7: Display runner order items one per line
+              Text(
+                'Ordered Items:',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.bold,
+                  color: DDartTheme.textSecondary(context),
+                ),
+              ),
+              const SizedBox(height: 4),
+              RunnerOrderItemsList(description: order.description),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Earned: ₱${order.deliveryFee.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isCompleted ? Colors.green.shade700 : DDartTheme.textSecondary(context),
+                      fontSize: 12.5,
+                    ),
+                  ),
+                  Text(
+                    'View History →',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: DDartTheme.textSecondary(context),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMyDeliveriesFeed([List<DeliveryOrder>? preloadedOrders]) {
+    Widget buildList(List<DeliveryOrder> orders) {
+      if (orders.isEmpty) {
+        return RefreshIndicator(
+          color: primaryMaroon,
+          onRefresh: _refreshEligibility,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: const [
+              SizedBox(height: 120),
+              Center(
+                child: Text(
+                  'You have no claimed deliveries yet.\nPull to refresh.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey, fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      final activeOrders = orders.where((o) =>
+        !const ['completed', 'cancelled', 'expired'].contains(o.effectiveStatus())
+      ).toList();
+
+      final pastOrders = orders.where((o) =>
+        const ['completed', 'cancelled', 'expired'].contains(o.effectiveStatus())
+      ).toList();
+
+      final isDark = DDartTheme.isDark(context);
+
+      return RefreshIndicator(
+        color: primaryMaroon,
+        onRefresh: _refreshEligibility,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: [
+            // Filter toggle chips: All, Active Orders, Past Orders
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildFilterChip('All (${orders.length})', 'all', context),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Active Orders (${activeOrders.length})', 'active', context),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Past Orders (${pastOrders.length})', 'past', context),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // When "All" is selected
+            if (_deliveriesFilter == 'all') ...[
+              if (activeOrders.isNotEmpty) ...[
+                _buildSectionHeader(
+                  'Active Orders (${activeOrders.length})',
+                  Icons.delivery_dining,
+                  primaryMaroon,
+                ),
+                ...activeOrders.map((o) => _buildActiveOrderCard(o, isDark)),
+              ],
+              if (pastOrders.isNotEmpty) ...[
+                _buildSectionHeader(
+                  'Past Orders (${pastOrders.length})',
+                  Icons.history,
+                  Colors.green.shade800,
+                ),
+                ...pastOrders.map((o) => _buildPastOrderCard(o, isDark)),
+              ],
+            ],
+
+            // When "Active Orders" filter is selected
+            if (_deliveriesFilter == 'active') ...[
+              _buildSectionHeader(
+                'Active Orders (${activeOrders.length})',
+                Icons.delivery_dining,
+                primaryMaroon,
+              ),
+              if (activeOrders.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  alignment: Alignment.center,
+                  child: Text(
+                    'No active deliveries in progress.',
+                    style: TextStyle(color: DDartTheme.textMuted(context), fontSize: 13),
+                  ),
+                )
+              else
+                ...activeOrders.map((o) => _buildActiveOrderCard(o, isDark)),
+            ],
+
+            // When "Past Orders" filter is selected
+            if (_deliveriesFilter == 'past') ...[
+              _buildSectionHeader(
+                'Past Orders (${pastOrders.length})',
+                Icons.history,
+                Colors.green.shade800,
+              ),
+              if (pastOrders.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  alignment: Alignment.center,
+                  child: Text(
+                    'No past deliveries found.',
+                    style: TextStyle(color: DDartTheme.textMuted(context), fontSize: 13),
+                  ),
+                )
+              else
+                ...pastOrders.map((o) => _buildPastOrderCard(o, isDark)),
+            ],
+          ],
+        ),
       );
     }
 

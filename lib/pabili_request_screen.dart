@@ -203,7 +203,7 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
       backgroundColor: DDartTheme.surface(context),
       appBar: AppBar(
         title: const Text(
-          'New Pabili Request',
+          'Custom Order (Pabili)',
           style: TextStyle(color: Colors.white, fontSize: 18),
         ),
         backgroundColor: primaryMaroon,
@@ -337,15 +337,17 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'Items to Buy',
+                                'Custom Item Description',
                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                               ),
                               const SizedBox(height: 6),
                               TextFormField(
                                 controller: _itemController,
-                                maxLines: 3,
+                                maxLines: 4,
+                                minLines: 2,
                                 decoration: InputDecoration(
-                                  hintText: 'e.g., Pork Siomai w/ rice, Mountain Dew',
+                                  hintText: 'Describe the item: specify product, brand, size, flavor, or details (e.g. 500ml C2 Apple, 1pc Fudgee Barr Chocolate)',
+                                  hintStyle: const TextStyle(fontSize: 12.5),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
@@ -364,7 +366,7 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'Qty',
+                                'Quantity',
                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                               ),
                               const SizedBox(height: 6),
@@ -394,7 +396,7 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                     const SizedBox(height: 16),
 
                     const Text(
-                      'Estimated Item Budget (₱)',
+                      'Estimated Price / Budget (₱)',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     const SizedBox(height: 6),
@@ -403,7 +405,9 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       onChanged: (_) => setState(() {}),
                       decoration: InputDecoration(
-                        hintText: '85.00',
+                        hintText: 'e.g. 85.00 (rough estimated budget or expected price)',
+                        helperText: 'Estimate only. Can be clarified with runner via in-app chat.',
+                        helperMaxLines: 2,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                         contentPadding:
                             const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -555,7 +559,7 @@ class _PabiliRequestScreenState extends State<PabiliRequestScreen> {
                                 ),
                               )
                             : const Text(
-                                'Post Delivery Request',
+                                'Submit Custom Order',
                                 style: TextStyle(color: Colors.white, fontSize: 15),
                               ),
                       ),
